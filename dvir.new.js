@@ -16,7 +16,7 @@ const payload = {
 
 app.get('/', (req, res) => {
   const token = jwt.sign(payload, privateKey, { algorithm: 'RS256' });
-  res.send(token); // מחזיר את ה-JWT ישירות
+  res.json({token}); // מחזיר את ה-JWT ישירות
 });
 
 app.listen(port, () => {
