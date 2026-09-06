@@ -4,220 +4,180 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>קופה סגורה</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Secular+One&family=Rubik:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap">
 <style>
   :root {
-    --ink: #08080E;
-    --panel: #12121D;
-    --panel-2: #191927;
-    --line: #262538;
-    --text: #EDECF5;
-    --dim: #8E8CA3;
-    --purple: #9D6BFF;
-    --purple-deep: #6D3FD4;
-    --teal: #2DE1C2;
-    --teal-dim: #1A8F7C;
-    --lose: #FF5C7A;
-    --r: 14px;
-    --font-d: "Secular One", "Rubik", sans-serif;
-    --font-b: "Rubik", "Heebo", Arial, sans-serif;
+    --bg: #05070A;
+    --text: #EAF4F4;
+    --dim: #64707A;
+    --faint: #39434C;
+    --line: rgba(234,244,244,.09);
+    --accent: #35E0DC;
+    --accent-press: #8FF0EC;
+    --bad: #FF6D6D;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  :root { color-scheme: dark; }
   input, button, select, textarea { color-scheme: dark; }
   body {
     margin: 0;
-    background: var(--ink);
+    background: var(--bg);
     color: var(--text);
-    font-family: var(--font-b);
+    font-family: "Heebo", "Segoe UI", Arial, sans-serif;
     font-size: 16px;
     line-height: 1.5;
     direction: rtl;
   }
-  body::before {
-    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background:
-      radial-gradient(900px 420px at 85% -10%, rgba(157,107,255,.14), transparent 60%),
-      radial-gradient(700px 380px at 0% 110%, rgba(45,225,194,.09), transparent 60%);
-  }
-  .wrap { max-width: 560px; margin: 0 auto; padding: 22px 14px 80px; }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 26px 18px 90px; }
 
   /* ---------- header ---------- */
-  header { margin-bottom: 18px; }
   .eyebrow {
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    font-size: 12px; letter-spacing: .12em; color: var(--teal); font-weight: 500;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; letter-spacing: .14em; color: var(--dim); font-weight: 500;
   }
-  .sync-badge {
-    font-size: 11px; letter-spacing: .03em; color: var(--dim);
-    border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px;
-    transition: color .3s, border-color .3s, box-shadow .3s;
-  }
-  .sync-badge.on { color: var(--teal); border-color: var(--teal-dim); box-shadow: 0 0 10px rgba(45,225,194,.25); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background .4s, box-shadow .4s; }
+  .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
   h1 {
-    font-family: var(--font-d);
-    font-weight: 400; font-size: 42px; margin: 4px 0 2px; line-height: 1.1;
-    background: linear-gradient(105deg, var(--text) 30%, var(--purple) 65%, var(--teal) 100%);
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent; color: var(--purple);
-    text-wrap: balance;
+    font-weight: 900; font-size: 44px; letter-spacing: -0.02em;
+    margin: 6px 0 0; line-height: 1.05; color: var(--text);
   }
-  .sub { color: var(--dim); margin: 0; font-size: 14px; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .sub { color: var(--dim); margin: 6px 0 0; font-size: 14px; font-weight: 300; }
 
-  /* ---------- buttons: shared press/hover animation ---------- */
+  /* ---------- shared controls ---------- */
   button {
-    font: inherit; cursor: pointer; border-radius: 10px;
-    border: 1px solid var(--line);
-    background: var(--panel-2); color: var(--text);
-    padding: 10px 14px; min-height: 44px;
-    transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease,
-                background-color .2s ease, color .2s ease, filter .2s ease;
-    touch-action: manipulation;
+    font: inherit; cursor: pointer; background: none; border: none; color: var(--text);
+    padding: 0; touch-action: manipulation;
+    transition: transform .12s ease, color .18s ease, border-color .18s ease,
+                background-color .18s ease, box-shadow .18s ease, opacity .18s ease;
   }
-  button:hover { border-color: var(--purple); }
-  button:active { transform: scale(.94); }
-  button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  button:active { transform: scale(.92); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 
-  .btn-add {
-    background: linear-gradient(120deg, var(--purple-deep), var(--purple));
-    border: none; color: #fff; font-weight: 700; white-space: nowrap;
-    box-shadow: 0 4px 18px rgba(157,107,255,.35);
-  }
-  .btn-add:hover { box-shadow: 0 6px 24px rgba(157,107,255,.55); filter: brightness(1.06); }
-
-  .btn-chip {
-    border-color: var(--teal-dim); color: var(--teal);
-    font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
-    position: relative; overflow: hidden;
-  }
-  .btn-chip:hover { border-color: var(--teal); box-shadow: 0 0 14px rgba(45,225,194,.3); }
-  .btn-chip.bump { animation: bump .35s ease; }
-  @keyframes bump {
-    30% { transform: scale(1.12); box-shadow: 0 0 22px rgba(45,225,194,.6); }
-  }
-
-  .btn-x {
-    color: var(--dim); border-color: transparent; background: transparent;
-    min-height: 36px; padding: 4px 10px; font-size: 20px; line-height: 1;
-  }
-  .btn-x:hover { color: var(--lose); border-color: var(--lose); transform: rotate(90deg); }
-  .btn-x:active { transform: rotate(90deg) scale(.9); }
-
-  .btn-ghost { background: transparent; color: var(--dim); }
-  .btn-ghost:hover { color: var(--lose); border-color: var(--lose); }
-
-  /* ---------- add row ---------- */
-  .addrow {
-    display: flex; gap: 10px; margin-bottom: 16px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--r); padding: 10px;
-  }
-  .addrow input { flex: 1; min-width: 0; }
   input[type="text"], input[type="number"] {
     -webkit-appearance: none; appearance: none;
-    background: var(--ink);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    color: var(--text);
+    background: none; border: none; border-bottom: 1px solid var(--line);
+    border-radius: 0; color: var(--text);
     font: inherit; font-variant-numeric: tabular-nums;
-    padding: 10px 12px; min-height: 44px;
-    transition: border-color .2s, box-shadow .2s;
+    padding: 8px 2px; min-height: 42px; width: 100%;
+    transition: border-color .2s;
   }
-  input:focus-visible { outline: none; border-color: var(--purple); box-shadow: 0 0 0 3px rgba(157,107,255,.25); }
-  input::placeholder { color: var(--dim); opacity: .8; }
+  input:focus-visible { outline: none; border-bottom-color: var(--accent); }
+  input::placeholder { color: var(--faint); }
   input[type=number]::-webkit-inner-spin-button { display: none; }
 
-  /* ---------- player cards ---------- */
-  .players { display: flex; flex-direction: column; gap: 10px; }
-  .pcard {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    padding: 12px 14px;
-    display: flex; flex-direction: column; gap: 10px;
-    animation: deal .3s ease both;
+  /* ---------- add row ---------- */
+  .addrow { display: flex; align-items: flex-end; gap: 14px; margin: 30px 0 6px; }
+  .addrow input { flex: 1; font-size: 17px; }
+  .btn-add {
+    color: var(--accent); font-weight: 700; font-size: 15px;
+    padding: 8px 2px 10px; white-space: nowrap; letter-spacing: .02em;
   }
-  @keyframes deal { from { opacity: 0; transform: translateY(8px); } }
-  .pcard-top { display: flex; align-items: center; gap: 10px; }
-  .pname { font-weight: 700; font-size: 18px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .net {
-    font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
-    font-size: 15px; border-radius: 999px; padding: 2px 12px;
-    transition: background-color .3s, color .3s;
-  }
-  .net.pos { color: var(--teal); background: rgba(45,225,194,.12); }
-  .net.neg { color: var(--lose); background: rgba(255,92,122,.12); }
-  .net.zero { color: var(--dim); background: var(--panel-2); font-weight: 400; }
-  .pcard-controls {
-    display: grid; grid-template-columns: auto 1fr; gap: 10px 12px; align-items: center;
-  }
-  .field-label { font-size: 12px; color: var(--dim); }
-  .buyin-line { display: flex; align-items: center; gap: 10px; }
-  .buyin-total { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 14px; white-space: nowrap; }
-  .buyin-total b { color: var(--text); font-size: 15px; }
-  .pcard-controls input[type="number"] { width: 100%; }
+  .btn-add:hover { color: var(--accent-press); }
 
-  /* ---------- summary ---------- */
-  .potbar {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-    margin: 16px 0;
+  /* ---------- mode switch ---------- */
+  .modes { display: flex; gap: 26px; margin: 26px 0 0; border-bottom: 1px solid var(--line); }
+  .mode {
+    color: var(--dim); font-weight: 500; font-size: 15px;
+    padding: 6px 2px 12px; position: relative;
   }
-  .pot-item {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--r);
-    padding: 10px 12px;
-    display: flex; flex-direction: column; gap: 2px;
+  .mode::after {
+    content: ""; position: absolute; right: 0; left: 0; bottom: -1px; height: 2px;
+    background: var(--accent); transform: scaleX(0); transform-origin: right;
+    transition: transform .25s ease;
   }
-  .pot-label { font-size: 11px; color: var(--dim); letter-spacing: .04em; }
-  .pot-value { font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .pot-value.bad { color: var(--lose); }
-  .pot-value.good { color: var(--teal); }
+  .mode.on { color: var(--text); }
+  .mode.on::after { transform: scaleX(1); }
 
-  .warn {
-    margin: 0 0 16px; padding: 12px 14px;
-    border: 1px solid var(--lose);
-    border-radius: var(--r);
-    background: rgba(255,92,122,.09);
-    color: var(--lose); font-size: 14px;
-  }
-  .warn strong { color: var(--text); }
+  /* ---------- player rows ---------- */
+  .rows {}
+  .prow { border-bottom: 1px solid var(--line); }
+  .prow-line { display: flex; align-items: center; gap: 12px; padding: 14px 0; min-height: 62px; }
+  .pname { font-weight: 700; font-size: 17px; flex: 1; min-width: 72px; overflow-wrap: anywhere; }
+  .pmeta { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 300; }
+  .pmeta b { color: var(--text); font-weight: 500; }
 
-  /* ---------- transfers ---------- */
-  h2 {
-    font-family: var(--font-d); font-weight: 400; font-size: 24px; margin: 26px 0 12px;
+  .btn-plus {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 1px solid var(--accent); color: var(--accent);
+    font-size: 22px; line-height: 1; font-weight: 400;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .2s ease, background-color .18s, color .18s, box-shadow .18s;
   }
-  h2 .tick { color: var(--teal); }
-  .transfers { display: flex; flex-direction: column; gap: 8px; }
+  .btn-plus:hover { box-shadow: 0 0 12px rgba(53,224,220,.35); }
+  .btn-plus.open { transform: rotate(45deg); background: var(--accent); color: var(--bg); }
+  .btn-plus.open:active { transform: rotate(45deg) scale(.92); }
+
+  .btn-x { color: var(--faint); font-size: 18px; padding: 6px; }
+  .btn-x:hover { color: var(--bad); }
+
+  /* expanding buy-in menu */
+  .pmenu { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s ease; }
+  .pmenu.open { grid-template-rows: 1fr; }
+  .pmenu-in { overflow: hidden; }
+  .pmenu-row { display: flex; align-items: center; gap: 10px; padding: 2px 0 16px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 18px; min-height: 40px;
+    color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; font-size: 15px;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip:active { background: var(--accent); color: var(--bg); }
+  .chip.flash { animation: flash .45s ease; }
+  @keyframes flash {
+    0% { background: var(--accent); color: var(--bg); box-shadow: 0 0 16px rgba(53,224,220,.6); }
+  }
+  .undo { color: var(--faint); font-size: 13px; margin-inline-start: auto; }
+  .undo:hover { color: var(--bad); }
+
+  /* settle rows */
+  input[type="number"].srow-input { width: 104px; flex: 0 0 104px; text-align: end; font-size: 17px; }
+  .net { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 16px; min-width: 74px; text-align: left; }
+  .net.pos { color: var(--accent); }
+  .net.neg { color: var(--bad); }
+  .net.zero { color: var(--faint); font-weight: 300; }
+
+  /* ---------- stats / results ---------- */
+  .statline {
+    display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline;
+    color: var(--dim); font-size: 14px; font-weight: 300;
+    margin: 22px 0 0; font-variant-numeric: tabular-nums;
+  }
+  .statline b { color: var(--text); font-weight: 700; font-size: 16px; }
+  .statline .sep { color: var(--faint); }
+  .statline .bad { color: var(--bad); font-weight: 700; }
+  .statline .good { color: var(--accent); font-weight: 700; }
+
+  .warn { color: var(--bad); font-size: 14px; margin: 14px 0 0; font-weight: 400; }
+
+  .results { margin-top: 34px; }
+  .results h2 {
+    font-size: 13px; letter-spacing: .16em; font-weight: 500;
+    color: var(--dim); margin: 0 0 4px;
+  }
   .transfer {
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    background: linear-gradient(120deg, rgba(157,107,255,.10), rgba(45,225,194,.07));
-    border: 1px solid var(--purple-deep);
-    border-radius: var(--r);
-    padding: 14px 16px; font-size: 16px;
-    animation: deal .3s ease both;
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 14px 0; border-bottom: 1px solid var(--line);
+    animation: rise .3s ease both;
   }
-  .transfer .who { font-weight: 700; }
-  .transfer .arrow { color: var(--dim); font-size: 14px; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  .transfer .who { font-weight: 700; font-size: 17px; }
+  .transfer .arrow { color: var(--faint); font-size: 13px; }
   .transfer .amount {
-    margin-inline-start: auto; font-weight: 700; font-size: 20px;
-    color: var(--teal); font-variant-numeric: tabular-nums; white-space: nowrap;
+    margin-inline-start: auto; font-weight: 900; font-size: 20px;
+    color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap;
   }
-  .settle-empty { color: var(--dim); margin: 0; font-size: 14px; }
+  .settle-empty { color: var(--faint); margin: 12px 0 0; font-size: 14px; font-weight: 300; }
+  .closed-ok { color: var(--accent); font-size: 14px; margin: 14px 0 0; }
 
-  .footer-actions { display: flex; gap: 10px; margin-top: 26px; flex-wrap: wrap; }
-  .hint { font-size: 12px; color: var(--dim); margin-top: 10px; }
-  .example-tag {
-    font-size: 11px; color: var(--purple);
-    border: 1px solid var(--purple-deep); border-radius: 999px; padding: 2px 10px;
-  }
+  /* ---------- footer ---------- */
+  .footer { margin-top: 56px; display: flex; flex-direction: column; gap: 26px; }
+  .btn-reset { color: var(--faint); font-size: 13px; align-self: flex-start; }
+  .btn-reset:hover { color: var(--bad); }
+  .roadmap { border-top: 1px solid var(--line); padding-top: 18px; color: var(--faint); font-size: 12px; font-weight: 300; line-height: 1.8; }
+  .roadmap b { color: var(--dim); font-weight: 500; letter-spacing: .1em; }
+  .example-tag { color: var(--accent); font-size: 12px; font-weight: 400; }
 
-  @media (max-width: 380px) {
-    h1 { font-size: 34px; }
-    .potbar { grid-template-columns: 1fr 1fr; }
-    .pot-item:last-child { grid-column: 1 / -1; }
-  }
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
@@ -228,9 +188,9 @@
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">קאש גיים · כניסה מינימלית ₪50 <span class="sync-badge" id="syncBadge">שמירה מקומית</span></div>
-    <h1>קופה סגורה</h1>
-    <p class="sub">רושמים כניסות תוך כדי המשחק, מזינים צ'יפים בסוף — ומקבלים מי משלם למי, במינימום העברות.</p>
+    <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span></div>
+    <h1>קופה <em>סגורה</em></h1>
+    <p class="sub">כניסות תוך כדי המשחק, צ'יפים בסוף — ומי משלם למי במינימום העברות.</p>
   </header>
 
   <div class="addrow">
@@ -238,23 +198,34 @@
     <button type="button" class="btn-add" id="addBtn">+ הוסף</button>
   </div>
 
-  <div class="players" id="players"></div>
+  <nav class="modes">
+    <button type="button" class="mode on" id="modeGame">משחק</button>
+    <button type="button" class="mode" id="modeSettle">התחשבנות</button>
+  </nav>
 
-  <div class="potbar" id="potbar"></div>
+  <div class="rows" id="rows"></div>
+
+  <div class="statline" id="statline"></div>
   <div id="warnbox"></div>
 
-  <h2><span class="tick">✦</span> מי משלם למי</h2>
-  <div class="transfers" id="transfers"></div>
+  <section class="results" id="results" hidden>
+    <h2>מי משלם למי</h2>
+    <div id="transfers"></div>
+  </section>
 
-  <div class="footer-actions">
-    <button type="button" class="btn-ghost" id="resetBtn">איפוס משחק</button>
+  <div class="footer">
+    <button type="button" class="btn-reset" id="resetBtn">איפוס משחק</button>
+    <div class="roadmap">
+      <b>מתוכנן</b><br>
+      כל שחקן מתחבר מהטלפון שלו לאותו משחק ורושם כניסות לעצמו · יומן פעולות בלתי ניתן לשינוי — כל כניסה, עדכון ומחיקה נרשמים עם מי ומתי.
+    </div>
   </div>
-  <p class="hint">כל כפתור ₪50+ מוסיף כניסה נוספת. הנתונים נשמרים בשרת — תיכנסו מכל מכשיר לאותו לינק ותמצאו את המשחק בדיוק איפה שעזבתם.</p>
 </div>
 
 <script>
 (function () {
   const MIN_BUYIN = 50;
+  const BUYIN_OPTIONS = [50, 100, 150];
   const KEY = "poker-settle-v1";
 
   const EXAMPLE = {
@@ -268,6 +239,8 @@
   };
 
   let state = load();
+  let mode = "game";          // "game" | "settle"
+  let openMenu = null;        // player name whose buy-in menu is open
 
   function load() {
     try {
@@ -293,10 +266,10 @@
   let dirtyUntil = 0; // while set, fresh local edits outrank incoming remote state
 
   function setSync(on, label) {
-    const b = document.getElementById("syncBadge");
-    if (!b) return;
-    b.textContent = label;
-    b.classList.toggle("on", on);
+    const d = document.getElementById("syncDot");
+    const t = document.getElementById("syncText");
+    if (d) d.classList.toggle("on", on);
+    if (t) t.textContent = label;
   }
 
   function remoteBody() {
@@ -356,7 +329,7 @@
       if (!db) return; // no server storage in this view — stay on localStorage
       gameDoc = db.doc("games/current");
       gameDoc.onSnapshot((snap) => {
-        setSync(true, "מסונכרן לשרת");
+        setSync(true, "מסונכרן");
         if (!snap.exists) {
           // First device seeds the shared game with whatever it has locally.
           if (!state.example && state.players.length) scheduleRemoteSave();
@@ -407,144 +380,155 @@
     return moves;
   }
 
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
   function render() {
-    const box = document.getElementById("players");
-    box.innerHTML = "";
+    document.getElementById("modeGame").classList.toggle("on", mode === "game");
+    document.getElementById("modeSettle").classList.toggle("on", mode === "settle");
+
+    const rows = document.getElementById("rows");
+    rows.innerHTML = "";
+
     state.players.forEach((p, idx) => {
-      const card = document.createElement("div");
-      card.className = "pcard";
+      const row = el("div", "prow");
+      const line = el("div", "prow-line");
 
-      const top = document.createElement("div");
-      top.className = "pcard-top";
+      line.appendChild(el("span", "pname", p.name));
 
-      const name = document.createElement("span");
-      name.className = "pname";
-      name.textContent = p.name;
-      top.appendChild(name);
+      if (mode === "game") {
+        const meta = el("span", "pmeta");
+        meta.innerHTML = "<b>" + fmt(sum(p.buyins)) + "</b> · " + p.buyins.length + " כניסות";
+        line.appendChild(meta);
 
-      const net = document.createElement("span");
-      net.dataset.net = idx;
-      top.appendChild(net);
+        const plus = el("button", "btn-plus", "+");
+        plus.type = "button";
+        plus.setAttribute("aria-label", "הוסף כניסה ל" + p.name);
+        plus.setAttribute("aria-expanded", openMenu === p.name ? "true" : "false");
+        if (openMenu === p.name) plus.classList.add("open");
+        plus.addEventListener("click", () => {
+          openMenu = openMenu === p.name ? null : p.name;
+          render();
+        });
+        line.appendChild(plus);
+        row.appendChild(line);
 
-      const x = document.createElement("button");
-      x.type = "button";
-      x.className = "btn-x";
-      x.textContent = "×";
-      x.setAttribute("aria-label", "הסר את " + p.name);
-      x.addEventListener("click", () => {
-        state.players.splice(idx, 1);
-        markReal(); save(); render();
-      });
-      top.appendChild(x);
-      card.appendChild(top);
+        const menu = el("div", "pmenu" + (openMenu === p.name ? " open" : ""));
+        const inner = el("div", "pmenu-in");
+        const mrow = el("div", "pmenu-row");
+        BUYIN_OPTIONS.forEach(amount => {
+          const chip = el("button", "chip", "₪" + amount + "+");
+          chip.type = "button";
+          chip.addEventListener("click", () => {
+            p.buyins.push(amount);
+            markReal(); save(); render();
+            const fresh = document.querySelectorAll(".prow")[idx];
+            if (fresh) {
+              const c = Array.from(fresh.querySelectorAll(".chip")).find(x => x.textContent === "₪" + amount + "+");
+              if (c) { c.classList.add("flash"); setTimeout(() => c.classList.remove("flash"), 500); }
+            }
+          });
+          mrow.appendChild(chip);
+        });
+        if (p.buyins.length > 0) {
+          const undo = el("button", "undo", "בטל אחרונה (₪" + p.buyins[p.buyins.length - 1] + ")");
+          undo.type = "button";
+          undo.addEventListener("click", () => {
+            p.buyins.pop();
+            if (p.buyins.length === 0) state.players.splice(idx, 1); // no entries left = out of the game
+            markReal(); save(); render();
+          });
+          mrow.appendChild(undo);
+        }
+        inner.appendChild(mrow);
+        menu.appendChild(inner);
+        row.appendChild(menu);
+      } else {
+        const inp = document.createElement("input");
+        inp.type = "number";
+        inp.min = "0";
+        inp.step = "1";
+        inp.inputMode = "decimal";
+        inp.placeholder = "צ'יפים";
+        inp.className = "srow-input";
+        inp.value = p.cashout === "" ? "" : p.cashout;
+        inp.setAttribute("aria-label", "שווי צ'יפים בסוף עבור " + p.name);
+        inp.addEventListener("input", () => {
+          p.cashout = inp.value === "" ? "" : Math.max(0, Number(inp.value));
+          markReal(); save(); renderDerived();
+        });
+        line.appendChild(inp);
 
-      const controls = document.createElement("div");
-      controls.className = "pcard-controls";
+        const net = el("span", "net");
+        net.dataset.net = idx;
+        line.appendChild(net);
+        row.appendChild(line);
+      }
 
-      const buyLabel = document.createElement("span");
-      buyLabel.className = "field-label";
-      buyLabel.textContent = "כניסות";
-      controls.appendChild(buyLabel);
-
-      const buyLine = document.createElement("div");
-      buyLine.className = "buyin-line";
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "btn-chip";
-      chip.textContent = "₪50+";
-      chip.setAttribute("aria-label", "הוסף כניסה של 50 שקלים ל" + p.name);
-      chip.addEventListener("click", () => {
-        p.buyins.push(MIN_BUYIN);
-        markReal(); save();
-        render();
-        // replay the bump animation on the freshly rendered chip button
-        const fresh = document.querySelectorAll(".btn-chip")[idx];
-        if (fresh) { fresh.classList.add("bump"); setTimeout(() => fresh.classList.remove("bump"), 400); }
-      });
-      const total = document.createElement("span");
-      total.className = "buyin-total";
-      total.innerHTML = p.buyins.length + "× · סה\"כ <b>" + fmt(sum(p.buyins)) + "</b>";
-      buyLine.appendChild(chip);
-      buyLine.appendChild(total);
-      controls.appendChild(buyLine);
-
-      const cashLabel = document.createElement("span");
-      cashLabel.className = "field-label";
-      cashLabel.textContent = "צ'יפים בסוף";
-      controls.appendChild(cashLabel);
-
-      const inp = document.createElement("input");
-      inp.type = "number";
-      inp.min = "0";
-      inp.step = "1";
-      inp.inputMode = "decimal";
-      inp.placeholder = "0";
-      inp.value = p.cashout === "" ? "" : p.cashout;
-      inp.setAttribute("aria-label", "שווי צ'יפים בסוף עבור " + p.name);
-      inp.addEventListener("input", () => {
-        p.cashout = inp.value === "" ? "" : Math.max(0, Number(inp.value));
-        markReal(); save(); renderDerived();
-      });
-      controls.appendChild(inp);
-
-      card.appendChild(controls);
-      box.appendChild(card);
+      rows.appendChild(row);
     });
+
     renderDerived();
   }
 
   function renderDerived() {
-    state.players.forEach((p, idx) => {
-      const el = document.querySelector('[data-net="' + idx + '"]');
-      if (!el) return;
-      const net = (Number(p.cashout) || 0) - sum(p.buyins);
-      el.className = "net " + (net > 0.005 ? "pos" : net < -0.005 ? "neg" : "zero");
-      el.textContent = (net > 0 ? "+" : "") + fmt(net).replace("₪-", "-₪");
-    });
-
     const t = totals();
-    const pot = document.getElementById("potbar");
-    const diffCls = Math.abs(t.diff) < 0.005 ? "good" : "bad";
-    pot.innerHTML =
-      potItem("בקופה", fmt(t.buy), "") +
-      potItem("צ'יפים שדווחו", fmt(t.out), "") +
-      potItem("הפרש ספירה", (t.diff > 0 ? "+" : "") + fmt(t.diff).replace("₪-", "-₪"), diffCls) +
-      (state.example ? '<span class="example-tag">נתוני דוגמה — כל עריכה הופכת אותם לשלכם</span>' : "");
+
+    if (mode === "settle") {
+      state.players.forEach((p, idx) => {
+        const e = document.querySelector('[data-net="' + idx + '"]');
+        if (!e) return;
+        const net = (Number(p.cashout) || 0) - sum(p.buyins);
+        e.className = "net " + (net > 0.005 ? "pos" : net < -0.005 ? "neg" : "zero");
+        e.textContent = (net > 0 ? "+" : "") + fmt(net).replace("₪-", "-₪");
+      });
+    }
+
+    const stat = document.getElementById("statline");
+    if (mode === "game") {
+      stat.innerHTML =
+        'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
+        state.players.length + " שחקנים" +
+        (state.example ? '<span class="sep">·</span><span class="example-tag">נתוני דוגמה — כל עריכה מאפסת אותם</span>' : "");
+    } else {
+      const diffTxt = (t.diff > 0 ? "+" : "") + fmt(t.diff).replace("₪-", "-₪");
+      stat.innerHTML =
+        'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
+        'דווח <b>' + fmt(t.out) + '</b><span class="sep">·</span>' +
+        'הפרש <span class="' + (Math.abs(t.diff) < 0.005 ? "good" : "bad") + '">' + (Math.abs(t.diff) < 0.005 ? "0 ✓" : diffTxt) + "</span>";
+    }
 
     const warn = document.getElementById("warnbox");
-    if (Math.abs(t.diff) >= 0.005 && t.buy > 0) {
-      warn.innerHTML = '<p class="warn">הצ\'יפים לא סוגרים את הקופה: הפרש של <strong>' +
-        fmt(Math.abs(t.diff)) + "</strong>. ספרו שוב לפני שמתחשבנים — ההתחשבנות למטה מוצגת לפי המספרים כפי שהוזנו.</p>";
+    if (mode === "settle" && Math.abs(t.diff) >= 0.005 && t.buy > 0) {
+      warn.innerHTML = '<p class="warn">הצ\'יפים לא סוגרים את הקופה — ספרו שוב לפני שמעבירים כסף. החישוב למטה לפי מה שהוזן.</p>';
     } else {
       warn.innerHTML = "";
     }
 
-    const box = document.getElementById("transfers");
-    const moves = settle();
-    box.innerHTML = "";
-    if (moves.length === 0) {
-      box.innerHTML = '<p class="settle-empty">אין העברות — או שכולם על אפס, או שעוד לא הוזנו סכומי סיום.</p>';
-    } else {
-      moves.forEach((m, i) => {
-        const div = document.createElement("div");
-        div.className = "transfer";
-        div.style.animationDelay = (i * 60) + "ms";
-        div.innerHTML =
-          '<span class="who">' + esc(m.from) + '</span>' +
-          '<span class="arrow">משלם ל־</span>' +
-          '<span class="who">' + esc(m.to) + '</span>' +
-          '<span class="amount">' + fmt(m.amount) + '</span>';
-        box.appendChild(div);
-      });
+    const results = document.getElementById("results");
+    results.hidden = mode !== "settle";
+    if (mode === "settle") {
+      const box = document.getElementById("transfers");
+      const moves = settle();
+      box.innerHTML = "";
+      if (moves.length === 0) {
+        box.innerHTML = '<p class="settle-empty">אין העברות — הזינו לכל שחקן את שווי הצ\'יפים שסיים איתו.</p>';
+      } else {
+        moves.forEach((m, i) => {
+          const div = el("div", "transfer");
+          div.style.animationDelay = (i * 60) + "ms";
+          div.appendChild(el("span", "who", m.from));
+          div.appendChild(el("span", "arrow", "משלם ל־"));
+          div.appendChild(el("span", "who", m.to));
+          div.appendChild(el("span", "amount", fmt(m.amount)));
+          box.appendChild(div);
+        });
+      }
     }
-  }
-
-  function potItem(label, value, cls) {
-    return '<div class="pot-item"><span class="pot-label">' + label +
-      '</span><span class="pot-value ' + cls + '">' + value + "</span></div>";
-  }
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   function addPlayer() {
@@ -554,13 +538,17 @@
     if (state.example) state = { example: false, players: [] };
     state.players.push({ name, buyins: [MIN_BUYIN], cashout: "" });
     inp.value = "";
+    mode = "game";
+    openMenu = name;
     save(); render();
-    inp.focus();
   }
   document.getElementById("addBtn").addEventListener("click", addPlayer);
   document.getElementById("newName").addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); addPlayer(); }
   });
+
+  document.getElementById("modeGame").addEventListener("click", () => { mode = "game"; render(); });
+  document.getElementById("modeSettle").addEventListener("click", () => { mode = "settle"; openMenu = null; render(); });
 
   // window.confirm is blocked in the sandboxed frame — two-step confirm instead.
   let resetArmed = null;
@@ -578,6 +566,7 @@
     resetArmed = null;
     btn.textContent = "איפוס משחק";
     state = { example: false, players: [] };
+    openMenu = null;
     save(); render();
   });
 
