@@ -195,10 +195,10 @@
         <tbody id="players"></tbody>
       </table>
     </div>
-    <form class="addrow" id="addForm">
+    <div class="addrow">
       <input type="text" id="newName" placeholder="שם שחקן חדש" autocomplete="off" aria-label="שם שחקן חדש">
-      <button type="submit" class="btn-chip">+ הוסף (כניסה ₪50)</button>
-    </form>
+      <button type="button" class="btn-chip" id="addBtn">+ הוסף (כניסה ₪50)</button>
+    </div>
   </div>
 
   <div class="potbar" id="potbar"></div>
@@ -495,19 +495,36 @@
     return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  document.getElementById("addForm").addEventListener("submit", (e) => {
-    e.preventDefault();
+  function addPlayer() {
     const inp = document.getElementById("newName");
     const name = inp.value.trim();
-    if (!name) return;
+    if (!name) { inp.focus(); return; }
     if (state.example) state = { example: false, players: [] };
     state.players.push({ name, buyins: [MIN_BUYIN], cashout: "" });
     inp.value = "";
     save(); render();
+    inp.focus();
+  }
+  document.getElementById("addBtn").addEventListener("click", addPlayer);
+  document.getElementById("newName").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); addPlayer(); }
   });
 
-  document.getElementById("resetBtn").addEventListener("click", () => {
-    if (!confirm("לאפס את כל המשחק? הפעולה תמחק את כל השחקנים והסכומים.")) return;
+  // window.confirm is blocked in the sandboxed frame — two-step confirm instead.
+  let resetArmed = null;
+  document.getElementById("resetBtn").addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    if (!resetArmed) {
+      btn.textContent = "בטוחים? לחיצה נוספת תמחק הכול";
+      resetArmed = setTimeout(() => {
+        resetArmed = null;
+        btn.textContent = "איפוס משחק";
+      }, 4000);
+      return;
+    }
+    clearTimeout(resetArmed);
+    resetArmed = null;
+    btn.textContent = "איפוס משחק";
     state = { example: false, players: [] };
     save(); render();
   });
