@@ -304,7 +304,12 @@
   }
 
   function applyRemote(data) {
-    const incoming = { example: !!data.example, players: Array.isArray(data.players) ? data.players : [] };
+    // Snapshot bodies are frozen objects — deep-clone so later edits
+    // (push into buyins, cashout assignment) don't silently fail.
+    const incoming = JSON.parse(JSON.stringify({
+      example: !!data.example,
+      players: Array.isArray(data.players) ? data.players : [],
+    }));
     if (JSON.stringify(incoming) === JSON.stringify({ example: state.example, players: state.players })) return;
     // Don't yank the UI out from under an active edit — apply on blur.
     const ae = document.activeElement;
