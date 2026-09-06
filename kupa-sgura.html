@@ -12,8 +12,20 @@
     --bad: #FF6D6D;
     color-scheme: dark;
   }
+  :root[data-theme="light"] {
+    --bg: #F5F8F9;
+    --text: #0C1519;
+    --dim: #5A6870;
+    --faint: #9AA8AE;
+    --line: rgba(12,21,25,.12);
+    --accent: #089E98;
+    --accent-press: #0CC2BB;
+    --bad: #D4403E;
+    color-scheme: light;
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  input, button, select, textarea { color-scheme: dark; }
+  [hidden] { display: none !important; }
+  input, button, select, textarea { color-scheme: inherit; }
   body {
     margin: 0;
     background: var(--bg);
@@ -22,6 +34,7 @@
     font-size: 16px;
     line-height: 1.5;
     direction: rtl;
+    transition: background-color .3s, color .3s;
   }
   .wrap { max-width: 520px; margin: 0 auto; padding: 26px 18px 90px; }
 
@@ -71,7 +84,7 @@
   }
   .btn-add:hover { color: var(--accent-press); }
 
-  /* ---------- mode switch ---------- */
+  /* ---------- tab bar ---------- */
   .modes { display: flex; gap: 26px; margin: 26px 0 0; border-bottom: 1px solid var(--line); }
   .mode {
     color: var(--dim); font-weight: 500; font-size: 15px;
@@ -86,22 +99,21 @@
   .mode.on::after { transform: scaleX(1); }
 
   /* ---------- player rows ---------- */
-  .rows {}
   .prow { border-bottom: 1px solid var(--line); }
+  .prow.anim { animation: rise .38s ease both; }
+  .load-in { animation: rise .5s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes shake {
+    20%, 60% { transform: translateX(5px); }
+    40%, 80% { transform: translateX(-5px); }
+  }
+  .shake { animation: shake .35s ease; }
   .prow-line { display: flex; align-items: center; gap: 12px; padding: 14px 0; min-height: 62px; }
   .pname { font-weight: 700; font-size: 17px; flex: 1; min-width: 72px; overflow-wrap: anywhere; }
   .pmeta { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 300; }
   .pmeta b { color: var(--text); font-weight: 500; display: inline-block; }
   .pmeta b.pulse { animation: pulseVal .55s ease; }
   @keyframes pulseVal { 30% { color: var(--accent); transform: scale(1.18); } }
-
-  .prow.anim { animation: rise .38s ease both; }
-  .load-in { animation: rise .5s ease both; }
-  @keyframes shake {
-    20%, 60% { transform: translateX(5px); }
-    40%, 80% { transform: translateX(-5px); }
-  }
-  .shake { animation: shake .35s ease; }
 
   .btn-plus {
     width: 40px; height: 40px; border-radius: 50%;
@@ -113,9 +125,6 @@
   .btn-plus:hover { box-shadow: 0 0 12px rgba(53,224,220,.35); }
   .btn-plus.open { transform: rotate(45deg); background: var(--accent); color: var(--bg); }
   .btn-plus.open:active { transform: rotate(45deg) scale(.92); }
-
-  .btn-x { color: var(--faint); font-size: 18px; padding: 6px; }
-  .btn-x:hover { color: var(--bad); }
 
   /* expanding buy-in menu */
   .pmenu { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s ease; }
@@ -163,7 +172,7 @@
   .warn { color: var(--bad); font-size: 14px; margin: 14px 0 0; font-weight: 400; animation: rise .3s ease both; }
 
   .results { margin-top: 34px; }
-  .results h2 {
+  .results h2, .ptitle {
     font-size: 13px; letter-spacing: .16em; font-weight: 500;
     color: var(--dim); margin: 0 0 4px;
   }
@@ -172,7 +181,6 @@
     padding: 14px 0; border-bottom: 1px solid var(--line);
     animation: rise .3s ease both;
   }
-  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
   .transfer .who { font-weight: 700; font-size: 17px; }
   .transfer .arrow { color: var(--faint); font-size: 13px; }
   .transfer .amount {
@@ -180,7 +188,53 @@
     color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap;
   }
   .settle-empty { color: var(--faint); margin: 12px 0 0; font-size: 14px; font-weight: 300; }
-  .closed-ok { color: var(--accent); font-size: 14px; margin: 14px 0 0; }
+
+  .btn-close-table {
+    margin-top: 30px; border: 1px solid var(--accent); border-radius: 999px;
+    color: var(--accent); font-weight: 700; font-size: 15px;
+    padding: 12px 26px; min-height: 48px;
+  }
+  .btn-close-table:hover { background: var(--accent); color: var(--bg); box-shadow: 0 0 18px rgba(53,224,220,.4); }
+  .btn-close-table.warn-state { border-color: var(--bad); color: var(--bad); }
+  .btn-close-table.warn-state:hover { background: var(--bad); color: var(--bg); box-shadow: none; }
+
+  /* ---------- profile ---------- */
+  .profile { margin-top: 6px; }
+  .psection { margin-top: 30px; animation: rise .4s ease both; }
+  .who-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .bignum {
+    font-size: 52px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .bignum.pos { color: var(--accent); }
+  .bignum.neg { color: var(--bad); }
+  .bignum.zero { color: var(--dim); }
+  .pstats { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 10px; color: var(--dim); font-size: 14px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .pstats b { color: var(--text); font-weight: 700; }
+  .hgame {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 12px 0; border-bottom: 1px solid var(--line);
+    font-variant-numeric: tabular-nums; animation: rise .3s ease both;
+  }
+  .hgame .hdate { color: var(--dim); font-size: 13px; font-weight: 300; }
+  .hgame .hplayers { color: var(--faint); font-size: 12px; font-weight: 300; }
+  .hgame .hnet { margin-inline-start: auto; font-weight: 700; font-size: 17px; }
+  .hnet.pos { color: var(--accent); } .hnet.neg { color: var(--bad); } .hnet.zero { color: var(--faint); font-weight: 300; }
+  .toggle-row { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
+  .toggle {
+    width: 52px; height: 30px; border-radius: 999px; border: 1px solid var(--line);
+    position: relative; flex: 0 0 52px;
+  }
+  .toggle::after {
+    content: ""; position: absolute; top: 3px; inset-inline-start: 3px;
+    width: 22px; height: 22px; border-radius: 50%; background: var(--dim);
+    transition: transform .25s ease, background-color .25s;
+  }
+  .toggle.on { border-color: var(--accent); }
+  .toggle.on::after { transform: translateX(-22px); background: var(--accent); }
+  :root[data-theme="light"] .toggle.on::after { transform: translateX(-22px); }
+  .toggle-label { color: var(--dim); font-size: 14px; font-weight: 300; }
+  .empty-note { color: var(--faint); font-size: 14px; font-weight: 300; margin-top: 10px; }
 
   /* ---------- footer ---------- */
   .footer { margin-top: 56px; display: flex; flex-direction: column; gap: 26px; }
@@ -202,14 +256,15 @@
     <p class="sub">כניסות תוך כדי המשחק, צ'יפים בסוף — ומי משלם למי במינימום העברות.</p>
   </header>
 
-  <div class="addrow load-in" style="animation-delay:.08s">
+  <div class="addrow load-in" style="animation-delay:.08s" id="addrow">
     <input type="text" id="newName" placeholder="שם שחקן חדש" autocomplete="off" aria-label="שם שחקן חדש">
     <button type="button" class="btn-add" id="addBtn">+ הוסף</button>
   </div>
 
   <nav class="modes load-in" style="animation-delay:.15s">
-    <button type="button" class="mode on" id="modeGame">משחק</button>
-    <button type="button" class="mode" id="modeSettle">התחשבנות</button>
+    <button type="button" class="mode on" id="modeGame">שולחן</button>
+    <button type="button" class="mode" id="modeSettle">חישוב</button>
+    <button type="button" class="mode" id="modeProfile">פרופיל</button>
   </nav>
 
   <div class="rows" id="rows"></div>
@@ -220,13 +275,16 @@
   <section class="results" id="results" hidden>
     <h2>מי משלם למי</h2>
     <div id="transfers"></div>
+    <button type="button" class="btn-close-table" id="closeTableBtn" hidden>סגירת שולחן ורישום לרקורד</button>
   </section>
+
+  <section class="profile" id="profile" hidden></section>
 
   <div class="footer load-in" style="animation-delay:.42s">
     <button type="button" class="btn-reset" id="resetBtn">איפוס משחק</button>
     <div class="roadmap">
       <b>מתוכנן</b><br>
-      כל שחקן מתחבר מהטלפון שלו לאותו משחק ורושם כניסות לעצמו · יומן פעולות בלתי ניתן לשינוי — כל כניסה, עדכון ומחיקה נרשמים עם מי ומתי.
+      חשבון אישי לכל שחקן — מתחברים בתחילת המשחק, וסגירת השולחן מעדכנת אוטומטית את הרקורד של כולם · יומן פעולות בלתי ניתן לשינוי — כל כניסה, עדכון ומחיקה נרשמים עם מי ומתי. הפרופיל כאן הוא דמו מקומי של הרעיון.
     </div>
   </div>
 </div>
@@ -236,6 +294,9 @@
   const MIN_BUYIN = 50;
   const BUYIN_OPTIONS = [50, 100, 150];
   const KEY = "poker-settle-v1";
+  const ME_KEY = "poker-settle-me";
+  const THEME_KEY = "poker-settle-theme";
+  const HISTORY_MAX = 60;
 
   const EXAMPLE = {
     example: true,
@@ -245,21 +306,39 @@
       { name: "רותם",  buyins: [50, 50, 50], cashout: 95 },
       { name: "עמית",  buyins: [50],     cashout: 25  },
     ],
+    history: [],
   };
 
   let state = load();
-  let mode = "game";          // "game" | "settle"
+  let mode = "game";          // "game" | "settle" | "profile"
   let openMenu = null;        // player name whose buy-in menu is open
   let customOpen = null;      // player name whose custom-amount input is open
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
   let animName = null;        // the player to animate when animNext === "one"
+  let me = loadMe();
 
+  // theme (default: dark)
+  try {
+    if (localStorage.getItem(THEME_KEY) === "light") document.documentElement.dataset.theme = "light";
+  } catch (e) {}
+
+  function loadMe() {
+    try { return localStorage.getItem(ME_KEY) || null; } catch (e) { return null; }
+  }
+  function saveMe() {
+    try { me ? localStorage.setItem(ME_KEY, me) : localStorage.removeItem(ME_KEY); } catch (e) {}
+  }
+
+  function normalize(s) {
+    if (!s || !Array.isArray(s.players)) return null;
+    return { example: !!s.example, players: s.players, history: Array.isArray(s.history) ? s.history : [] };
+  }
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) {
-        const s = JSON.parse(raw);
-        if (s && Array.isArray(s.players)) return s;
+        const s = normalize(JSON.parse(raw));
+        if (s) return s;
       }
     } catch (e) {}
     return JSON.parse(JSON.stringify(EXAMPLE));
@@ -289,6 +368,7 @@
       by: CLIENT_ID,
       example: !!state.example,
       players: state.players,
+      history: state.history,
       updatedAt: new Date().toISOString(),
     };
   }
@@ -309,8 +389,9 @@
     const incoming = JSON.parse(JSON.stringify({
       example: !!data.example,
       players: Array.isArray(data.players) ? data.players : [],
+      history: Array.isArray(data.history) ? data.history : [],
     }));
-    if (JSON.stringify(incoming) === JSON.stringify({ example: state.example, players: state.players })) return;
+    if (JSON.stringify(incoming) === JSON.stringify({ example: state.example, players: state.players, history: state.history })) return;
     // Don't yank the UI out from under an active edit — apply on blur.
     const ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT")) { pendingRemote = incoming; return; }
@@ -336,7 +417,7 @@
       if (!pendingRemote) return;
       if (saveTimer || Date.now() < dirtyUntil) { pendingRemote = null; return; }
       const p = pendingRemote; pendingRemote = null;
-      applyRemote({ example: p.example, players: p.players });
+      applyRemote({ example: p.example, players: p.players, history: p.history });
     }, 50);
   });
 
@@ -349,7 +430,7 @@
         setSync(true, "מסונכרן");
         if (!snap.exists) {
           // First device seeds the shared game with whatever it has locally.
-          if (!state.example && state.players.length) scheduleRemoteSave();
+          if (!state.example && (state.players.length || state.history.length)) scheduleRemoteSave();
           return;
         }
         const data = snap.data();
@@ -369,6 +450,7 @@
   }
 
   const fmt = (n) => "₪" + (Math.round(n * 100) / 100).toLocaleString("he-IL");
+  const fmtSigned = (n) => ((n > 0 ? "+" : "") + fmt(n)).replace("₪-", "-₪");
   const sum = (a) => a.reduce((x, y) => x + y, 0);
 
   function totals() {
@@ -423,11 +505,13 @@
     const anim = animNext; animNext = null;
     document.getElementById("modeGame").classList.toggle("on", mode === "game");
     document.getElementById("modeSettle").classList.toggle("on", mode === "settle");
+    document.getElementById("modeProfile").classList.toggle("on", mode === "profile");
+    document.getElementById("addrow").hidden = mode !== "game";
 
     const rows = document.getElementById("rows");
     rows.innerHTML = "";
 
-    state.players.forEach((p, idx) => {
+    if (mode !== "profile") state.players.forEach((p, idx) => {
       const row = el("div", "prow");
       if (anim === "all") { row.classList.add("anim"); row.style.animationDelay = (idx * 50) + "ms"; }
       else if (anim === "one" && p.name === animName) { row.classList.add("anim"); }
@@ -546,6 +630,7 @@
     });
 
     renderDerived();
+    renderProfile();
   }
 
   function renderDerived() {
@@ -557,22 +642,22 @@
         if (!e) return;
         const net = (Number(p.cashout) || 0) - sum(p.buyins);
         e.className = "net " + (net > 0.005 ? "pos" : net < -0.005 ? "neg" : "zero");
-        e.textContent = (net > 0 ? "+" : "") + fmt(net).replace("₪-", "-₪");
+        e.textContent = fmtSigned(net);
       });
     }
 
     const stat = document.getElementById("statline");
+    stat.hidden = mode === "profile";
     if (mode === "game") {
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
         state.players.length + " שחקנים" +
         (state.example ? '<span class="sep">·</span><span class="example-tag">נתוני דוגמה — כל עריכה מאפסת אותם</span>' : "");
-    } else {
-      const diffTxt = (t.diff > 0 ? "+" : "") + fmt(t.diff).replace("₪-", "-₪");
+    } else if (mode === "settle") {
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
         'דווח <b>' + fmt(t.out) + '</b><span class="sep">·</span>' +
-        'הפרש <span class="' + (Math.abs(t.diff) < 0.005 ? "good" : "bad") + '">' + (Math.abs(t.diff) < 0.005 ? "0 ✓" : diffTxt) + "</span>";
+        'הפרש <span class="' + (Math.abs(t.diff) < 0.005 ? "good" : "bad") + '">' + (Math.abs(t.diff) < 0.005 ? "0 ✓" : fmtSigned(t.diff)) + "</span>";
     }
 
     const warn = document.getElementById("warnbox");
@@ -601,14 +686,164 @@
           box.appendChild(div);
         });
       }
+      const closeBtn = document.getElementById("closeTableBtn");
+      closeBtn.hidden = !(state.players.length && !state.example);
+      closeBtn.classList.toggle("warn-state", closeArmed);
     }
+  }
+
+  // ---------- close table -> record ----------
+  let closeArmed = false;
+  let closeArmTimer = null;
+  document.getElementById("closeTableBtn").addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    const t = totals();
+    const balanced = Math.abs(t.diff) < 0.005;
+    if (!closeArmed) {
+      closeArmed = true;
+      btn.classList.add("warn-state");
+      btn.textContent = balanced
+        ? "לסגור את השולחן? לחיצה נוספת מאשרת"
+        : "ההפרש אינו אפס — לחיצה נוספת סוגרת בכל זאת";
+      closeArmTimer = setTimeout(() => {
+        closeArmed = false;
+        btn.classList.remove("warn-state");
+        btn.textContent = "סגירת שולחן ורישום לרקורד";
+      }, 5000);
+      return;
+    }
+    clearTimeout(closeArmTimer);
+    closeArmed = false;
+    btn.classList.remove("warn-state");
+    btn.textContent = "סגירת שולחן ורישום לרקורד";
+
+    const entry = {
+      at: new Date().toISOString(),
+      players: state.players.map(p => ({
+        name: p.name,
+        buyin: sum(p.buyins),
+        cashout: Number(p.cashout) || 0,
+        net: (Number(p.cashout) || 0) - sum(p.buyins),
+      })),
+    };
+    state.history.unshift(entry);
+    if (state.history.length > HISTORY_MAX) state.history.length = HISTORY_MAX;
+    state.players = [];
+    state.example = false;
+    openMenu = null; customOpen = null;
+    save();
+    mode = "profile"; animNext = "all";
+    render();
+  });
+
+  // ---------- profile ----------
+  function knownNames() {
+    const names = [];
+    state.history.forEach(g => g.players.forEach(p => { if (!names.includes(p.name)) names.push(p.name); }));
+    state.players.forEach(p => { if (!state.example && !names.includes(p.name)) names.push(p.name); });
+    return names;
+  }
+
+  function renderProfile() {
+    const box = document.getElementById("profile");
+    box.hidden = mode !== "profile";
+    if (mode !== "profile") return;
+    box.innerHTML = "";
+
+    // who am I
+    const whoSec = el("section", "psection");
+    whoSec.appendChild(el("h2", "ptitle", "מי אתה"));
+    const whoRow = el("div", "who-row");
+    const names = knownNames();
+    if (names.length === 0) {
+      whoSec.appendChild(el("p", "empty-note", "עוד אין שחקנים ברקורד — שחקו ערב אחד, סגרו שולחן בטאב \"חישוב\", והשמות יופיעו כאן."));
+    } else {
+      names.forEach(n => {
+        const chip = el("button", "chip" + (me === n ? " active" : ""), n);
+        chip.type = "button";
+        chip.addEventListener("click", () => {
+          me = me === n ? null : n;
+          saveMe(); renderProfile();
+        });
+        whoRow.appendChild(chip);
+      });
+      whoSec.appendChild(whoRow);
+    }
+    box.appendChild(whoSec);
+
+    // balance
+    if (me) {
+      const games = state.history
+        .map(g => ({ at: g.at, players: g.players, mine: g.players.find(p => p.name === me) }))
+        .filter(g => g.mine);
+      const total = sum(games.map(g => g.mine.net));
+      const wins = games.filter(g => g.mine.net > 0.005).length;
+      const best = games.length ? Math.max(...games.map(g => g.mine.net)) : 0;
+      const worst = games.length ? Math.min(...games.map(g => g.mine.net)) : 0;
+
+      const balSec = el("section", "psection");
+      balSec.style.animationDelay = ".08s";
+      balSec.appendChild(el("h2", "ptitle", "המאזן של " + me));
+      const big = el("div", "bignum " + (total > 0.005 ? "pos" : total < -0.005 ? "neg" : "zero"), fmtSigned(total));
+      balSec.appendChild(big);
+      const stats = el("div", "pstats");
+      stats.innerHTML =
+        "<span><b>" + games.length + "</b> ערבים</span>" +
+        "<span><b>" + wins + "</b> חיוביים</span>" +
+        "<span>הכי טוב <b>" + fmtSigned(best) + "</b></span>" +
+        "<span>הכי גרוע <b>" + fmtSigned(worst) + "</b></span>";
+      balSec.appendChild(stats);
+      box.appendChild(balSec);
+
+      const histSec = el("section", "psection");
+      histSec.style.animationDelay = ".16s";
+      histSec.appendChild(el("h2", "ptitle", "ערבים אחרונים"));
+      if (games.length === 0) {
+        histSec.appendChild(el("p", "empty-note", "עוד אין ערבים סגורים עם " + me + "."));
+      } else {
+        games.slice(0, 12).forEach((g, i) => {
+          const row = el("div", "hgame");
+          row.style.animationDelay = (i * 40) + "ms";
+          const d = new Date(g.at);
+          row.appendChild(el("span", "hdate", d.toLocaleDateString("he-IL", { day: "numeric", month: "short" })));
+          row.appendChild(el("span", "hplayers", g.players.length + " שחקנים"));
+          const net = el("span", "hnet " + (g.mine.net > 0.005 ? "pos" : g.mine.net < -0.005 ? "neg" : "zero"), fmtSigned(g.mine.net));
+          row.appendChild(net);
+          histSec.appendChild(row);
+        });
+      }
+      box.appendChild(histSec);
+    } else if (names.length) {
+      box.appendChild(el("p", "empty-note", "בחר מי אתה כדי לראות מאזן והיסטוריה."));
+    }
+
+    // theme
+    const themeSec = el("section", "psection");
+    themeSec.style.animationDelay = ".24s";
+    themeSec.appendChild(el("h2", "ptitle", "תצוגה"));
+    const trow = el("div", "toggle-row");
+    const isLight = document.documentElement.dataset.theme === "light";
+    const tg = el("button", "toggle" + (isLight ? " on" : ""));
+    tg.type = "button";
+    tg.setAttribute("aria-label", "החלף בין מצב כהה למצב בהיר");
+    tg.addEventListener("click", () => {
+      const nowLight = document.documentElement.dataset.theme !== "light";
+      if (nowLight) document.documentElement.dataset.theme = "light";
+      else delete document.documentElement.dataset.theme;
+      try { localStorage.setItem(THEME_KEY, nowLight ? "light" : "dark"); } catch (e) {}
+      renderProfile();
+    });
+    trow.appendChild(tg);
+    trow.appendChild(el("span", "toggle-label", isLight ? "מצב בהיר" : "מצב כהה"));
+    themeSec.appendChild(trow);
+    box.appendChild(themeSec);
   }
 
   function addPlayer() {
     const inp = document.getElementById("newName");
     const name = inp.value.trim();
     if (!name) { inp.focus(); return; }
-    if (state.example) state = { example: false, players: [] };
+    if (state.example) state = { example: false, players: [], history: state.history };
     state.players.push({ name, buyins: [MIN_BUYIN], cashout: "" });
     inp.value = "";
     mode = "game";
@@ -622,21 +857,23 @@
     if (e.key === "Enter") { e.preventDefault(); addPlayer(); }
   });
 
-  document.getElementById("modeGame").addEventListener("click", () => {
-    if (mode === "game") return;
-    mode = "game"; animNext = "all"; render();
-  });
-  document.getElementById("modeSettle").addEventListener("click", () => {
-    if (mode === "settle") return;
-    mode = "settle"; openMenu = null; customOpen = null; animNext = "all"; render();
-  });
+  function switchMode(m) {
+    if (mode === m) return;
+    mode = m;
+    if (m !== "game") { openMenu = null; customOpen = null; }
+    animNext = "all";
+    render();
+  }
+  document.getElementById("modeGame").addEventListener("click", () => switchMode("game"));
+  document.getElementById("modeSettle").addEventListener("click", () => switchMode("settle"));
+  document.getElementById("modeProfile").addEventListener("click", () => switchMode("profile"));
 
   // window.confirm is blocked in the sandboxed frame — two-step confirm instead.
   let resetArmed = null;
   document.getElementById("resetBtn").addEventListener("click", (e) => {
     const btn = e.currentTarget;
     if (!resetArmed) {
-      btn.textContent = "בטוחים? לחיצה נוספת תמחק הכול";
+      btn.textContent = "בטוחים? לחיצה נוספת תמחק את השולחן הנוכחי";
       resetArmed = setTimeout(() => {
         resetArmed = null;
         btn.textContent = "איפוס משחק";
@@ -646,8 +883,8 @@
     clearTimeout(resetArmed);
     resetArmed = null;
     btn.textContent = "איפוס משחק";
-    state = { example: false, players: [] };
-    openMenu = null;
+    state = { example: false, players: [], history: state.history };
+    openMenu = null; customOpen = null;
     save(); render();
   });
 
