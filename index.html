@@ -36,7 +36,8 @@
     font-size: 12px; letter-spacing: .14em; color: var(--dim); font-weight: 500;
   }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background .4s, box-shadow .4s; }
-  .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: breathe 2.6s ease-in-out infinite; }
+  @keyframes breathe { 50% { box-shadow: 0 0 14px var(--accent); opacity: .7; } }
   h1 {
     font-weight: 900; font-size: 44px; letter-spacing: -0.02em;
     margin: 6px 0 0; line-height: 1.05; color: var(--text);
@@ -95,7 +96,17 @@
   .prow-line { display: flex; align-items: center; gap: 12px; padding: 14px 0; min-height: 62px; }
   .pname { font-weight: 700; font-size: 17px; flex: 1; min-width: 72px; overflow-wrap: anywhere; }
   .pmeta { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 300; }
-  .pmeta b { color: var(--text); font-weight: 500; }
+  .pmeta b { color: var(--text); font-weight: 500; display: inline-block; }
+  .pmeta b.pulse { animation: pulseVal .55s ease; }
+  @keyframes pulseVal { 30% { color: var(--accent); transform: scale(1.18); } }
+
+  .prow.anim { animation: rise .38s ease both; }
+  .load-in { animation: rise .5s ease both; }
+  @keyframes shake {
+    20%, 60% { transform: translateX(5px); }
+    40%, 80% { transform: translateX(-5px); }
+  }
+  .shake { animation: shake .35s ease; }
 
   .btn-plus {
     width: 40px; height: 40px; border-radius: 50%;
@@ -124,11 +135,17 @@
   .chip:hover { border-color: var(--accent); }
   .chip:active { background: var(--accent); color: var(--bg); }
   .chip.flash { animation: flash .45s ease; }
+  .chip.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
   @keyframes flash {
     0% { background: var(--accent); color: var(--bg); box-shadow: 0 0 16px rgba(53,224,220,.6); }
   }
   .undo { color: var(--faint); font-size: 13px; margin-inline-start: auto; }
   .undo:hover { color: var(--bad); }
+
+  .custom-line { display: flex; align-items: flex-end; gap: 12px; padding: 0 0 16px; animation: rise .3s ease both; }
+  .custom-line input { flex: 1; min-width: 0; font-size: 16px; }
+  .btn-confirm { color: var(--accent); font-weight: 700; font-size: 15px; padding: 8px 2px 10px; white-space: nowrap; }
+  .btn-confirm:hover { color: var(--accent-press); }
 
   /* settle rows */
   input[type="number"].srow-input { width: 104px; flex: 0 0 104px; text-align: end; font-size: 17px; }
@@ -148,7 +165,7 @@
   .statline .bad { color: var(--bad); font-weight: 700; }
   .statline .good { color: var(--accent); font-weight: 700; }
 
-  .warn { color: var(--bad); font-size: 14px; margin: 14px 0 0; font-weight: 400; }
+  .warn { color: var(--bad); font-size: 14px; margin: 14px 0 0; font-weight: 400; animation: rise .3s ease both; }
 
   .results { margin-top: 34px; }
   .results h2 {
@@ -187,25 +204,25 @@
 
 
 <div class="wrap">
-  <header>
+  <header class="load-in">
     <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span></div>
     <h1>קופה <em>סגורה</em></h1>
     <p class="sub">כניסות תוך כדי המשחק, צ'יפים בסוף — ומי משלם למי במינימום העברות.</p>
   </header>
 
-  <div class="addrow">
+  <div class="addrow load-in" style="animation-delay:.08s">
     <input type="text" id="newName" placeholder="שם שחקן חדש" autocomplete="off" aria-label="שם שחקן חדש">
     <button type="button" class="btn-add" id="addBtn">+ הוסף</button>
   </div>
 
-  <nav class="modes">
+  <nav class="modes load-in" style="animation-delay:.15s">
     <button type="button" class="mode on" id="modeGame">משחק</button>
     <button type="button" class="mode" id="modeSettle">התחשבנות</button>
   </nav>
 
   <div class="rows" id="rows"></div>
 
-  <div class="statline" id="statline"></div>
+  <div class="statline load-in" style="animation-delay:.34s" id="statline"></div>
   <div id="warnbox"></div>
 
   <section class="results" id="results" hidden>
@@ -213,7 +230,7 @@
     <div id="transfers"></div>
   </section>
 
-  <div class="footer">
+  <div class="footer load-in" style="animation-delay:.42s">
     <button type="button" class="btn-reset" id="resetBtn">איפוס משחק</button>
     <div class="roadmap">
       <b>מתוכנן</b><br>
@@ -241,6 +258,9 @@
   let state = load();
   let mode = "game";          // "game" | "settle"
   let openMenu = null;        // player name whose buy-in menu is open
+  let customOpen = null;      // player name whose custom-amount input is open
+  let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
+  let animName = null;        // the player to animate when animNext === "one"
 
   function load() {
     try {
@@ -387,7 +407,23 @@
     return e;
   }
 
+  // Adds a buy-in for the player and replays the feedback animations
+  // (chip flash + total pulse) on the freshly rendered row.
+  function addBuyin(p, idx, amount, chipText) {
+    p.buyins.push(amount);
+    markReal(); save(); render();
+    const fresh = document.querySelectorAll(".prow")[idx];
+    if (!fresh) return;
+    if (chipText) {
+      const c = Array.from(fresh.querySelectorAll(".chip")).find(x => x.textContent === chipText);
+      if (c) { c.classList.add("flash"); setTimeout(() => c.classList.remove("flash"), 500); }
+    }
+    const totalEl = fresh.querySelector(".pmeta b");
+    if (totalEl) { totalEl.classList.add("pulse"); setTimeout(() => totalEl.classList.remove("pulse"), 600); }
+  }
+
   function render() {
+    const anim = animNext; animNext = null;
     document.getElementById("modeGame").classList.toggle("on", mode === "game");
     document.getElementById("modeSettle").classList.toggle("on", mode === "settle");
 
@@ -396,6 +432,8 @@
 
     state.players.forEach((p, idx) => {
       const row = el("div", "prow");
+      if (anim === "all") { row.classList.add("anim"); row.style.animationDelay = (idx * 50) + "ms"; }
+      else if (anim === "one" && p.name === animName) { row.classList.add("anim"); }
       const line = el("div", "prow-line");
 
       line.appendChild(el("span", "pname", p.name));
@@ -412,6 +450,7 @@
         if (openMenu === p.name) plus.classList.add("open");
         plus.addEventListener("click", () => {
           openMenu = openMenu === p.name ? null : p.name;
+          if (openMenu !== p.name) customOpen = null;
           render();
         });
         line.appendChild(plus);
@@ -423,17 +462,21 @@
         BUYIN_OPTIONS.forEach(amount => {
           const chip = el("button", "chip", "₪" + amount + "+");
           chip.type = "button";
-          chip.addEventListener("click", () => {
-            p.buyins.push(amount);
-            markReal(); save(); render();
-            const fresh = document.querySelectorAll(".prow")[idx];
-            if (fresh) {
-              const c = Array.from(fresh.querySelectorAll(".chip")).find(x => x.textContent === "₪" + amount + "+");
-              if (c) { c.classList.add("flash"); setTimeout(() => c.classList.remove("flash"), 500); }
-            }
-          });
+          chip.addEventListener("click", () => addBuyin(p, idx, amount, "₪" + amount + "+"));
           mrow.appendChild(chip);
         });
+        const other = el("button", "chip" + (customOpen === p.name ? " active" : ""), "אחר");
+        other.type = "button";
+        other.addEventListener("click", () => {
+          customOpen = customOpen === p.name ? null : p.name;
+          render();
+          if (customOpen === p.name) {
+            const fresh = document.querySelectorAll(".prow")[idx];
+            const ci = fresh && fresh.querySelector(".custom-line input");
+            if (ci) ci.focus();
+          }
+        });
+        mrow.appendChild(other);
         if (p.buyins.length > 0) {
           const undo = el("button", "undo", "בטל אחרונה (₪" + p.buyins[p.buyins.length - 1] + ")");
           undo.type = "button";
@@ -445,6 +488,39 @@
           mrow.appendChild(undo);
         }
         inner.appendChild(mrow);
+
+        if (customOpen === p.name) {
+          const cline = el("div", "custom-line");
+          const cinp = document.createElement("input");
+          cinp.type = "number";
+          cinp.min = String(MIN_BUYIN);
+          cinp.step = "1";
+          cinp.inputMode = "decimal";
+          cinp.placeholder = "סכום חופשי · מינימום ₪" + MIN_BUYIN;
+          cinp.setAttribute("aria-label", "סכום כניסה חופשי עבור " + p.name);
+          const confirmCustom = () => {
+            const amount = Number(cinp.value);
+            if (!cinp.value || !isFinite(amount) || amount < MIN_BUYIN) {
+              cinp.classList.remove("shake");
+              void cinp.offsetWidth; // restart the animation
+              cinp.classList.add("shake");
+              cinp.focus();
+              return;
+            }
+            customOpen = null;
+            addBuyin(p, idx, Math.round(amount));
+          };
+          cinp.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); confirmCustom(); }
+          });
+          const cbtn = el("button", "btn-confirm", "הוסף");
+          cbtn.type = "button";
+          cbtn.addEventListener("click", confirmCustom);
+          cline.appendChild(cinp);
+          cline.appendChild(cbtn);
+          inner.appendChild(cline);
+        }
+
         menu.appendChild(inner);
         row.appendChild(menu);
       } else {
@@ -540,6 +616,8 @@
     inp.value = "";
     mode = "game";
     openMenu = name;
+    customOpen = null;
+    animNext = "one"; animName = name;
     save(); render();
   }
   document.getElementById("addBtn").addEventListener("click", addPlayer);
@@ -547,8 +625,14 @@
     if (e.key === "Enter") { e.preventDefault(); addPlayer(); }
   });
 
-  document.getElementById("modeGame").addEventListener("click", () => { mode = "game"; render(); });
-  document.getElementById("modeSettle").addEventListener("click", () => { mode = "settle"; openMenu = null; render(); });
+  document.getElementById("modeGame").addEventListener("click", () => {
+    if (mode === "game") return;
+    mode = "game"; animNext = "all"; render();
+  });
+  document.getElementById("modeSettle").addEventListener("click", () => {
+    if (mode === "settle") return;
+    mode = "settle"; openMenu = null; customOpen = null; animNext = "all"; render();
+  });
 
   // window.confirm is blocked in the sandboxed frame — two-step confirm instead.
   let resetArmed = null;
