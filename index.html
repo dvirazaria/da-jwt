@@ -258,6 +258,7 @@
   let gameDoc = null;
   let saveTimer = null;
   let pendingRemote = null;
+  let dirtyUntil = 0; // while set, fresh local edits outrank incoming remote state
 
   function setSync(on, label) {
     const b = document.getElementById("syncBadge");
@@ -267,9 +268,11 @@
   }
 
   function scheduleRemoteSave() {
+    dirtyUntil = Date.now() + 6000;
     if (!gameDoc) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
+      saveTimer = null;
       gameDoc.set({
         by: CLIENT_ID,
         example: !!state.example,
@@ -289,6 +292,20 @@
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     render();
   }
+
+  document.addEventListener("visibilitychange", () => {
+    // Flush a pending debounced write immediately when the tab is hidden/closed.
+    if (document.visibilityState === "hidden" && saveTimer && gameDoc) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      gameDoc.set({
+        by: CLIENT_ID,
+        example: !!state.example,
+        players: state.players,
+        updatedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+  });
 
   document.addEventListener("focusout", () => {
     if (pendingRemote) {
@@ -310,7 +327,11 @@
           return;
         }
         const data = snap.data();
-        if (!data || data.by === CLIENT_ID) return;
+        if (!data) return;
+        if (data.by === CLIENT_ID) { dirtyUntil = 0; return; } // our own write confirmed
+        // A fresh local edit is still on its way to the server — don't let
+        // an older remote snapshot overwrite it.
+        if (saveTimer || Date.now() < dirtyUntil) return;
         applyRemote(data);
       }, () => setSync(false, "שמירה מקומית"));
     }).catch(() => {});
