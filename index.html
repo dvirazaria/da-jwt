@@ -249,6 +249,7 @@
     return JSON.parse(JSON.stringify(EXAMPLE));
   }
   function save() {
+    pendingRemote = null; // a local edit supersedes any remote state parked for later
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     scheduleRemoteSave();
   }
@@ -308,10 +309,15 @@
   });
 
   document.addEventListener("focusout", () => {
-    if (pendingRemote) {
+    if (!pendingRemote) return;
+    // Let the click/submit that caused this blur run first; if it made a
+    // local edit, that edit wins and the parked remote state is dropped.
+    setTimeout(() => {
+      if (!pendingRemote) return;
+      if (saveTimer || Date.now() < dirtyUntil) { pendingRemote = null; return; }
       const p = pendingRemote; pendingRemote = null;
-      setTimeout(() => applyRemote({ example: p.example, players: p.players }), 0);
-    }
+      applyRemote({ example: p.example, players: p.players });
+    }, 50);
   });
 
   function initSync() {
