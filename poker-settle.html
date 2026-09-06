@@ -1,0 +1,418 @@
+<title>קופה סגורה</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Heebo:wght@400;500;700&display=swap">
+<style>
+  :root {
+    --felt: #0B2E24;
+    --felt-deep: #072019;
+    --felt-line: #1B4A3A;
+    --cream: #F0E7D4;
+    --cream-dim: #BFB49B;
+    --gold: #D2A84C;
+    --gold-soft: #8A6F35;
+    --win: #5DBF8E;
+    --lose: #E07A6E;
+    --chip-red: #C34A3E;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    margin: 0;
+    background: var(--felt-deep);
+    color: var(--cream);
+    font-family: "Heebo", "Segoe UI", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    direction: rtl;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+
+  header { margin-bottom: 20px; }
+  .eyebrow {
+    font-size: 12px; letter-spacing: 0.14em; color: var(--gold);
+    text-transform: uppercase; font-weight: 500;
+  }
+  h1 {
+    font-family: "Frank Ruhl Libre", Georgia, serif;
+    font-weight: 900; font-size: 40px; margin: 2px 0 4px;
+    text-wrap: balance;
+  }
+  .sub { color: var(--cream-dim); margin: 0; font-size: 15px; }
+
+  .table-card {
+    background: var(--felt);
+    border: 1px solid var(--felt-line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  th {
+    text-align: right; font-size: 12px; font-weight: 500;
+    letter-spacing: 0.08em; color: var(--cream-dim);
+    padding: 12px 14px 8px; border-bottom: 1px solid var(--felt-line);
+    white-space: nowrap;
+  }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--felt-line); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .pname { font-weight: 700; font-size: 17px; }
+  input[type="text"], input[type="number"] {
+    background: var(--felt-deep);
+    border: 1px solid var(--felt-line);
+    border-radius: 6px;
+    color: var(--cream);
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    padding: 7px 10px;
+    width: 110px;
+  }
+  input[type="text"] { width: 100%; min-width: 120px; }
+  input:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; border-color: var(--gold); }
+  input::placeholder { color: var(--cream-dim); opacity: .7; }
+  input[type=number]::-webkit-inner-spin-button { display: none; }
+
+  button {
+    font: inherit; cursor: pointer; border-radius: 6px;
+    border: 1px solid var(--felt-line);
+    background: var(--felt);
+    color: var(--cream);
+    padding: 7px 12px;
+  }
+  button:hover { border-color: var(--gold-soft); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .btn-chip {
+    border-color: var(--gold-soft); color: var(--gold);
+    font-weight: 700; padding: 6px 10px; font-variant-numeric: tabular-nums;
+  }
+  .btn-chip:hover { background: rgba(210,168,76,.12); }
+  .btn-x { color: var(--lose); border-color: transparent; background: transparent; padding: 4px 8px; font-size: 18px; line-height: 1; }
+  .btn-x:hover { border-color: var(--chip-red); }
+  .btn-primary {
+    background: var(--gold); color: #241B08; border-color: var(--gold);
+    font-weight: 700; padding: 10px 18px;
+  }
+  .btn-primary:hover { filter: brightness(1.07); }
+  .btn-ghost { background: transparent; color: var(--cream-dim); }
+
+  .addrow { display: flex; gap: 10px; padding: 14px; border-top: 1px solid var(--felt-line); }
+  .addrow input { flex: 1; }
+
+  .buyin-cell { display: flex; align-items: center; gap: 8px; }
+  .buyin-count { font-size: 12px; color: var(--cream-dim); white-space: nowrap; }
+
+  .net { font-weight: 700; white-space: nowrap; }
+  .net.pos { color: var(--win); }
+  .net.neg { color: var(--lose); }
+  .net.zero { color: var(--cream-dim); font-weight: 400; }
+
+  .potbar {
+    display: flex; flex-wrap: wrap; gap: 10px 28px;
+    margin: 18px 0; padding: 14px 16px;
+    background: var(--felt);
+    border: 1px solid var(--felt-line);
+    border-radius: var(--radius);
+    align-items: baseline;
+  }
+  .pot-item { display: flex; flex-direction: column; }
+  .pot-label { font-size: 12px; color: var(--cream-dim); letter-spacing: 0.06em; }
+  .pot-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pot-value.bad { color: var(--lose); }
+  .pot-value.good { color: var(--win); }
+
+  .warn {
+    margin: 0 0 18px; padding: 12px 16px;
+    border: 1px solid var(--chip-red);
+    border-radius: var(--radius);
+    background: rgba(195,74,62,.12);
+    color: var(--lose); font-size: 15px;
+  }
+  .warn strong { color: var(--cream); }
+
+  h2 {
+    font-family: "Frank Ruhl Libre", Georgia, serif;
+    font-weight: 700; font-size: 24px; margin: 32px 0 12px;
+  }
+  .transfers { display: flex; flex-direction: column; gap: 8px; }
+  .transfer {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--felt);
+    border: 1px solid var(--gold-soft);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-size: 17px;
+  }
+  .transfer .amount {
+    margin-inline-start: auto;
+    font-weight: 700; font-size: 20px; color: var(--gold);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .transfer .arrow { color: var(--cream-dim); }
+  .transfer .who { font-weight: 700; }
+  .settle-empty { color: var(--cream-dim); margin: 0; }
+
+  .footer-actions { display: flex; gap: 10px; margin-top: 28px; flex-wrap: wrap; }
+  .hint { font-size: 13px; color: var(--cream-dim); margin-top: 10px; }
+  .example-tag {
+    display: inline-block; font-size: 12px; color: var(--gold);
+    border: 1px solid var(--gold-soft); border-radius: 999px;
+    padding: 1px 10px; margin-inline-start: 8px; vertical-align: middle;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .transfer { animation: deal .25s ease-out both; }
+    @keyframes deal { from { opacity: 0; transform: translateY(4px); } }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">קאש גיים · כניסה מינימלית ₪50</div>
+    <h1>קופה סגורה</h1>
+    <p class="sub">רושמים כניסות תוך כדי המשחק, מזינים צ'יפים בסוף — ומקבלים מי משלם למי, במינימום העברות.</p>
+  </header>
+
+  <div class="table-card">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>שחקן</th>
+            <th>כניסות</th>
+            <th>סה"כ כניסה</th>
+            <th>שווי צ'יפים בסוף</th>
+            <th>מאזן</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="players"></tbody>
+      </table>
+    </div>
+    <form class="addrow" id="addForm">
+      <input type="text" id="newName" placeholder="שם שחקן חדש" autocomplete="off" aria-label="שם שחקן חדש">
+      <button type="submit" class="btn-chip">+ הוסף (כניסה ₪50)</button>
+    </form>
+  </div>
+
+  <div class="potbar" id="potbar"></div>
+  <div id="warnbox"></div>
+
+  <h2>מי משלם למי</h2>
+  <div class="transfers" id="transfers"></div>
+
+  <div class="footer-actions">
+    <button class="btn-ghost" id="resetBtn">איפוס משחק</button>
+  </div>
+  <p class="hint">כל כפתור ₪50+ מוסיף כניסה נוספת. הנתונים נשמרים בדפדפן שלך עד לאיפוס.</p>
+</div>
+
+<script>
+(function () {
+  const MIN_BUYIN = 50;
+  const KEY = "poker-settle-v1";
+
+  const EXAMPLE = {
+    example: true,
+    players: [
+      { name: "דביר",  buyins: [50, 50], cashout: 180 },
+      { name: "יוסי",  buyins: [50],     cashout: 0   },
+      { name: "רותם",  buyins: [50, 50, 50], cashout: 95 },
+      { name: "עמית",  buyins: [50],     cashout: 25  },
+    ],
+  };
+
+  let state = load();
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s && Array.isArray(s.players)) return s;
+      }
+    } catch (e) {}
+    return JSON.parse(JSON.stringify(EXAMPLE));
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function markReal() {
+    if (state.example) state.example = false;
+  }
+
+  const fmt = (n) => "₪" + (Math.round(n * 100) / 100).toLocaleString("he-IL");
+  const sum = (a) => a.reduce((x, y) => x + y, 0);
+
+  function totals() {
+    const buy = sum(state.players.map(p => sum(p.buyins)));
+    const out = sum(state.players.map(p => Number(p.cashout) || 0));
+    return { buy, out, diff: out - buy };
+  }
+
+  // Greedy settlement: fewest transfers between net winners and losers.
+  function settle() {
+    const nets = state.players
+      .map(p => ({ name: p.name, net: (Number(p.cashout) || 0) - sum(p.buyins) }))
+      .filter(p => Math.abs(p.net) > 0.005);
+    const winners = nets.filter(p => p.net > 0).sort((a, b) => b.net - a.net);
+    const losers  = nets.filter(p => p.net < 0).sort((a, b) => a.net - b.net);
+    const moves = [];
+    let i = 0, j = 0;
+    while (i < losers.length && j < winners.length) {
+      const pay = Math.min(-losers[i].net, winners[j].net);
+      moves.push({ from: losers[i].name, to: winners[j].name, amount: pay });
+      losers[i].net += pay;
+      winners[j].net -= pay;
+      if (-losers[i].net < 0.005) i++;
+      if (winners[j].net < 0.005) j++;
+    }
+    return moves;
+  }
+
+  function render() {
+    const tbody = document.getElementById("players");
+    tbody.innerHTML = "";
+    state.players.forEach((p, idx) => {
+      const tr = document.createElement("tr");
+
+      const tdName = document.createElement("td");
+      tdName.className = "pname";
+      tdName.textContent = p.name;
+      tr.appendChild(tdName);
+
+      const tdBuy = document.createElement("td");
+      const cell = document.createElement("div");
+      cell.className = "buyin-cell";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-chip";
+      btn.textContent = "₪50+";
+      btn.setAttribute("aria-label", "הוסף כניסה של 50 שקלים ל" + p.name);
+      btn.addEventListener("click", () => {
+        p.buyins.push(MIN_BUYIN);
+        markReal(); save(); render();
+      });
+      const count = document.createElement("span");
+      count.className = "buyin-count num";
+      count.textContent = p.buyins.length + "×";
+      cell.appendChild(btn);
+      cell.appendChild(count);
+      tdBuy.appendChild(cell);
+      tr.appendChild(tdBuy);
+
+      const tdTotal = document.createElement("td");
+      tdTotal.className = "num";
+      tdTotal.textContent = fmt(sum(p.buyins));
+      tr.appendChild(tdTotal);
+
+      const tdCash = document.createElement("td");
+      const inp = document.createElement("input");
+      inp.type = "number";
+      inp.min = "0";
+      inp.step = "1";
+      inp.inputMode = "decimal";
+      inp.value = p.cashout === "" ? "" : p.cashout;
+      inp.setAttribute("aria-label", "שווי צ'יפים בסוף עבור " + p.name);
+      inp.addEventListener("input", () => {
+        p.cashout = inp.value === "" ? "" : Math.max(0, Number(inp.value));
+        markReal(); save(); renderDerived();
+      });
+      tdCash.appendChild(inp);
+      tr.appendChild(tdCash);
+
+      const tdNet = document.createElement("td");
+      tdNet.dataset.net = idx;
+      tr.appendChild(tdNet);
+
+      const tdX = document.createElement("td");
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "btn-x";
+      x.textContent = "×";
+      x.setAttribute("aria-label", "הסר את " + p.name);
+      x.addEventListener("click", () => {
+        state.players.splice(idx, 1);
+        markReal(); save(); render();
+      });
+      tdX.appendChild(x);
+      tr.appendChild(tdX);
+
+      tbody.appendChild(tr);
+    });
+    renderDerived();
+  }
+
+  function renderDerived() {
+    // per-player net
+    state.players.forEach((p, idx) => {
+      const td = document.querySelector('[data-net="' + idx + '"]');
+      if (!td) return;
+      const net = (Number(p.cashout) || 0) - sum(p.buyins);
+      td.className = "net num " + (net > 0.005 ? "pos" : net < -0.005 ? "neg" : "zero");
+      td.textContent = (net > 0 ? "+" : "") + fmt(net).replace("₪-", "-₪");
+    });
+
+    const t = totals();
+    const pot = document.getElementById("potbar");
+    const diffCls = Math.abs(t.diff) < 0.005 ? "good" : "bad";
+    pot.innerHTML =
+      potItem("בקופה (סה\"כ כניסות)", fmt(t.buy), "") +
+      potItem("סה\"כ צ'יפים שדווחו", fmt(t.out), "") +
+      potItem("הפרש ספירה", (t.diff > 0 ? "+" : "") + fmt(t.diff).replace("₪-", "-₪"), diffCls) +
+      (state.example ? '<span class="example-tag">נתוני דוגמה — התחילו להקליד והם יהפכו לשלכם</span>' : "");
+
+    const warn = document.getElementById("warnbox");
+    if (Math.abs(t.diff) >= 0.005 && t.buy > 0) {
+      warn.innerHTML = '<p class="warn">הצ\'יפים לא סוגרים את הקופה: הפרש של <strong>' +
+        fmt(Math.abs(t.diff)) + "</strong>. ספרו שוב לפני שמתחשבנים — ההתחשבנות למטה מוצגת לפי המספרים כפי שהוזנו.</p>";
+    } else {
+      warn.innerHTML = "";
+    }
+
+    const box = document.getElementById("transfers");
+    const moves = settle();
+    box.innerHTML = "";
+    if (moves.length === 0) {
+      box.innerHTML = '<p class="settle-empty">אין העברות — או שכולם על אפס, או שעוד לא הוזנו סכומי סיום.</p>';
+    } else {
+      moves.forEach(m => {
+        const div = document.createElement("div");
+        div.className = "transfer";
+        div.innerHTML =
+          '<span class="who">' + esc(m.from) + '</span>' +
+          '<span class="arrow">משלם ל־</span>' +
+          '<span class="who">' + esc(m.to) + '</span>' +
+          '<span class="amount">' + fmt(m.amount) + '</span>';
+        box.appendChild(div);
+      });
+    }
+  }
+
+  function potItem(label, value, cls) {
+    return '<div class="pot-item"><span class="pot-label">' + label +
+      '</span><span class="pot-value ' + cls + '">' + value + "</span></div>";
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  document.getElementById("addForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const inp = document.getElementById("newName");
+    const name = inp.value.trim();
+    if (!name) return;
+    if (state.example) state = { example: false, players: [] };
+    state.players.push({ name, buyins: [MIN_BUYIN], cashout: "" });
+    inp.value = "";
+    save(); render();
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    if (!confirm("לאפס את כל המשחק? הפעולה תמחק את כל השחקנים והסכומים.")) return;
+    state = { example: false, players: [] };
+    save(); render();
+  });
+
+  render();
+})();
+</script>
