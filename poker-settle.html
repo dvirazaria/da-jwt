@@ -154,6 +154,13 @@
 
   .footer-actions { display: flex; gap: 10px; margin-top: 28px; flex-wrap: wrap; }
   .hint { font-size: 13px; color: var(--cream-dim); margin-top: 10px; }
+  .sync-badge {
+    display: inline-block; font-size: 11px; letter-spacing: 0.04em;
+    color: var(--cream-dim); border: 1px solid var(--felt-line);
+    border-radius: 999px; padding: 1px 10px; margin-inline-start: 10px;
+    vertical-align: middle; text-transform: none;
+  }
+  .sync-badge.on { color: var(--win); border-color: var(--win); }
   .example-tag {
     display: inline-block; font-size: 12px; color: var(--gold);
     border: 1px solid var(--gold-soft); border-radius: 999px;
@@ -167,7 +174,7 @@
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">קאש גיים · כניסה מינימלית ₪50</div>
+    <div class="eyebrow">קאש גיים · כניסה מינימלית ₪50 <span class="sync-badge" id="syncBadge">שמירה מקומית</span></div>
     <h1>קופה סגורה</h1>
     <p class="sub">רושמים כניסות תוך כדי המשחק, מזינים צ'יפים בסוף — ומקבלים מי משלם למי, במינימום העברות.</p>
   </header>
@@ -203,7 +210,7 @@
   <div class="footer-actions">
     <button class="btn-ghost" id="resetBtn">איפוס משחק</button>
   </div>
-  <p class="hint">כל כפתור ₪50+ מוסיף כניסה נוספת. הנתונים נשמרים בדפדפן שלך עד לאיפוס.</p>
+  <p class="hint">כל כפתור ₪50+ מוסיף כניסה נוספת. הנתונים נשמרים בשרת — תיכנסו מכל מכשיר לאותו לינק ותמצאו את המשחק בדיוק איפה שעזבתם.</p>
 </div>
 
 <script>
@@ -235,7 +242,72 @@
   }
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    scheduleRemoteSave();
   }
+
+  // --- server sync (shared document, survives devices and reloads) ---
+  const CLIENT_ID = Math.random().toString(36).slice(2);
+  let gameDoc = null;
+  let saveTimer = null;
+  let pendingRemote = null;
+
+  function setSync(on, label) {
+    const b = document.getElementById("syncBadge");
+    if (!b) return;
+    b.textContent = label;
+    b.classList.toggle("on", on);
+  }
+
+  function scheduleRemoteSave() {
+    if (!gameDoc) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      gameDoc.set({
+        by: CLIENT_ID,
+        example: !!state.example,
+        players: state.players,
+        updatedAt: new Date().toISOString(),
+      }).catch(() => setSync(false, "שגיאת שמירה — נשמר מקומית"));
+    }, 400);
+  }
+
+  function applyRemote(data) {
+    const incoming = { example: !!data.example, players: Array.isArray(data.players) ? data.players : [] };
+    if (JSON.stringify(incoming) === JSON.stringify({ example: state.example, players: state.players })) return;
+    // Don't yank the UI out from under an active edit — apply on blur.
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === "INPUT")) { pendingRemote = incoming; return; }
+    state = incoming;
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    render();
+  }
+
+  document.addEventListener("focusout", () => {
+    if (pendingRemote) {
+      const p = pendingRemote; pendingRemote = null;
+      setTimeout(() => applyRemote({ example: p.example, players: p.players }), 0);
+    }
+  });
+
+  function initSync() {
+    if (!window.claude || typeof window.claude.use !== "function") return;
+    window.claude.use("db").then((db) => {
+      if (!db) return; // no server storage in this view — stay on localStorage
+      gameDoc = db.doc("games/current");
+      gameDoc.onSnapshot((snap) => {
+        setSync(true, "מסונכרן לשרת");
+        if (!snap.exists) {
+          // First device seeds the shared game with whatever it has locally.
+          if (!state.example && state.players.length) scheduleRemoteSave();
+          return;
+        }
+        const data = snap.data();
+        if (!data || data.by === CLIENT_ID) return;
+        applyRemote(data);
+      }, () => setSync(false, "שמירה מקומית"));
+    }).catch(() => {});
+  }
+  initSync();
   function markReal() {
     if (state.example) state.example = false;
   }
