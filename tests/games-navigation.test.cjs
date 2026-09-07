@@ -59,6 +59,14 @@ test('dashboard creation and resume actions have dedicated handlers', () => {
   assert.match(html, /setAppView\("game"\)/);
 });
 
+test('Games dashboard centers its visible content while preserving RTL text direction', () => {
+  assert.match(html, /document\.body\.classList\.toggle\("games-view", appView === "games"\)/);
+  assert.match(html, /\.games-view header \{ text-align: center; \}/);
+  assert.match(html, /\.games-home \{[^}]*text-align: center;/s);
+  assert.match(html, /\.games-card \{[^}]*align-items: center;[^}]*text-align: center;/s);
+  assert.match(html, /direction: rtl;/);
+});
+
 test('active game finish is a one-second hold and settlement can return to editing', () => {
   assert.match(html, /const FINISH_GAME_HOLD_MS = 1000;/);
   assert.match(html, /id="finishGameBtn"/);
