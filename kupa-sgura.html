@@ -568,6 +568,34 @@
   .set-flat.danger { color: var(--bad); }
   .set-flat.danger:hover, .set-flat.danger.armed { color: var(--bad); }
 
+  /* group page: invite (code / link / QR placeholder) */
+  .games-invite-create {
+    border: 1px solid var(--accent); border-radius: 999px; color: var(--accent);
+    font-weight: 700; font-size: 15px; padding: 10px 24px; min-height: 44px;
+  }
+  .games-invite-create:hover { background: var(--accent); color: var(--bg); }
+  .games-invite-card { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .games-invite-code {
+    margin: 0; text-align: center; color: var(--text);
+    font-size: 28px; font-weight: 800; letter-spacing: .12em;
+    font-variant-numeric: tabular-nums;
+  }
+  .games-invite-actions { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .games-invite-action {
+    border: 1px solid var(--line); border-radius: 999px; color: var(--text);
+    font-size: 13px; font-weight: 600; padding: 8px 16px; min-height: 40px;
+  }
+  .games-invite-action:hover { border-color: var(--accent); color: var(--accent); }
+  .games-invite-copied { color: var(--accent); font-size: 12px; font-weight: 500; }
+  .games-invite-qr {
+    width: 120px; height: 120px; border: 1px solid var(--line); border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    padding: 10px; color: var(--faint); font-size: 12px; font-weight: 300;
+  }
+  .games-invite-note { margin: 0; color: var(--dim); font-size: 12px; font-weight: 300; max-width: 280px; }
+  .games-invite-revoke { color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; }
+  .games-invite-revoke:hover { color: var(--bad); }
+
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
@@ -615,6 +643,15 @@
     <input type="text" id="loginName" placeholder="השם שלך" autocomplete="off" aria-label="השם שלך">
     <button type="button" class="btn-primary" id="loginGo">המשך</button>
     <button type="button" class="btn-skip" id="loginSkip">דלג בינתיים</button>
+  </div>
+</div>
+
+<div class="login" id="joinNotice" hidden>
+  <div class="login-in">
+    <h2>קיבלת הזמנה לקבוצה</h2>
+    <p class="games-invite-code" id="joinNoticeCode" dir="ltr"></p>
+    <p>הצטרפות תעבוד כשהשרת יחובר.</p>
+    <button type="button" class="btn-primary" id="joinNoticeContinueBtn">המשך</button>
   </div>
 </div>
 
@@ -1438,6 +1475,55 @@
     return { group, member };
   }
 
+  // ---------- invites (pure) ----------
+  // One invite token model, three presentations (large code / link / QR placeholder). Joining
+  // through an invite needs a backend and does not exist yet: parseJoinToken only recognizes a
+  // token in the URL so boot can show a friendly notice; nothing here ever touches state.
+  var INVITE_TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
+  // randomBytes is a Uint8Array(8) the caller fills (crypto.getRandomValues, Math.random
+  // fallback) — kept as an argument so this stays a pure, deterministically testable function.
+  function generateInviteToken(randomBytes) {
+    const bytes = randomBytes || [];
+    let token = "";
+    for (let i = 0; i < 8; i++) {
+      token += INVITE_TOKEN_ALPHABET[bytes[i] % INVITE_TOKEN_ALPHABET.length];
+    }
+    return token;
+  }
+  function createInvite(invites, groupId, byRef, token, at) {
+    const invite = normalizeInvite({ id: newId(), groupId, token, createdBy: byRef, createdAt: at, revokedAt: null });
+    invites.push(invite);
+    return invite;
+  }
+  // Latest (by createdAt) non-revoked invite for the group, or null.
+  function activeInvite(invites, groupId) {
+    const open = (Array.isArray(invites) ? invites : []).filter(i => i && i.groupId === groupId && !i.revokedAt);
+    if (!open.length) return null;
+    return open.reduce((latest, i) => (i.createdAt > latest.createdAt ? i : latest));
+  }
+  function revokeInvite(invites, inviteId, at) {
+    const invite = (Array.isArray(invites) ? invites : []).find(i => i && i.id === inviteId);
+    if (!invite || invite.revokedAt) return false;
+    invite.revokedAt = at;
+    return true;
+  }
+  function inviteLink(token, origin, pathname) {
+    return origin + pathname + "?join=" + token;
+  }
+  function formatInviteCode(token) {
+    const t = String(token || "");
+    return t.slice(0, 4) + "-" + t.slice(4, 8);
+  }
+  // Reads a ?join= token out of a location.search string. Accepts a dash the way the formatted
+  // code displays it, uppercases, and only returns 8 alphabet characters — anything else is null
+  // so a malformed or foreign query can't be mistaken for a real invite.
+  function parseJoinToken(search) {
+    const match = String(search || "").match(/[?&]join=([^&]*)/);
+    if (!match) return null;
+    const token = decodeURIComponent(match[1]).toUpperCase().replace(/-/g, "");
+    return new RegExp("^[" + INVITE_TOKEN_ALPHABET + "]{8}$").test(token) ? token : null;
+  }
+
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -1587,6 +1673,32 @@
     save();
     resetCreateGroupPanel(); // plain reset: openGroup's render replaces the dashboard next anyway
     openGroup(group.id);
+  }
+
+  // Fills a Uint8Array(8) with real randomness for a fresh invite token: crypto.getRandomValues
+  // when available, Math.random otherwise. Not part of the pure section — it is the one place
+  // that actually reaches for randomness; generateInviteToken() itself stays deterministic.
+  function randomInviteBytes() {
+    const bytes = new Uint8Array(8);
+    if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") crypto.getRandomValues(bytes);
+    else for (let i = 0; i < 8; i++) bytes[i] = Math.floor(Math.random() * 256);
+    return bytes;
+  }
+
+  function createGroupInvite(groupId) {
+    const at = new Date().toISOString();
+    const byRef = { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me };
+    createInvite(state.invites, groupId, byRef, generateInviteToken(randomInviteBytes()), at);
+    save();
+    renderGroupPage();
+  }
+
+  function revokeGroupInvite(groupId) {
+    const invite = activeInvite(state.invites, groupId);
+    if (!invite) return;
+    revokeInvite(state.invites, invite.id, new Date().toISOString());
+    save();
+    renderGroupPage();
   }
 
   function resetCreateGroupPanel() {
@@ -2081,6 +2193,82 @@
     return section;
   }
 
+  // The group's invite: any active member sees it (returns null otherwise, same convention as
+  // renderGroupLastGame). No invite yet → "צור הזמנה". With one → the code, copy/share, a QR
+  // placeholder (rendering is deferred to a backend that can host a redemption endpoint), and,
+  // for admins only, a text action to revoke it (which brings back "צור הזמנה").
+  function renderGroupInvite(summary, invite, isAdmin) {
+    if (!summary || !summary.isMember) return null;
+    const section = el("section", "games-section games-invite-section");
+    section.appendChild(el("h3", "games-section-title", "הזמנה לקבוצה"));
+    if (!invite) {
+      const createBtn = el("button", "games-invite-create", "צור הזמנה");
+      createBtn.type = "button";
+      createBtn.addEventListener("click", () => createGroupInvite(summary.groupId));
+      section.appendChild(createBtn);
+      return section;
+    }
+    const card = el("div", "games-invite-card");
+    const code = el("p", "games-invite-code", formatInviteCode(invite.token));
+    code.dir = "ltr";
+    card.appendChild(code);
+
+    const actions = el("div", "games-invite-actions");
+    const copyBtn = el("button", "games-invite-action", "העתק קישור");
+    copyBtn.type = "button";
+    const copiedNote = el("span", "games-invite-copied", "הועתק ✓");
+    copiedNote.hidden = true;
+    copyBtn.addEventListener("click", () => {
+      const link = inviteLink(invite.token, location.origin, location.pathname);
+      const announceCopied = () => {
+        copiedNote.hidden = false;
+        setTimeout(() => { copiedNote.hidden = true; }, 2000);
+      };
+      const copyViaSelect = () => {
+        const tmp = document.createElement("textarea");
+        tmp.value = link;
+        tmp.style.position = "fixed";
+        tmp.style.opacity = "0";
+        document.body.appendChild(tmp);
+        tmp.focus();
+        tmp.select();
+        try { document.execCommand("copy"); } catch (err) { /* best effort */ }
+        document.body.removeChild(tmp);
+        announceCopied();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(announceCopied).catch(copyViaSelect);
+      } else {
+        copyViaSelect();
+      }
+    });
+    actions.appendChild(copyBtn);
+    actions.appendChild(copiedNote);
+
+    if (typeof navigator.share === "function") {
+      const shareBtn = el("button", "games-invite-action", "שתף");
+      shareBtn.type = "button";
+      shareBtn.addEventListener("click", () => {
+        const link = inviteLink(invite.token, location.origin, location.pathname);
+        navigator.share({ title: summary.name, url: link }).catch(() => {});
+      });
+      actions.appendChild(shareBtn);
+    }
+    card.appendChild(actions);
+
+    card.appendChild(el("div", "games-invite-qr", "QR יופיע עם חיבור לשרת"));
+    card.appendChild(el("p", "games-invite-note", "הצטרפות דרך הזמנה תעבוד כשהאפליקציה תתחבר לשרת."));
+
+    if (isAdmin) {
+      const revokeBtn = el("button", "games-invite-revoke", "בטל הזמנה");
+      revokeBtn.type = "button";
+      revokeBtn.addEventListener("click", () => revokeGroupInvite(summary.groupId));
+      card.appendChild(revokeBtn);
+    }
+    section.appendChild(card);
+    return section;
+  }
+
   function renderGroupPage() {
     const box = document.getElementById("gamesHome");
     box.innerHTML = "";
@@ -2096,6 +2284,8 @@
     if (lastGame) inner.appendChild(lastGame);
     inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
+    const inviteSection = renderGroupInvite(summary, activeInvite(state.invites, currentGroupId), summary.isAdmin);
+    if (inviteSection) inner.appendChild(inviteSection);
     box.appendChild(inner);
   }
 
@@ -3092,6 +3282,21 @@
   // ---------- boot ----------
   appView = initialAppView(state);
   render();
-  if (!me) showLogin();
+  const joinToken = parseJoinToken(location.search);
+  if (joinToken) {
+    // Nothing is joined here — this only shows the code and strips the query. Real redemption
+    // needs a backend (see the invite section's note); if the user isn't signed in yet, the
+    // normal login screen still follows once they dismiss the notice.
+    document.getElementById("joinNoticeCode").textContent = formatInviteCode(joinToken);
+    const notice = document.getElementById("joinNotice");
+    notice.hidden = false;
+    document.getElementById("joinNoticeContinueBtn").addEventListener("click", () => {
+      notice.hidden = true;
+      if (!me) showLogin();
+    }, { once: true });
+    history.replaceState(null, "", location.pathname);
+  } else if (!me) {
+    showLogin();
+  }
 })();
 </script>
