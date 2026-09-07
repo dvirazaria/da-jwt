@@ -113,6 +113,17 @@ hosting, concurrent games across groups, guest→account merge.
 11. Tests: extend `tests/*.test.cjs` with the vm-slice pattern; run `node --test tests/*.test.cjs`
     and `git diff --check` before every commit. Commit on `main` with a conventional subject.
 12. Hebrew microcopy, short and direct. RTL.
+13. **Motion is mandatory wherever something moves or appears.** Every new button has a press
+    state (`transform: scale(.92)` ~.12s) and transitions on background/color/border (~.2s). Every
+    panel/expansion opens with the grid `0fr → 1fr` collapse pattern (~.28s) and its arrow/plus
+    rotates. Every new screen or overlay (group page, settings overlays, join notice, participant
+    picker) enters with fade + `translateY(6px)` rise (~.3s), and list rows stagger in (40-60ms per
+    row, `.anim` pattern). Armed/danger states animate their color change. Feedback text
+    ("הועתק ✓", tags appearing) fades in. Checkbox/selection toggles animate the check. All of it is
+    disabled under `prefers-reduced-motion: reduce` (the existing global rule covers it — do not
+    add per-element overrides that bypass it). Reuse existing keyframes/classes (`.anim`, `.load-in`,
+    `.pmenu` transition, `.chip` stagger, `.pulse`) before inventing new ones; new keyframes go next
+    to the existing ones.
 
 ---
 
@@ -593,3 +604,23 @@ join, memberships, permissions, active-game concurrency, debts/settlement persis
 plan from the current `state` document. Also update `HANDOFF.md` (data model section + new flows) and
 `DESIGN.md` (new components: group page, member rows, invite block, participant picker, exit tag).
 No runtime code changes.
+
+---
+
+## Task 18: Motion pass over everything built in Tasks 1-8, 11, 12, 14
+
+**Goal 18:** every interactive element and every state change added by the groups work animates
+according to Global Constraint 13, with zero behavior changes.
+
+Scope (audit each, add what is missing): player exit panel open/close and the "יצא" tag; create-group
+panel and avatar preview; group card tap feedback and expand; group page enter (header + sections
+stagger), back; primary action button; members add panel, remove armed state, former-members
+collapse; friends tab switch and list; invite code appear, copy feedback, QR tile; participant
+picker rows and checkboxes, guest add/remove; history row expand + ranking rows stagger;
+leaderboard rows stagger; group settings overlay enter/exit, armed buttons; archive line collapse;
+join notice enter. Also: view transitions between `games ↔ group ↔ game ↔ settle ↔ profile` get a
+short container fade+rise on `setAppView` (apply a class on the visible container, remove on
+animationend). Keep durations ≤ .5s. Test: a regex test asserting the new panels use the shared
+transition classes and that no new `animation:` lacks the reduced-motion guard (the global
+`@media (prefers-reduced-motion: reduce) * { animation: none !important; transition: none !important }`
+must still be the last rule of the stylesheet).
