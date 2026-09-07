@@ -9,7 +9,7 @@ Usage: python3 build.py
 """
 import re
 
-VERSION = 23
+VERSION = 24
 
 HEAD = """<!doctype html>
 <html lang="he" dir="rtl">

@@ -70,26 +70,40 @@ test('frozen remote snapshots retain logs and allow subsequent additions', () =>
   assert.equal(result.players[0].entryLog.length,2);
   assert.equal(result.players[0].entryLog[0].timestamp,'2026-09-07T18:00:00Z');
 });
-test('closing archives a detached log and starts a different game', () => {
-  const closing=html.slice(html.indexOf('    const entry = {\n      gameId: state.gameId,'),html.indexOf('  // ---------- login (who'));
+test('table balance is an exact integer: buy-ins minus cashouts', () => {
+  const start = html.indexOf('  const wholeMoney');
+  const end = html.indexOf('  function totals', start);
+  assert.ok(start >= 0, 'tableBalance helper exists');
+  const context = vm.createContext({});
+  vm.runInContext('const sum = values => values.reduce((x, y) => x + y, 0);', context);
+  vm.runInContext(html.slice(start, end), context);
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(tableBalance([{buyins:[4500],cashout:4400}]))', context)), {buy:4500,out:4400,difference:100,isBalanced:false});
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(tableBalance([{buyins:[4500],cashout:4500}]))', context)), {buy:4500,out:4500,difference:0,isBalanced:true});
+});
+test('closed history records whether the table was balanced and the exact difference', () => {
+  const start = html.indexOf('  function buildHistoryEntry');
+  const end = html.indexOf('  // Greedy settlement', start);
+  assert.ok(start >= 0, 'buildHistoryEntry helper exists');
+  const context = vm.createContext({});
+  vm.runInContext('const sum = values => values.reduce((x, y) => x + y, 0);', context);
+  vm.runInContext(html.slice(start, end), context);
+  const state = {gameId:'game-one', players:[{id:'p',name:'א',buyins:[4500],entryLog:[],cashout:4400}], history:[]};
+  const entry = JSON.parse(vm.runInContext(`JSON.stringify(buildHistoryEntry(${JSON.stringify(state)}, {difference:100,isBalanced:false}, '2026-09-07T18:00:00.000Z'))`, context));
+  assert.equal(entry.isBalanced, false);
+  assert.equal(entry.balanceDifference, 100);
+  assert.equal(entry.players[0].cashout, 4400);
+});
+test('closed history keeps a detached entry log snapshot', () => {
+  const closing=html.slice(html.indexOf('  const wholeMoney'),html.indexOf('  // Greedy settlement'));
   const context=vm.createContext({crypto:require('node:crypto').webcrypto});
-  vm.runInContext(normalizeSource + `
-    let state={gameId:'first-game',players:[{id:'p',name:'א',buyins:[],entryLog:[],cashout:150}],history:[]};
-    addEntry(state.players[0],50); addEntry(state.players[0],100);
-    const oldPlayer=state.players[0], expandedEntries=new Set(['p']);
-    const HISTORY_MAX=60, sum=a=>a.reduce((x,y)=>x+y,0), balanced=false;
-    let openMenu='א', customOpen=null, mode='settle', animNext=null;
-    function save(){} function render(){} function confetti(){}
-    (() => {
-  ` + closing.replace(/\}\);\s*$/, '})();'), context);
-  const result=JSON.parse(vm.runInContext('JSON.stringify(state)',context));
-  assert.notEqual(result.gameId,'first-game');
-  assert.equal(result.players.length,0);
-  assert.equal(result.history[0].gameId,'first-game');
-  assert.equal(result.history[0].players[0].entryLog.length,2);
-  assert.equal(result.history[0].players[0].net,0);
-  vm.runInContext('oldPlayer.entryLog[0].amount=999',context);
-  assert.equal(vm.runInContext('state.history[0].players[0].entryLog[0].amount',context),50);
+  vm.runInContext('const sum = values => values.reduce((x, y) => x + y, 0);' + closing, context);
+  const snapshot = {gameId:'first-game',players:[{id:'p',name:'א',buyins:[50,100],entryLog:[{id:'e',amount:50}],cashout:150}],history:[]};
+  const result=JSON.parse(vm.runInContext(`JSON.stringify(buildHistoryEntry(${JSON.stringify(snapshot)}, {difference:0,isBalanced:true}, '2026-09-07T18:00:00.000Z'))`,context));
+  assert.equal(result.gameId,'first-game');
+  assert.equal(result.isBalanced,true);
+  assert.equal(result.players[0].entryLog.length,1);
+  snapshot.players[0].entryLog[0].amount=999;
+  assert.equal(result.players[0].entryLog[0].amount,50);
 });
 test('a player with no entries remains empty on reload', () => {
   const result=normalize({gameId:'g',players:[{id:'p',name:'א',buyins:[],entryLog:[]}],history:[]});

@@ -229,8 +229,9 @@
   .entry-details-in { overflow: hidden; min-height: 0; }
   .entry-list { margin: 0; padding: 2px 0 12px; list-style: none; }
   .entry-item { display: flex; justify-content: flex-start; align-items: baseline;
-    gap: 18px; padding: 5px 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+    gap: 8px; padding: 5px 0; font-size: 13px; font-variant-numeric: tabular-nums; }
   .entry-time { color: var(--dim); font-weight: 300; }
+  .entry-divider { width: 14px; height: 1px; flex: 0 0 14px; background: var(--line); }
   .entry-amount { color: var(--text); font-weight: 500; }
   .entry-empty { color: var(--dim); font-size: 12px; margin: 0; padding: 4px 0 12px; }
 
@@ -280,6 +281,16 @@
   .btn-close-table:hover { background: var(--accent); color: var(--bg); }
   .btn-close-table.warn-state { border-color: var(--bad); color: var(--bad); }
   .btn-close-table.warn-state:hover { background: var(--bad); color: var(--bg); box-shadow: none; }
+  .btn-close-table:disabled { cursor: not-allowed; opacity: .45; border-color: var(--line); color: var(--faint); }
+  .btn-close-table:disabled:hover { background: none; color: var(--faint); }
+  .btn-force-close { margin-top: 10px; color: var(--dim); font-size: 13px; font-weight: 500; padding: 7px 2px; }
+  .btn-force-close:hover { color: var(--text); }
+  .force-close-confirm { margin-top: 12px; color: var(--dim); font-size: 13px; }
+  .force-close-confirm p { margin: 0 0 8px; }
+  .force-close-actions { display: flex; align-items: center; gap: 14px; }
+  .force-close-actions button { font-size: 13px; padding: 5px 2px; }
+  .force-close-cancel { color: var(--dim); }
+  .force-close-submit { color: var(--text); font-weight: 700; }
 
   /* ---------- profile (centered) ---------- */
   .profile { margin-top: 6px; text-align: center; }
@@ -424,7 +435,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 23</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 24</p>
   </div>
 </div>
 
@@ -477,6 +488,14 @@
     <h2>מי משלם למי</h2>
     <div id="transfers"></div>
     <button type="button" class="btn-close-table" id="closeTableBtn" hidden>סגירת שולחן ורישום לרקורד</button>
+    <button type="button" class="btn-force-close" id="forceCloseBtn" hidden>סגור בכל זאת</button>
+    <div class="force-close-confirm" id="forceCloseConfirm" hidden>
+      <p id="forceCloseMessage"></p>
+      <div class="force-close-actions">
+        <button type="button" class="force-close-cancel" id="forceCloseCancel">חזור</button>
+        <button type="button" class="force-close-submit" id="forceCloseConfirmBtn">סגור בכל זאת</button>
+      </div>
+    </div>
   </section>
 
   <section class="profile" id="profile" hidden></section>
@@ -713,11 +732,41 @@
   const fmt = (n) => "₪" + (Math.round(n * 100) / 100).toLocaleString("he-IL");
   const fmtSigned = (n) => ((n > 0 ? "+" : "") + fmt(n)).replace("₪-", "-₪");
   const sum = (a) => a.reduce((x, y) => x + y, 0);
+  const wholeMoney = (n) => Math.round(Number(n) || 0);
+
+  function tableBalance(players) {
+    const buy = players.reduce((total, p) => total + p.buyins.reduce((x, amount) => x + wholeMoney(amount), 0), 0);
+    const out = players.reduce((total, p) => total + wholeMoney(p.cashout), 0);
+    const difference = Math.round(buy - out);
+    return { buy, out, difference, isBalanced: difference === 0 };
+  }
 
   function totals() {
-    const buy = sum(state.players.map(p => sum(p.buyins)));
-    const out = sum(state.players.map(p => Number(p.cashout) || 0));
-    return { buy, out, diff: out - buy };
+    const balance = tableBalance(state.players);
+    return { buy: balance.buy, out: balance.out, diff: balance.difference };
+  }
+
+  function buildHistoryEntry(snapshot, balance, at) {
+    return {
+      gameId: snapshot.gameId,
+      at,
+      isBalanced: balance.isBalanced,
+      balanceDifference: balance.difference,
+      players: snapshot.players.map(p => ({
+        id: p.id,
+        entryLog: p.entryLog.map(entry => ({ ...entry })),
+        name: p.name,
+        buyin: sum(p.buyins),
+        cashout: Number(p.cashout) || 0,
+        net: (Number(p.cashout) || 0) - sum(p.buyins),
+      })),
+    };
+  }
+
+  function balanceDescription(diff) {
+    if (diff > 0) return "חסר " + fmt(diff);
+    if (diff < 0) return "עודף " + fmt(Math.abs(diff));
+    return "0";
   }
 
   // Greedy settlement: fewest transfers between net winners and losers.
@@ -877,7 +926,7 @@
             else { time.title = "שעת הכניסה לא תועדה"; time.setAttribute("aria-label", time.title); }
             const amount = el("span", "entry-amount", fmt(entry.amount));
             amount.dir = "ltr";
-            item.append(time, amount);
+            item.append(time, el("span", "entry-divider"), amount);
             list.appendChild(item);
           });
           detailsInner.appendChild(list);
@@ -1071,12 +1120,12 @@
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
         'דווח <b>' + fmt(t.out) + '</b><span class="sep">·</span>' +
-        'הפרש <span class="' + (Math.abs(t.diff) < 0.005 ? "good" : "bad") + '">' + (Math.abs(t.diff) < 0.005 ? "0 ✓" : fmtSigned(t.diff)) + "</span>";
+        'הפרש <span class="' + (t.diff === 0 ? "good" : "bad") + '">' + (t.diff === 0 ? "0 ✓" : balanceDescription(t.diff)) + "</span>";
     }
 
     const warn = document.getElementById("warnbox");
-    if (mode === "settle" && Math.abs(t.diff) >= 0.005 && t.buy > 0) {
-      warn.innerHTML = '<p class="warn">הצ\'יפים לא סוגרים את הקופה — ספרו שוב לפני שמעבירים כסף. החישוב למטה לפי מה שהוזן.</p>';
+    if (mode === "settle" && t.diff !== 0 && t.buy > 0) {
+      warn.innerHTML = '<p class="warn">השולחן לא מאוזן — ' + balanceDescription(t.diff) + '.</p>';
     } else {
       warn.innerHTML = "";
     }
@@ -1101,8 +1150,18 @@
         });
       }
       const closeBtn = document.getElementById("closeTableBtn");
-      closeBtn.hidden = !(state.players.length && !state.example);
+      const forceBtn = document.getElementById("forceCloseBtn");
+      const forceConfirm = document.getElementById("forceCloseConfirm");
+      const hasTable = state.players.length && !state.example;
+      const balanced = t.diff === 0;
+      closeBtn.hidden = !hasTable;
+      closeBtn.disabled = !balanced;
+      closeBtn.setAttribute("aria-disabled", String(!balanced));
       closeBtn.classList.toggle("warn-state", closeArmed);
+      forceBtn.hidden = !hasTable || balanced || forceCloseArmed;
+      forceConfirm.hidden = !hasTable || balanced || !forceCloseArmed;
+      if (forceCloseArmed) document.getElementById("forceCloseMessage").textContent =
+        "השולחן לא מאוזן — " + balanceDescription(t.diff) + ". לסגור את המשחק בכל זאת?";
     }
   }
 
@@ -1157,40 +1216,18 @@
   // ---------- close table -> record ----------
   let closeArmed = false;
   let closeArmTimer = null;
-  document.getElementById("closeTableBtn").addEventListener("click", (e) => {
-    const btn = e.currentTarget;
+  let forceCloseArmed = false;
+
+  function finishCloseTable() {
     const t = totals();
-    const balanced = Math.abs(t.diff) < 0.005;
-    if (!closeArmed) {
-      closeArmed = true;
-      btn.classList.add("warn-state");
-      btn.textContent = balanced
-        ? "לסגור את השולחן? לחיצה נוספת מאשרת"
-        : "ההפרש אינו אפס — לחיצה נוספת סוגרת בכל זאת";
-      closeArmTimer = setTimeout(() => {
-        closeArmed = false;
-        btn.classList.remove("warn-state");
-        btn.textContent = "סגירת שולחן ורישום לרקורד";
-      }, 5000);
-      return;
-    }
+    const balanced = t.diff === 0;
+    const btn = document.getElementById("closeTableBtn");
     clearTimeout(closeArmTimer);
     closeArmed = false;
+    forceCloseArmed = false;
     btn.classList.remove("warn-state");
     btn.textContent = "סגירת שולחן ורישום לרקורד";
-
-    const entry = {
-      gameId: state.gameId,
-      at: new Date().toISOString(),
-      players: state.players.map(p => ({
-        id: p.id,
-        entryLog: p.entryLog.map(entry => ({ ...entry })),
-        name: p.name,
-        buyin: sum(p.buyins),
-        cashout: Number(p.cashout) || 0,
-        net: (Number(p.cashout) || 0) - sum(p.buyins),
-      })),
-    };
+    const entry = buildHistoryEntry(state, { difference: t.diff, isBalanced: balanced }, new Date().toISOString());
     state.history.unshift(entry);
     if (state.history.length > HISTORY_MAX) state.history.length = HISTORY_MAX;
     state.players = [];
@@ -1202,6 +1239,37 @@
     mode = "profile"; animNext = "all";
     render();
     if (balanced) confetti();
+  }
+
+  document.getElementById("closeTableBtn").addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    const t = totals();
+    if (t.diff !== 0) return;
+    if (!closeArmed) {
+      closeArmed = true;
+      btn.classList.add("warn-state");
+      btn.textContent = "לסגור את השולחן? לחיצה נוספת מאשרת";
+      closeArmTimer = setTimeout(() => {
+        closeArmed = false;
+        btn.classList.remove("warn-state");
+        btn.textContent = "סגירת שולחן ורישום לרקורד";
+      }, 5000);
+      return;
+    }
+    finishCloseTable();
+  });
+
+  document.getElementById("forceCloseBtn").addEventListener("click", () => {
+    forceCloseArmed = true;
+    renderDerived();
+  });
+  document.getElementById("forceCloseCancel").addEventListener("click", () => {
+    forceCloseArmed = false;
+    renderDerived();
+  });
+  document.getElementById("forceCloseConfirmBtn").addEventListener("click", () => {
+    if (totals().diff === 0) { forceCloseArmed = false; renderDerived(); return; }
+    finishCloseTable();
   });
 
   // ---------- login (who are you — asked once per device, on first open) ----------
@@ -1354,6 +1422,7 @@
     if (mode === m) return;
     mode = m;
     if (m !== "game") { openMenu = null; customOpen = null; }
+    if (m !== "settle") forceCloseArmed = false;
     animNext = "all";
     render();
   }

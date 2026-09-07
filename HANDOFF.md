@@ -7,7 +7,7 @@ A Hebrew, RTL, mobile-first PWA for settling home poker cash games:
 players + buy-ins on a "שולחן" tab, chip counts and a minimal-transfers
 who-pays-whom on a "חישוב" tab, per-player record on a "פרופיל" tab.
 Deployed on Vercel (static, auto-deploys from `main`), installable to the
-home screen. Version 23.
+home screen. Version 24.
 
 ## Files
 - `kupa-sgura.html` — THE app. Single file: CSS + HTML + one IIFE of vanilla JS.
@@ -33,6 +33,10 @@ All animations respect `prefers-reduced-motion`.
   Both localStorage and the existing Claude document sync persist the log and gameId.
   Closing archives a detached entryLog per player and rotates gameId; reset also rotates it.
   Inline “פירוט כניסות” is current-game only; its expanded state is UI-only.
+  Table balance is an integer `buy-ins - cashouts`. A normal close is enabled only at zero.
+  Forced unbalanced closes require an inline confirmation and archive `isBalanced: false`
+  plus `balanceDifference` in the history record. Positive difference means money is missing;
+  negative means there is an excess.
 - Regression checks: `node --test tests/entry-log.test.cjs`.
 - localStorage key `poker-settle-v1` (legacy prefix kept for continuity;
   also `poker-settle-me`, `-theme`, `-contact`).
