@@ -71,6 +71,26 @@ test('active game finish is a one-second hold and settlement can return to editi
   assert.match(html, /state\.phase = "active"/);
 });
 
+test('finish and return actions preserve the current game data', () => {
+  const start = html.indexOf('  function finishGame()');
+  const end = html.indexOf('  function clearCloseHold()', start);
+  const context = vm.createContext({
+    state: { example: false, phase: 'active', gameId: 'g1', players: [{id: 'p1', buyins: [50]}], history: [] },
+    saved: 0,
+    view: null,
+  });
+  vm.runInContext('function save() { saved += 1; } function setAppView(next) { view = next; }' + html.slice(start, end), context);
+  vm.runInContext('finishGame()', context);
+  assert.equal(vm.runInContext('state.phase', context), 'settlement');
+  assert.equal(vm.runInContext('view', context), 'settle');
+  assert.equal(vm.runInContext('saved', context), 1);
+  assert.equal(vm.runInContext('state.players[0].buyins[0]', context), 50);
+  vm.runInContext('returnToGameEdit()', context);
+  assert.equal(vm.runInContext('state.phase', context), 'active');
+  assert.equal(vm.runInContext('view', context), 'game');
+  assert.equal(vm.runInContext('saved', context), 2);
+});
+
 test('final close archives the game and returns to the Games dashboard', () => {
   assert.match(html, /state\.phase = "closed";/);
   assert.match(html, /state\.players = \[\];/);
