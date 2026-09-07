@@ -370,9 +370,9 @@
       <button type="button" class="switch" id="setThemeSwitch" role="switch" aria-label="החלף בין מצב כהה למצב בהיר"></button>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13.5A8 8 0 0 1 10.5 4a8 8 0 1 0 9.5 9.5Z"></path></svg>
     </div>
-    <button type="button" class="set-flat" id="setSwapBtn">החלפת שחקן</button>
+    <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 16</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 17</p>
   </div>
 </div>
 
@@ -462,6 +462,8 @@
   let state = load();
   let mode = "game";          // "game" | "settle" | "profile"
   let openMenu = null;        // player name whose buy-in menu is open
+  let menuJustOpened = null;  // menu that should animate open on the next render
+  let pendingAmount = null;   // amount selected once, waiting for the confirming second tap
   let customOpen = null;      // player name whose custom-amount input is open
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
   let animName = null;        // the player to animate when animNext === "one"
@@ -652,19 +654,33 @@
     return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  // Adds a buy-in for the player and replays the feedback animations
-  // (chip flash + total pulse) on the freshly rendered row.
-  function addBuyin(p, idx, amount, chipText) {
+  // Confirms a buy-in: menu closes, the money lands with a count-up
+  // animation on the player's total, plus a light haptic where supported.
+  function confirmBuyin(p, idx, amount) {
+    const from = sum(p.buyins);
     p.buyins.push(amount);
-    markReal(); save(); render();
+    openMenu = null; customOpen = null; pendingAmount = null;
+    markReal(); save();
+    try { if (navigator.vibrate) navigator.vibrate(20); } catch (e) {}
+    render();
     const fresh = document.querySelectorAll(".prow")[idx];
-    if (!fresh) return;
-    if (chipText) {
-      const c = Array.from(fresh.querySelectorAll(".chip")).find(x => x.textContent === chipText);
-      if (c) { c.classList.add("flash"); setTimeout(() => c.classList.remove("flash"), 500); }
-    }
-    const totalEl = fresh.querySelector(".pmeta b");
-    if (totalEl) { totalEl.classList.add("pulse"); setTimeout(() => totalEl.classList.remove("pulse"), 600); }
+    const totalEl = fresh && fresh.querySelector(".pmeta b");
+    if (totalEl) countUp(totalEl, from, from + amount);
+  }
+
+  function countUp(elm, from, to) {
+    const dur = 650;
+    const t0 = performance.now();
+    (function tick(now) {
+      const t = Math.min(1, (now - t0) / dur);
+      const eased = 1 - Math.pow(1 - t, 3);
+      elm.textContent = fmt(Math.round(from + (to - from) * eased));
+      if (t < 1) requestAnimationFrame(tick);
+      else {
+        elm.classList.add("pulse");
+        setTimeout(() => elm.classList.remove("pulse"), 600);
+      }
+    })(t0);
   }
 
   function render() {
@@ -697,26 +713,48 @@
         plus.setAttribute("aria-expanded", openMenu === p.name ? "true" : "false");
         if (openMenu === p.name) plus.classList.add("open");
         plus.addEventListener("click", () => {
-          openMenu = openMenu === p.name ? null : p.name;
-          if (openMenu !== p.name) customOpen = null;
+          const opening = openMenu !== p.name;
+          openMenu = opening ? p.name : null;
+          menuJustOpened = opening ? p.name : null;
+          customOpen = null;
+          pendingAmount = null;
           render();
         });
         line.appendChild(plus);
         row.appendChild(line);
 
-        const menu = el("div", "pmenu" + (openMenu === p.name ? " open" : ""));
+        const isOpen = openMenu === p.name;
+        const menu = el("div", "pmenu");
+        if (isOpen && menuJustOpened === p.name) {
+          // fresh open: start collapsed and let the transition play
+          menuJustOpened = null;
+          requestAnimationFrame(() => requestAnimationFrame(() => menu.classList.add("open")));
+        } else if (isOpen) {
+          menu.classList.add("open");
+        }
         const inner = el("div", "pmenu-in");
         const mrow = el("div", "pmenu-row");
         BUYIN_OPTIONS.forEach(amount => {
-          const chip = el("button", "chip", "₪" + amount + "+");
+          const selected = isOpen && pendingAmount === amount;
+          const chip = el("button", "chip" + (selected ? " active" : ""), "₪" + amount + "+");
           chip.type = "button";
-          chip.addEventListener("click", () => addBuyin(p, idx, amount, "₪" + amount + "+"));
+          chip.setAttribute("aria-pressed", selected ? "true" : "false");
+          chip.addEventListener("click", () => {
+            if (pendingAmount === amount) {
+              confirmBuyin(p, idx, amount); // second tap on the selected amount = confirm
+            } else {
+              pendingAmount = amount;       // first tap = select and highlight
+              customOpen = null;
+              render();
+            }
+          });
           mrow.appendChild(chip);
         });
         const other = el("button", "chip" + (customOpen === p.name ? " active" : ""), "אחר");
         other.type = "button";
         other.addEventListener("click", () => {
           customOpen = customOpen === p.name ? null : p.name;
+          pendingAmount = null;
           render();
           if (customOpen === p.name) {
             const fresh = document.querySelectorAll(".prow")[idx];
@@ -755,8 +793,7 @@
               cinp.focus();
               return;
             }
-            customOpen = null;
-            addBuyin(p, idx, Math.round(amount));
+            confirmBuyin(p, idx, Math.round(amount));
           };
           cinp.addEventListener("keydown", (e) => {
             if (e.key === "Enter") { e.preventDefault(); confirmCustom(); }
@@ -1177,7 +1214,9 @@
     refreshSettings();
   });
   document.getElementById("setSwapBtn").addEventListener("click", () => {
+    me = null; saveMe();
     document.getElementById("settings").hidden = true;
+    render();
     showLogin();
   });
   let setClearArmed = null;
