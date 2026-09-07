@@ -267,7 +267,7 @@
 
   /* ---------- corner controls (top-left, scroll with the page) ---------- */
   .corner {
-    position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); left: 18px;
+    position: absolute; top: calc(6px + env(safe-area-inset-top, 0px)); left: 18px;
     display: flex; flex-direction: column; align-items: center; gap: 16px;
     z-index: 30;
   }
@@ -345,7 +345,7 @@
 
 <div class="wrap">
   <header class="load-in">
-    <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span></div>
+    <div class="eyebrow"><span class="dot" id="syncDot" title="מצב סנכרון"></span><span>קאש · מינימום ₪50</span></div>
     <h1>סוגרים קופה</h1>
   </header>
 
@@ -470,9 +470,7 @@
 
   function setSync(on, label) {
     const d = document.getElementById("syncDot");
-    const t = document.getElementById("syncText");
-    if (d) d.classList.toggle("on", on);
-    if (t) t.textContent = label;
+    if (d) { d.classList.toggle("on", on); d.title = label; }
   }
 
   function remoteBody() {
