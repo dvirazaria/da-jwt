@@ -342,8 +342,14 @@ test('buildHistoryEntry copies groupId, startedAt, leaderRef, and per-player gue
 
 test('normalize defaults groups/groupMembers/invites/friendships to [] and leaderRef to null for an old snapshot, and player guestId/memberId to null', () => {
   const normalizeSource = html.slice(html.indexOf('  function normalizePhase'), html.indexOf('  function load()'));
+  // Task 3 hardening: normalize() now shapes groups/groupMembers/invites/friendships through
+  // their normalizers (same as debts through normalizeDebt), so this slice needs them too.
+  const groupsPureSource = html.slice(html.indexOf('  // ---------- groups domain (pure) ----------'), html.indexOf('  function el('));
   function normalize(s) {
-    return JSON.parse(vm.runInNewContext(normalizeSource + '\nJSON.stringify(normalize(input))', { input: s, crypto: require('node:crypto').webcrypto }));
+    return JSON.parse(vm.runInNewContext(
+      normalizeSource + '\n' + groupsPureSource + '\nJSON.stringify(normalize(input))',
+      { input: s, crypto: require('node:crypto').webcrypto, newId: () => 'stub-new-id' }
+    ));
   }
   const legacy = normalize({ gameId: 'legacy-1', players: [{ name: 'א', buyins: [50], cashout: 0 }], history: [] });
   assert.deepEqual(legacy.groups, []);
@@ -359,10 +365,28 @@ test('normalize defaults groups/groupMembers/invites/friendships to [] and leade
     history: [], groups: [{ id: 'g1' }], groupMembers: [{ id: 'm1' }], invites: [{ id: 'i1' }], friendships: [{ id: 'f1' }],
     leaderRef: { userId: null, guestId: 'u1', displayName: 'x' },
   });
-  assert.deepEqual(saved.groups, [{ id: 'g1' }]);
-  assert.deepEqual(saved.groupMembers, [{ id: 'm1' }]);
-  assert.deepEqual(saved.invites, [{ id: 'i1' }]);
-  assert.deepEqual(saved.friendships, [{ id: 'f1' }]);
+  // Each collection is now shaped by its normalizer, same as debts through normalizeDebt —
+  // ids survive, missing fields get safe defaults (see the normalizeGroup* contracts above).
+  assert.deepEqual(saved.groups, [{
+    id: 'g1', name: '', avatarDataUrl: null,
+    createdBy: { userId: null, guestId: null, displayName: '' },
+    createdAt: '', archivedAt: null, deletedAt: null,
+  }]);
+  assert.deepEqual(saved.groupMembers, [{
+    id: 'm1', groupId: '', userId: null, guestId: null, displayName: '',
+    role: 'member', status: 'active', joinedAt: '', leftAt: null,
+  }]);
+  assert.deepEqual(saved.invites, [{
+    id: 'i1', groupId: '', token: '',
+    createdBy: { userId: null, guestId: null, displayName: '' },
+    createdAt: '', revokedAt: null,
+  }]);
+  assert.deepEqual(saved.friendships, [{
+    id: 'f1',
+    requester: { userId: null, guestId: null, displayName: '' },
+    addressee: { userId: null, guestId: null, displayName: '' },
+    status: 'pending', createdAt: '', respondedAt: null,
+  }]);
   assert.deepEqual(saved.leaderRef, { userId: null, guestId: 'u1', displayName: 'x' });
   assert.equal(saved.players[0].guestId, 'guest-9');
   assert.equal(saved.players[0].memberId, 'member-9');

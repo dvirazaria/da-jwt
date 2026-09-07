@@ -329,9 +329,6 @@
   }
   .games-quick-action.primary { border-color: var(--accent); color: var(--accent); }
   .games-quick-action.primary:hover { background: var(--accent); color: var(--bg); }
-  .games-quick-action.coming-soon { color: var(--dim); opacity: .72; cursor: default; }
-  .games-quick-action.coming-soon:active { transform: none; }
-  .games-coming-soon { color: var(--faint); font-size: 9px; font-weight: 400; white-space: nowrap; }
   .games-active-card, .games-group-card { padding: 15px 0; border-bottom: 1px solid var(--line); text-align: center; }
   .games-card-status { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; font-weight: 400; }
   .games-card-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
@@ -356,8 +353,42 @@
   .games-detail-totals { color: var(--dim); font-size: 12px; font-weight: 300; margin: 8px 0 0; }
   .games-detail-totals b { color: var(--text); font-weight: 600; }
   .games-group-head { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .games-group-head[role="button"] { cursor: pointer; }
+  .games-group-head[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
   .games-group-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; background: var(--line); color: var(--dim); font-weight: 700; }
   .games-empty { color: var(--faint); font-size: 14px; font-weight: 300; margin: 0; }
+
+  /* create-group inline panel — same grid-collapse transition as .pmenu */
+  .games-create-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s ease; margin-top: 14px; }
+  .games-create-panel.open { grid-template-rows: 1fr; }
+  .games-create-panel-in { overflow: hidden; }
+  .games-create-panel-content { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 4px 0 6px; }
+  .games-create-avatar {
+    width: 56px; height: 56px; border-radius: 50%; flex: 0 0 auto;
+    border: 1px solid var(--line); background: var(--line); color: var(--dim);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    font-size: 22px; font-weight: 700;
+  }
+  .games-create-avatar:hover { border-color: var(--accent); color: var(--accent); }
+  .games-create-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .games-create-panel input[type="text"] { max-width: 260px; text-align: center; }
+  .games-create-submit {
+    border: 1px solid var(--accent); border-radius: 999px; color: var(--accent);
+    font-weight: 700; font-size: 15px; padding: 10px 24px; min-height: 44px;
+  }
+  .games-create-submit:hover { background: var(--accent); color: var(--bg); }
+  .games-create-cancel { color: var(--dim); font-size: 13px; padding: 6px 2px; }
+  .games-create-cancel:hover { color: var(--text); }
+
+  /* group page header — minimal here, a later task extends this page */
+  .games-group-header { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 40px; text-align: center; }
+  .games-group-header-avatar {
+    width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--line); color: var(--dim); font-weight: 700; font-size: 26px;
+  }
+  .games-group-header-name { margin: 6px 0 0; font-size: 24px; font-weight: 800; }
+  .games-group-header-meta { margin: 0; color: var(--dim); font-size: 13px; font-weight: 300; }
 
   .btn-close-table {
     position: relative; overflow: hidden; isolation: isolate;
@@ -654,13 +685,18 @@
   const expandedGameCards = new Set();
   const expandedGroupCards = new Set();
   let state = load();
-  let appView = "games";         // "games" | "game" | "settle" | "profile"
+  let appView = "games";         // "games" | "game" | "settle" | "profile" | "group"
+  let currentGroupId = null;  // UI-only: which group's page is open when appView === "group"
   let openMenu = null;        // player name whose buy-in menu is open
   let menuJustOpened = null;  // menu that should animate open on the next render
   let exitOpen = null;        // player name whose exit (cashout) panel is open
   let exitJustOpened = null;  // exit panel that should animate open on the next render
   let pendingAmount = null;   // amount selected once, waiting for the confirming second tap
   let customOpen = null;      // player name whose custom-amount input is open
+  let createGroupOpen = false;         // whether the create-group panel is expanded
+  let createGroupJustOpened = false;   // panel should animate open on the next render
+  let createGroupName = "";            // draft group name, kept across unrelated dashboard re-renders
+  let createGroupAvatarDataUrl = null; // draft avatar preview (data URL), same reason
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
   let animName = null;        // the player to animate when animNext === "one"
   let me = loadMe();
@@ -787,13 +823,12 @@
         ? { ...s.settlementStatuses } : {},
       groupId: s.groupId || s.clanId || null,
       startedAt: typeof s.startedAt === "string" ? s.startedAt : null,
-      // Simple array pass-through, same as `history` above: these collections are shaped by
-      // normalizeGroup/normalizeGroupMember/normalizeInvite/normalizeFriendship (groups domain
-      // pure section) at the point a record is created/imported, not re-validated on every load.
-      groups: Array.isArray(s.groups) ? s.groups : [],
-      groupMembers: Array.isArray(s.groupMembers) ? s.groupMembers : [],
-      invites: Array.isArray(s.invites) ? s.invites : [],
-      friendships: Array.isArray(s.friendships) ? s.friendships : [],
+      // Shaped the same way `debts` is above: normalize each record and drop anything invalid
+      // (e.g. missing id), so malformed or partial synced/legacy data can't corrupt state.
+      groups: Array.isArray(s.groups) ? s.groups.map(normalizeGroup).filter(Boolean) : [],
+      groupMembers: Array.isArray(s.groupMembers) ? s.groupMembers.map(normalizeGroupMember).filter(Boolean) : [],
+      invites: Array.isArray(s.invites) ? s.invites.map(normalizeInvite).filter(Boolean) : [],
+      friendships: Array.isArray(s.friendships) ? s.friendships.map(normalizeFriendship).filter(Boolean) : [],
       leaderRef: s.leaderRef || null,
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
     };
@@ -1351,6 +1386,27 @@
       ...patch,
     };
   }
+  // Builds a new Group and its creator GroupMember (role "admin", status "active") from a
+  // typed name and optional avatar. The caller pushes both records and calls save().
+  function buildGroupCreation(meName, name, avatarDataUrl, guestId, at) {
+    const group = normalizeGroup({
+      id: newId(),
+      name: String(name || "").trim(),
+      avatarDataUrl: avatarDataUrl || null,
+      createdBy: { userId: null, guestId, displayName: meName },
+      createdAt: at,
+    });
+    const member = normalizeGroupMember({
+      id: newId(),
+      groupId: group.id,
+      guestId,
+      displayName: meName,
+      role: "admin",
+      status: "active",
+      joinedAt: at,
+    });
+    return { group, member };
+  }
 
   function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -1483,6 +1539,72 @@
     setAppView(state.phase === "settlement" ? "settle" : "game");
   }
 
+  function openGroup(groupId) {
+    currentGroupId = String(groupId || "");
+    setAppView("group");
+  }
+
+  // Creates a group and its creator admin membership. Requires a signed-in name; when there
+  // isn't one the create panel stays open (with whatever was typed) and the user tries again
+  // once they've picked a name in the login screen.
+  function createGroup({ name, avatarDataUrl }) {
+    if (!me) { showLogin(); return; }
+    const at = new Date().toISOString();
+    const guestId = resolveGuestId(collectionsOf(state), me);
+    const { group, member } = buildGroupCreation(me, name, avatarDataUrl || null, guestId, at);
+    state.groups.push(group);
+    state.groupMembers.push(member);
+    save();
+    resetCreateGroupPanel(); // plain reset: openGroup's render replaces the dashboard next anyway
+    openGroup(group.id);
+  }
+
+  function resetCreateGroupPanel() {
+    createGroupOpen = false;
+    createGroupJustOpened = false;
+    createGroupName = "";
+    createGroupAvatarDataUrl = null;
+  }
+
+  function toggleCreateGroupPanel() {
+    if (createGroupOpen) { closeCreateGroupPanel(); return; }
+    createGroupOpen = true;
+    createGroupJustOpened = true;
+    renderGamesDashboard();
+  }
+
+  // Plays the panel's collapse transition (matching animateMenuClose's approach for .pmenu)
+  // before clearing the draft name/avatar and rebuilding the dashboard without it.
+  function closeCreateGroupPanel() {
+    const panel = document.querySelector(".games-create-panel.open");
+    const finish = () => { resetCreateGroupPanel(); renderGamesDashboard(); };
+    if (!panel) { finish(); return; }
+    panel.classList.remove("open");
+    setTimeout(finish, 280);
+  }
+
+  // Resizes/crops an image file to a 96×96 JPEG data URL (cover crop, quality 0.8) for a
+  // group avatar. DOM-dependent (canvas/Image), so it lives outside the pure domain section.
+  function resizeAvatarImage(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const size = 96;
+        const canvas = document.createElement("canvas");
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale, h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("avatar image failed to load")); };
+      img.src = url;
+    });
+  }
+
   // Builds the { groups, groupMembers, history, currentGame } shape the pure groups-domain
   // adapters take as input, from the single persisted state document.
   function collectionsOf(state) {
@@ -1556,6 +1678,10 @@
     return count === 1 ? "כניסה אחת" : count + " כניסות";
   }
 
+  function formatMemberCount(count) {
+    return count === 1 ? "חבר אחד" : count + " חברים";
+  }
+
   function renderQuickActions(parent) {
     const section = el("section", "games-section games-quick-section");
     section.appendChild(el("h3", "games-section-title", "פעולות מהירות"));
@@ -1565,15 +1691,94 @@
     start.type = "button";
     start.addEventListener("click", startUngroupedGame);
 
-    const createGroup = el("button", "games-quick-action coming-soon");
-    createGroup.type = "button";
-    createGroup.disabled = true;
-    createGroup.setAttribute("aria-disabled", "true");
-    createGroup.append(el("span", "", "+ צור קבוצה"), el("span", "games-coming-soon", "בקרוב"));
+    const createGroupBtn = el("button", "games-quick-action", "+ צור קבוצה");
+    createGroupBtn.type = "button";
+    createGroupBtn.setAttribute("aria-expanded", String(createGroupOpen));
+    createGroupBtn.addEventListener("click", toggleCreateGroupPanel);
 
-    actions.append(start, createGroup);
+    actions.append(start, createGroupBtn);
     section.appendChild(actions);
+    renderCreateGroupPanel(section);
     parent.appendChild(section);
+  }
+
+  function renderCreateGroupPanel(parent) {
+    const panel = el("div", "games-create-panel");
+    const panelIn = el("div", "games-create-panel-in");
+    const content = el("div", "games-create-panel-content");
+
+    const avatarBtn = el("button", "games-create-avatar");
+    avatarBtn.type = "button";
+    avatarBtn.setAttribute("aria-label", "הוספת תמונה לקבוצה");
+    const applyAvatarPreview = () => {
+      avatarBtn.innerHTML = "";
+      if (createGroupAvatarDataUrl) {
+        const img = document.createElement("img");
+        img.src = createGroupAvatarDataUrl;
+        img.alt = "";
+        avatarBtn.appendChild(img);
+      } else {
+        avatarBtn.textContent = (createGroupName.trim() || "?").slice(0, 1);
+      }
+    };
+    applyAvatarPreview();
+
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.hidden = true;
+    fileInput.setAttribute("aria-hidden", "true");
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = "";
+      if (!file) return;
+      try {
+        createGroupAvatarDataUrl = await resizeAvatarImage(file);
+        applyAvatarPreview();
+      } catch (e) {}
+    });
+    avatarBtn.addEventListener("click", () => fileInput.click());
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.maxLength = 40;
+    nameInput.placeholder = "שם הקבוצה";
+    nameInput.autocomplete = "off";
+    nameInput.setAttribute("aria-label", "שם הקבוצה");
+    nameInput.value = createGroupName;
+    nameInput.addEventListener("input", () => {
+      createGroupName = nameInput.value;
+      if (!createGroupAvatarDataUrl) applyAvatarPreview();
+    });
+
+    const submit = () => {
+      const name = nameInput.value.trim();
+      if (!name) { shakeEl(nameInput); return; }
+      createGroup({ name, avatarDataUrl: createGroupAvatarDataUrl });
+    };
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+    });
+
+    const submitBtn = el("button", "games-create-submit", "צור קבוצה");
+    submitBtn.type = "button";
+    submitBtn.addEventListener("click", submit);
+
+    const cancelBtn = el("button", "games-create-cancel", "ביטול");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", closeCreateGroupPanel);
+
+    content.append(avatarBtn, fileInput, nameInput, submitBtn, cancelBtn);
+    panelIn.appendChild(content);
+    panel.appendChild(panelIn);
+
+    if (createGroupOpen && createGroupJustOpened) {
+      createGroupJustOpened = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add("open")));
+    } else if (createGroupOpen) {
+      panel.classList.add("open");
+    }
+    parent.appendChild(panel);
   }
 
   function renderActiveGameCard(summary, actions) {
@@ -1642,6 +1847,13 @@
   function renderGroupCard(group, actions) {
     const card = el("article", "games-group-card");
     const head = el("div", "games-group-head");
+    head.setAttribute("role", "button");
+    head.setAttribute("tabindex", "0");
+    head.setAttribute("aria-label", "פתח את " + String(group.name || "הקבוצה"));
+    head.addEventListener("click", actions.onOpen);
+    head.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); actions.onOpen(); }
+    });
     if (group.avatarDataUrl) {
       const avatar = el("img", "games-group-avatar");
       avatar.src = group.avatarDataUrl;
@@ -1694,6 +1906,7 @@
             expandedGroupCards.has(groupId) ? expandedGroupCards.delete(groupId) : expandedGroupCards.add(groupId);
             renderGamesDashboard();
           },
+          onOpen: () => openGroup(groupId),
         }));
       });
     }
@@ -1717,21 +1930,55 @@
     box.appendChild(inner);
   }
 
+  // Minimal header for now (back arrow, avatar, name, member count) — a later task extends
+  // the group page with sections built the same way, each appended to #gamesHome.
+  function renderGroupHeader(summary) {
+    const header = el("div", "games-group-header");
+    const back = el("button", "back-arrow");
+    back.type = "button";
+    back.setAttribute("aria-label", "חזרה");
+    back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>';
+    back.addEventListener("click", () => setAppView("games"));
+    header.appendChild(back);
+    if (summary.avatarDataUrl) {
+      const avatar = el("img", "games-group-header-avatar");
+      avatar.src = summary.avatarDataUrl;
+      avatar.alt = "";
+      header.appendChild(avatar);
+    } else {
+      header.appendChild(el("span", "games-group-header-avatar", String(summary.name || "?").slice(0, 1)));
+    }
+    header.appendChild(el("h2", "games-group-header-name", summary.name));
+    header.appendChild(el("p", "games-group-header-meta", formatMemberCount(summary.memberCount)));
+    return header;
+  }
+
+  function renderGroupPage() {
+    const box = document.getElementById("gamesHome");
+    box.innerHTML = "";
+    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
+    if (!summary) { setAppView("games"); return; } // the group is gone on this device — don't strand the user
+    const inner = el("div", "games-home-in");
+    inner.appendChild(renderGroupHeader(summary));
+    box.appendChild(inner);
+  }
+
   function render() {
     const anim = animNext; animNext = null;
-    const inGames = appView === "games" || appView === "game" || appView === "settle";
+    const inGames = appView === "games" || appView === "game" || appView === "settle" || appView === "group";
     document.body.classList.toggle("games-view", appView === "games");
+    if (appView === "group") document.body.classList.add("games-view"); // group page reuses the dashboard shell
     document.body.classList.toggle("game-view", appView === "game");
     document.getElementById("modeGames").classList.toggle("on", inGames);
     document.getElementById("modeProfile").classList.toggle("on", appView === "profile");
     document.getElementById("addrow").hidden = appView !== "game";
     document.getElementById("settingsBtn").hidden = appView !== "profile";
-    document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games";
-    document.getElementById("gamesHome").hidden = appView !== "games";
+    document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games" || appView === "group";
+    document.getElementById("gamesHome").hidden = appView !== "games" && appView !== "group";
 
     const rows = document.getElementById("rows");
     rows.innerHTML = "";
-    rows.hidden = !inGames || appView === "games";
+    rows.hidden = !inGames || appView === "games" || appView === "group";
 
     if (appView === "game" || appView === "settle") state.players.forEach((p, idx) => {
       const row = el("div", "prow");
@@ -2028,6 +2275,7 @@
     renderDerived();
     renderProfile();
     if (appView === "games") renderGamesDashboard();
+    else if (appView === "group") renderGroupPage();
   }
 
   function renderDerived() {
@@ -2053,7 +2301,7 @@
     }
 
     const stat = document.getElementById("statline");
-    stat.hidden = appView === "profile" || appView === "games";
+    stat.hidden = appView === "profile" || appView === "games" || appView === "group";
     if (appView === "game") {
       const exitedCount = exitedPlayers(state.players).length;
       const exitedLabel = exitedCount === 0 ? "" :

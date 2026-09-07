@@ -112,7 +112,9 @@ test('Games dashboard is composed from three modular sections', () => {
   assert.match(html, /renderGroupsSection\(inner, getGroupSummaries\(collectionsOf\(state\), me\)\)/);
   assert.match(html, /אין משחקים פעילים כרגע/);
   assert.match(html, /אין לך קבוצות עדיין/);
-  assert.match(html, /בקרוב/);
+  // Task 3 enables the create-group quick action; it's no longer a "coming soon" placeholder.
+  assert.doesNotMatch(html, /בקרוב/);
+  assert.match(html, /toggleCreateGroupPanel/);
 });
 
 test('active game card renderer never reads game state directly', () => {

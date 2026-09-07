@@ -4,7 +4,12 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const html = fs.readFileSync('kupa-sgura.html', 'utf8');
 const normalizeSource = html.slice(html.indexOf('  function normalizePhase'), html.indexOf('  function load()'));
-function normalize(s) { return vm.runInNewContext(normalizeSource + '\nnormalize(input)', {input:s, crypto:require('node:crypto').webcrypto}); }
+// Task 3 hardening: normalize() now shapes groups/groupMembers/invites/friendships through
+// their normalizers (same as debts through normalizeDebt), so any slice that calls normalize()
+// needs that pure section too, plus a newId() stub for the normalizers that mint ids.
+const groupsPureSource = html.slice(html.indexOf('  // ---------- groups domain (pure) ----------'), html.indexOf('  function el('));
+const withGroupsPure = normalizeSource + '\n' + groupsPureSource;
+function normalize(s) { return vm.runInNewContext(withGroupsPure + '\nnormalize(input)', {input:s, crypto:require('node:crypto').webcrypto, newId: () => 'stub-new-id'}); }
 test('legacy amounts survive migration without invented times, with stable identities', () => {
   const old = {players:[{name:'א',buyins:[50,100],cashout:150}],history:[]};
   const s = normalize(old);
@@ -55,8 +60,8 @@ test('each added amount has a distinct identity, timestamp, player and game; sav
 });
 test('frozen remote snapshots retain logs and allow subsequent additions', () => {
   const remoteSource=html.slice(html.indexOf('  function applyRemote(data)'),html.indexOf('  document.addEventListener("visibilitychange"'));
-  const context=vm.createContext({crypto:require('node:crypto').webcrypto});
-  vm.runInContext(normalizeSource + remoteSource + `
+  const context=vm.createContext({crypto:require('node:crypto').webcrypto, newId: () => 'stub-new-id'});
+  vm.runInContext(withGroupsPure + remoteSource + `
     let state={gameId:'old',players:[],history:[]}, pendingRemote=null;
     const KEY='game', document={activeElement:null};
     let stored, renders=0;
