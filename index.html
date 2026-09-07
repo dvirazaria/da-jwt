@@ -238,6 +238,34 @@
     transition: transform .25s ease;
   }
   .entry-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .exit-toggle {
+    display: flex; align-items: center; padding: 4px 0;
+    color: var(--dim); font-size: 12px; font-weight: 400;
+    margin-inline-start: 10px;
+  }
+  .exit-toggle:hover { color: var(--bad); }
+  .exit-tag { color: var(--dim); font-size: 12px; }
+  .exit-edit {
+    color: var(--dim); font-size: 12px; font-weight: 400;
+    padding: 4px 0 4px 8px; margin-inline-start: 4px;
+  }
+  .exit-edit:hover { color: var(--accent); }
+  .prow.exited .pname { opacity: .55; }
+  .exit-row { align-items: center; }
+  input.exit-cashout-input {
+    flex: 1 1 auto; min-width: 0; min-height: 42px;
+    border: none; border-bottom: 1px solid var(--line); background: none;
+    border-radius: 0; padding: 8px 2px; margin: 0;
+    font: inherit; color: var(--text); font-variant-numeric: tabular-nums;
+    transition: border-color .2s;
+  }
+  input.exit-cashout-input:focus-visible { outline: none; border-bottom-color: var(--accent); }
+  .exit-confirm {
+    flex: 0 0 auto; min-height: 44px;
+    border-color: var(--accent); color: var(--accent); font-weight: 700;
+    white-space: nowrap;
+  }
+  .exit-confirm:hover { background: var(--accent); color: var(--bg); }
   .entry-details { display: grid; grid-template-rows: 0fr; visibility: hidden;
     transition: grid-template-rows .28s ease, visibility .28s; }
   .entry-details.open { grid-template-rows: 1fr; visibility: visible; }
@@ -314,9 +342,6 @@
   }
   .games-quick-action.primary { border-color: var(--accent); color: var(--accent); }
   .games-quick-action.primary:hover { background: var(--accent); color: var(--bg); }
-  .games-quick-action.coming-soon { color: var(--dim); opacity: .72; cursor: default; }
-  .games-quick-action.coming-soon:active { transform: none; }
-  .games-coming-soon { color: var(--faint); font-size: 9px; font-weight: 400; white-space: nowrap; }
   .games-active-card, .games-group-card { padding: 15px 0; border-bottom: 1px solid var(--line); text-align: center; }
   .games-card-status { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; font-weight: 400; }
   .games-card-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
@@ -341,8 +366,70 @@
   .games-detail-totals { color: var(--dim); font-size: 12px; font-weight: 300; margin: 8px 0 0; }
   .games-detail-totals b { color: var(--text); font-weight: 600; }
   .games-group-head { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .games-group-head[role="button"] { cursor: pointer; }
+  .games-group-head[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
   .games-group-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; background: var(--line); color: var(--dim); font-weight: 700; }
   .games-empty { color: var(--faint); font-size: 14px; font-weight: 300; margin: 0; }
+
+  /* create-group inline panel — same grid-collapse transition as .pmenu */
+  .games-create-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s ease; margin-top: 14px; }
+  .games-create-panel.open { grid-template-rows: 1fr; }
+  .games-create-panel-in { overflow: hidden; }
+  .games-create-panel-content { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 4px 0 6px; }
+  .games-create-avatar {
+    width: 56px; height: 56px; border-radius: 50%; flex: 0 0 auto;
+    border: 1px solid var(--line); background: var(--line); color: var(--dim);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    font-size: 22px; font-weight: 700;
+  }
+  .games-create-avatar:hover { border-color: var(--accent); color: var(--accent); }
+  .games-create-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .games-create-panel input[type="text"] { max-width: 260px; text-align: center; }
+  .games-create-submit {
+    border: 1px solid var(--accent); border-radius: 999px; color: var(--accent);
+    font-weight: 700; font-size: 15px; padding: 10px 24px; min-height: 44px;
+  }
+  .games-create-submit:hover { background: var(--accent); color: var(--bg); }
+  .games-create-cancel { color: var(--dim); font-size: 13px; padding: 6px 2px; }
+  .games-create-cancel:hover { color: var(--text); }
+
+  /* group page: header, primary action, leaderboard, last game, members, history */
+  .games-group-header { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 40px; text-align: center; }
+  .games-group-header-avatar {
+    width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--line); color: var(--dim); font-weight: 700; font-size: 26px;
+  }
+  .games-group-header-name { margin: 6px 0 0; font-size: 24px; font-weight: 800; }
+  .games-group-header-meta { margin: 0; color: var(--dim); font-size: 13px; font-weight: 300; }
+  .games-primary-action { margin-top: 22px; text-align: center; }
+  .games-primary-action .btn-primary { min-width: 200px; }
+  .btn-primary:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--faint); }
+  .btn-primary:disabled:hover { background: none; color: var(--faint); }
+  .games-primary-reason { margin: 10px 0 0; color: var(--dim); font-size: 12px; font-weight: 300; }
+  .games-leader-row, .games-member-row, .games-history-row {
+    margin: 0; padding: 8px 0; border-bottom: 1px solid var(--line);
+    font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere;
+  }
+  .games-leader-row:last-of-type, .games-member-row:last-of-type, .games-history-row:last-of-type { border-bottom: none; }
+  .games-history-row { font-size: 13px; font-weight: 400; color: var(--dim); }
+  .games-member-tag { margin-inline-start: 6px; color: var(--dim); font-size: 12px; font-weight: 400; }
+
+  /* group members: admin row actions, add-member panel, former members */
+  .games-member-row.with-actions { display: flex; align-items: center; gap: 10px; text-align: start; }
+  .games-member-name { flex: 1 1 auto; min-width: 0; display: inline-flex; align-items: center; flex-wrap: wrap; }
+  .games-member-remove {
+    flex: 0 0 auto; margin-inline-start: auto;
+    color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0 4px 8px;
+  }
+  .games-member-remove:hover, .games-member-remove.armed { color: var(--bad); }
+  .games-member-add { margin-top: 14px; text-align: center; }
+  .games-member-add-toggle { color: var(--dim); font-size: 13px; font-weight: 600; padding: 6px 2px; }
+  .games-member-add-toggle:hover { color: var(--accent); }
+  .games-member-add-note { margin: 0; color: var(--faint); font-size: 11px; font-weight: 300; }
+  .games-former-members { margin-top: 14px; text-align: center; }
+  .games-former-toggle { color: var(--dim); font-size: 12px; font-weight: 500; padding: 6px 2px; }
+  .games-former-toggle:hover { color: var(--accent); }
 
   .btn-close-table {
     position: relative; overflow: hidden; isolation: isolate;
@@ -426,6 +513,7 @@
   .debt-amount { flex: 0 0 auto; color: var(--text); font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .debt-paid-btn { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); font-size: 12px; font-weight: 500; padding: 4px 10px; min-height: 30px; }
   .debt-paid-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .friend-helper { color: var(--faint); font-size: 12px; font-weight: 300; margin-top: 8px; text-align: center; }
   .empty-note { color: var(--faint); font-size: 14px; font-weight: 300; margin-top: 10px; }
   .pid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .pname-big { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
@@ -510,6 +598,34 @@
   .set-flat.danger { color: var(--bad); }
   .set-flat.danger:hover, .set-flat.danger.armed { color: var(--bad); }
 
+  /* group page: invite (code / link / QR placeholder) */
+  .games-invite-create {
+    border: 1px solid var(--accent); border-radius: 999px; color: var(--accent);
+    font-weight: 700; font-size: 15px; padding: 10px 24px; min-height: 44px;
+  }
+  .games-invite-create:hover { background: var(--accent); color: var(--bg); }
+  .games-invite-card { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .games-invite-code {
+    margin: 0; text-align: center; color: var(--text);
+    font-size: 28px; font-weight: 800; letter-spacing: .12em;
+    font-variant-numeric: tabular-nums;
+  }
+  .games-invite-actions { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .games-invite-action {
+    border: 1px solid var(--line); border-radius: 999px; color: var(--text);
+    font-size: 13px; font-weight: 600; padding: 8px 16px; min-height: 40px;
+  }
+  .games-invite-action:hover { border-color: var(--accent); color: var(--accent); }
+  .games-invite-copied { color: var(--accent); font-size: 12px; font-weight: 500; }
+  .games-invite-qr {
+    width: 120px; height: 120px; border: 1px solid var(--line); border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    padding: 10px; color: var(--faint); font-size: 12px; font-weight: 300;
+  }
+  .games-invite-note { margin: 0; color: var(--dim); font-size: 12px; font-weight: 300; max-width: 280px; }
+  .games-invite-revoke { color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; }
+  .games-invite-revoke:hover { color: var(--bad); }
+
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
@@ -548,7 +664,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">גרסה 38</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 39</p>
   </div>
 </div>
 
@@ -560,6 +676,15 @@
     <input type="text" id="loginName" placeholder="השם שלך" autocomplete="off" aria-label="השם שלך">
     <button type="button" class="btn-primary" id="loginGo">המשך</button>
     <button type="button" class="btn-skip" id="loginSkip">דלג בינתיים</button>
+  </div>
+</div>
+
+<div class="login" id="joinNotice" hidden>
+  <div class="login-in">
+    <h2>קיבלת הזמנה לקבוצה</h2>
+    <p class="games-invite-code" id="joinNoticeCode" dir="ltr"></p>
+    <p>הצטרפות תעבוד כשהשרת יחובר.</p>
+    <button type="button" class="btn-primary" id="joinNoticeContinueBtn">המשך</button>
   </div>
 </div>
 
@@ -623,7 +748,7 @@
   const THEME_KEY = "poker-settle-theme";
   const CONTACT_KEY = "poker-settle-contact";
   const PROFILE_DEBT_SEEN_KEY = "poker-settle-profile-debts-seen";
-  const HISTORY_MAX = 60;
+  const HISTORY_MAX = 400;
   const HOLD_TO_FORCE_CLOSE_MS = 1000;
   const FINISH_GAME_HOLD_MS = 1000;
 
@@ -642,11 +767,24 @@
   const expandedGameCards = new Set();
   const expandedGroupCards = new Set();
   let state = load();
-  let appView = "games";         // "games" | "game" | "settle" | "profile"
+  let appView = "games";         // "games" | "game" | "settle" | "profile" | "group"
+  let currentGroupId = null;  // UI-only: which group's page is open when appView === "group"
   let openMenu = null;        // player name whose buy-in menu is open
   let menuJustOpened = null;  // menu that should animate open on the next render
+  let exitOpen = null;        // player name whose exit (cashout) panel is open
+  let exitJustOpened = null;  // exit panel that should animate open on the next render
   let pendingAmount = null;   // amount selected once, waiting for the confirming second tap
   let customOpen = null;      // player name whose custom-amount input is open
+  let createGroupOpen = false;         // whether the create-group panel is expanded
+  let createGroupJustOpened = false;   // panel should animate open on the next render
+  let createGroupName = "";            // draft group name, kept across unrelated dashboard re-renders
+  let createGroupAvatarDataUrl = null; // draft avatar preview (data URL), same reason
+  let addMemberOpen = false;           // whether the "+ הוסף חבר" inline panel is expanded
+  let addMemberJustOpened = false;     // panel should animate open on the next render
+  let addMemberName = "";              // draft member name, kept across unrelated re-renders
+  let removeMemberArmedId = null;      // memberId whose "הסר" is armed (two-step confirm)
+  let removeMemberArmedTimeout = null; // auto-disarm timer for the above
+  let formerMembersOpen = false;       // whether the "חברים לשעבר" collapsed list is expanded
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
   let animName = null;        // the player to animate when animNext === "one"
   let me = loadMe();
@@ -755,7 +893,12 @@
       players: s.players.map((p, index) => {
         const id = p.id || gameId + "-player-" + index;
         const buyins = Array.isArray(p.buyins) ? [...p.buyins] : [];
-        return { ...p, id, buyins, entryLog: buyins.map((amount, i) => {
+        return { ...p, id, buyins,
+          status: p.status === "exited" ? "exited" : "active",
+          exitedAt: typeof p.exitedAt === "string" ? p.exitedAt : null,
+          guestId: typeof p.guestId === "string" ? p.guestId : null,
+          memberId: typeof p.memberId === "string" ? p.memberId : null,
+          entryLog: buyins.map((amount, i) => {
           const saved = p.entryLog && p.entryLog[i];
           return saved && saved.amount === amount && saved.playerId === id && saved.gameId === gameId
             ? { ...saved }
@@ -768,6 +911,13 @@
         ? { ...s.settlementStatuses } : {},
       groupId: s.groupId || s.clanId || null,
       startedAt: typeof s.startedAt === "string" ? s.startedAt : null,
+      // Shaped the same way `debts` is above: normalize each record and drop anything invalid
+      // (e.g. missing id), so malformed or partial synced/legacy data can't corrupt state.
+      groups: Array.isArray(s.groups) ? s.groups.map(normalizeGroup).filter(Boolean) : [],
+      groupMembers: Array.isArray(s.groupMembers) ? s.groupMembers.map(normalizeGroupMember).filter(Boolean) : [],
+      invites: Array.isArray(s.invites) ? s.invites.map(normalizeInvite).filter(Boolean) : [],
+      friendships: Array.isArray(s.friendships) ? s.friendships.map(normalizeFriendship).filter(Boolean) : [],
+      leaderRef: s.leaderRef || null,
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
     };
   }
@@ -822,6 +972,11 @@
       settlementStatuses: state.settlementStatuses,
       groupId: state.groupId || null,
       startedAt: state.startedAt || null,
+      leaderRef: state.leaderRef || null,
+      groups: state.groups || [],
+      groupMembers: state.groupMembers || [],
+      invites: state.invites || [],
+      friendships: state.friendships || [],
       updatedAt: state.updatedAt || new Date().toISOString(),
     };
   }
@@ -849,10 +1004,15 @@
       settlementStatuses: data.settlementStatuses && typeof data.settlementStatuses === "object" ? data.settlementStatuses : {},
       groupId: data.groupId || data.clanId || null,
       startedAt: typeof data.startedAt === "string" ? data.startedAt : null,
+      leaderRef: data.leaderRef && typeof data.leaderRef === "object" ? data.leaderRef : null,
+      groups: Array.isArray(data.groups) ? data.groups : [],
+      groupMembers: Array.isArray(data.groupMembers) ? data.groupMembers : [],
+      invites: Array.isArray(data.invites) ? data.invites : [],
+      friendships: Array.isArray(data.friendships) ? data.friendships : [],
       updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
     })));
-    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses, a: incoming.startedAt }) ===
-        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses, a: state.startedAt })) return;
+    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses, a: incoming.startedAt, gr: incoming.groups, gm: incoming.groupMembers, iv: incoming.invites, fr: incoming.friendships }) ===
+        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses, a: state.startedAt, gr: state.groups, gm: state.groupMembers, iv: state.invites, fr: state.friendships })) return;
     // Don't yank the UI out from under an active edit — apply on blur.
     const ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT")) { pendingRemote = incoming; return; }
@@ -925,12 +1085,7 @@
   // Returns true when it wiped, so callers can stop their own action.
   function markReal() {
     if (!state.example) return false;
-    state = {
-      example: false, phase: "active", gameId: newId(), players: [], history: state.history,
-      debts: state.debts, settlementStatuses: {}, groupId: state.groupId || null,
-      startedAt: new Date().toISOString(),
-      updatedAt: state.updatedAt,
-    };
+    state = newCurrentGame(state, { phase: "active", startedAt: new Date().toISOString() });
     expandedEntries.clear();
     return true;
   }
@@ -956,6 +1111,9 @@
     return {
       gameId: snapshot.gameId,
       at,
+      groupId: snapshot.groupId || null,
+      startedAt: snapshot.startedAt || null,
+      leaderRef: snapshot.leaderRef || null,
       isBalanced: balance.isBalanced,
       balanceDifference: balance.difference,
       transfers: moves.map((move, index) => ({
@@ -969,9 +1127,13 @@
         id: p.id,
         entryLog: p.entryLog.map(entry => ({ ...entry })),
         name: p.name,
+        guestId: p.guestId || null,
+        memberId: p.memberId || null,
         buyin: sum(p.buyins),
         cashout: Number(p.cashout) || 0,
         net: (Number(p.cashout) || 0) - sum(p.buyins),
+        status: p.status === "exited" ? "exited" : "active",
+        exitedAt: p.exitedAt || null,
       })),
     };
   }
@@ -1050,6 +1212,477 @@
     return moves;
   }
 
+  // ---------- friends (pure) ----------
+  // FriendRequests = { incoming: [Friendship], outgoing: [Friendship], friends: [ParticipantRef] }
+  // incoming/outgoing keep the raw Friendship (so a future UI can act on its id); friends
+  // flattens to the other party's ref since there is no pending action on an accepted friendship.
+  function friendRequestsFor(friendships, meRef) {
+    const list = Array.isArray(friendships) ? friendships : [];
+    const incoming = [];
+    const outgoing = [];
+    const friends = [];
+    list.forEach(f => {
+      if (!f) return;
+      if (f.status === "pending") {
+        if (sameIdentity(f.addressee, meRef)) incoming.push(f);
+        else if (sameIdentity(f.requester, meRef)) outgoing.push(f);
+      } else if (f.status === "accepted") {
+        if (sameIdentity(f.requester, meRef)) friends.push(f.addressee);
+        else if (sameIdentity(f.addressee, meRef)) friends.push(f.requester);
+      }
+    });
+    return { incoming, outgoing, friends };
+  }
+  // Returns the new pending Friendship (pushed onto `friendships`), or null for a self-request,
+  // or when a pending/accepted friendship already exists between the two in either direction.
+  function createFriendRequest(friendships, fromRef, toRef, at) {
+    const list = Array.isArray(friendships) ? friendships : [];
+    if (sameIdentity(fromRef, toRef)) return null;
+    const exists = list.some(f => f && (f.status === "pending" || f.status === "accepted") &&
+      ((sameIdentity(f.requester, fromRef) && sameIdentity(f.addressee, toRef)) ||
+       (sameIdentity(f.requester, toRef) && sameIdentity(f.addressee, fromRef))));
+    if (exists) return null;
+    const friendship = {
+      id: newId(),
+      requester: fromRef,
+      addressee: toRef,
+      status: "pending",
+      createdAt: at,
+      respondedAt: null,
+    };
+    friendships.push(friendship);
+    return friendship;
+  }
+  // Returns false unless `id` names a pending friendship whose addressee is `meRef`; else sets
+  // status to accepted/rejected and stamps respondedAt.
+  function respondToFriendRequest(friendships, id, meRef, accept, at) {
+    const list = Array.isArray(friendships) ? friendships : [];
+    const friendship = list.find(f => f && f.id === id);
+    if (!friendship || friendship.status !== "pending" || !sameIdentity(friendship.addressee, meRef)) return false;
+    friendship.status = accept ? "accepted" : "rejected";
+    friendship.respondedAt = at;
+    return true;
+  }
+
+  // ---------- player exit (pure) ----------
+  function exitPlayer(player, cashout, at) {
+    if (!player || player.status === "exited") return false;
+    const amount = Math.round(Number(cashout));
+    if (!Number.isFinite(amount) || amount < 0) return false;
+    player.status = "exited";
+    player.exitedAt = at;
+    player.cashout = amount;
+    return true;
+  }
+  function updateExitCashout(player, cashout) {
+    if (!player || player.status !== "exited") return false;
+    const amount = Math.round(Number(cashout));
+    if (!Number.isFinite(amount) || amount < 0) return false;
+    player.cashout = amount;
+    return true;
+  }
+  function activePlayers(players) {
+    return players.filter(p => p.status !== "exited");
+  }
+  function exitedPlayers(players) {
+    return players.filter(p => p.status === "exited");
+  }
+  function isExited(player) {
+    return !!player && player.status === "exited";
+  }
+
+  // ---------- groups domain (pure) ----------
+  // Pre-backend identity: userId is always null; guestId is the stable local identity
+  // (resolveGuestId reuses one guestId per displayName across groups/history on this device).
+  // ParticipantRef  = { userId: string|null, guestId: string|null, displayName: string }
+  // Group           = { id, name, avatarDataUrl: string|null, createdBy: ParticipantRef, createdAt,
+  //                     archivedAt: ISO|null, deletedAt: ISO|null }
+  // GroupMember     = { id, groupId, userId: null, guestId, displayName, role: "admin"|"member",
+  //                     status: "active"|"left"|"removed", joinedAt, leftAt: ISO|null }
+  // Invite          = { id, groupId, token, createdBy: ParticipantRef, createdAt, revokedAt: ISO|null }
+  // Friendship      = { id, requester: ParticipantRef, addressee: ParticipantRef,
+  //                     status: "pending"|"accepted"|"rejected", createdAt, respondedAt: ISO|null }
+  // GroupSummary     = { groupId, name, avatarDataUrl, memberCount, members: [displayName], hasActiveGame,
+  //                      activeGamePhase, gameCount, lastGameAt, leaderNames: [displayName], isAdmin, isMember }
+  // LeaderboardEntry = { rank, identityKey, displayName, gamesPlayed, wins, isFormerMember } -- no money field
+  // GroupGameSummary = { gameId, at, startedAt, playerCount, playerNames, winnerNames, potSize, totalEntries,
+  //                      isBalanced } -- no per-player net; built by toGroupGameSummary(historyEntry)
+  function normalizeParticipantRef(ref) {
+    const r = ref && typeof ref === "object" ? ref : {};
+    return {
+      userId: null,
+      guestId: typeof r.guestId === "string" ? r.guestId : null,
+      displayName: String(r.displayName || ""),
+    };
+  }
+  function normalizeGroup(g) {
+    if (!g || typeof g !== "object" || !g.id) return null;
+    return {
+      id: String(g.id),
+      name: String(g.name || ""),
+      avatarDataUrl: typeof g.avatarDataUrl === "string" ? g.avatarDataUrl : null,
+      createdBy: normalizeParticipantRef(g.createdBy),
+      createdAt: typeof g.createdAt === "string" ? g.createdAt : "",
+      archivedAt: typeof g.archivedAt === "string" ? g.archivedAt : null,
+      deletedAt: typeof g.deletedAt === "string" ? g.deletedAt : null,
+    };
+  }
+  function normalizeGroupMember(m) {
+    if (!m || typeof m !== "object" || !m.id) return null;
+    return {
+      id: String(m.id),
+      groupId: String(m.groupId || ""),
+      userId: null,
+      guestId: typeof m.guestId === "string" ? m.guestId : null,
+      displayName: String(m.displayName || ""),
+      role: m.role === "admin" ? "admin" : "member",
+      status: m.status === "left" || m.status === "removed" ? m.status : "active",
+      joinedAt: typeof m.joinedAt === "string" ? m.joinedAt : "",
+      leftAt: typeof m.leftAt === "string" ? m.leftAt : null,
+    };
+  }
+  function normalizeInvite(i) {
+    if (!i || typeof i !== "object" || !i.id) return null;
+    return {
+      id: String(i.id),
+      groupId: String(i.groupId || ""),
+      token: String(i.token || ""),
+      createdBy: normalizeParticipantRef(i.createdBy),
+      createdAt: typeof i.createdAt === "string" ? i.createdAt : "",
+      revokedAt: typeof i.revokedAt === "string" ? i.revokedAt : null,
+    };
+  }
+  function normalizeFriendship(f) {
+    if (!f || typeof f !== "object" || !f.id) return null;
+    return {
+      id: String(f.id),
+      requester: normalizeParticipantRef(f.requester),
+      addressee: normalizeParticipantRef(f.addressee),
+      status: f.status === "accepted" || f.status === "rejected" ? f.status : "pending",
+      createdAt: typeof f.createdAt === "string" ? f.createdAt : "",
+      respondedAt: typeof f.respondedAt === "string" ? f.respondedAt : null,
+    };
+  }
+  function identityKey(ref) {
+    const r = ref || {};
+    if (r.userId) return "u:" + r.userId;
+    if (r.guestId) return "g:" + r.guestId;
+    return "n:" + (r.displayName || "");
+  }
+  function sameIdentity(a, b) {
+    return identityKey(a) === identityKey(b);
+  }
+  // Reuses the guestId already on record for this displayName (an active/former group
+  // member, or a player in a closed game) so the same person keeps one id on this device.
+  function resolveGuestId(collections, displayName) {
+    const c = collections || {};
+    const members = Array.isArray(c.groupMembers) ? c.groupMembers : [];
+    const knownMember = members.find(m => m && m.displayName === displayName && m.guestId);
+    if (knownMember) return knownMember.guestId;
+    const history = Array.isArray(c.history) ? c.history : [];
+    for (const entry of history) {
+      const players = entry && Array.isArray(entry.players) ? entry.players : [];
+      const knownPlayer = players.find(p => p && p.name === displayName && p.guestId);
+      if (knownPlayer) return knownPlayer.guestId;
+    }
+    return newId();
+  }
+  function findMyMembership(members, groupId, meName) {
+    return (Array.isArray(members) ? members : [])
+      .find(m => m && m.groupId === groupId && m.status === "active" && m.displayName === meName) || null;
+  }
+  function isGroupAdmin(members, groupId, meName) {
+    const membership = findMyMembership(members, groupId, meName);
+    return !!membership && membership.role === "admin";
+  }
+  function activeMembers(members, groupId) {
+    return (Array.isArray(members) ? members : []).filter(m => m && m.groupId === groupId && m.status === "active");
+  }
+  function formerMembers(members, groupId) {
+    return (Array.isArray(members) ? members : [])
+      .filter(m => m && m.groupId === groupId && (m.status === "left" || m.status === "removed"));
+  }
+  function visibleGroups(groups) {
+    return (Array.isArray(groups) ? groups : []).filter(g => g && !g.deletedAt && !g.archivedAt);
+  }
+  function archivedGroups(groups) {
+    return (Array.isArray(groups) ? groups : []).filter(g => g && !g.deletedAt && g.archivedAt);
+  }
+  // History is stored newest-first (unshift on close); filtering preserves that order.
+  function groupClosedGames(history, groupId) {
+    return (Array.isArray(history) ? history : []).filter(h => h && h.groupId === groupId);
+  }
+  function gameWinners(historyEntry) {
+    const players = historyEntry && Array.isArray(historyEntry.players) ? historyEntry.players : [];
+    if (!players.length) return [];
+    const maxNet = Math.max(...players.map(p => Number(p.net) || 0));
+    return players.filter(p => (Number(p.net) || 0) === maxNet);
+  }
+  // Builds a GroupGameSummary from a closed-game HistoryEntry for the group's last-game and
+  // history rows. Deliberately has no net/cashout field — group screens never show another
+  // person's exact P&L (Global Constraint 10).
+  function toGroupGameSummary(historyEntry) {
+    const entry = historyEntry || {};
+    const players = Array.isArray(entry.players) ? entry.players : [];
+    return {
+      gameId: entry.gameId,
+      at: entry.at,
+      startedAt: entry.startedAt || null,
+      playerCount: players.length,
+      playerNames: players.map(p => p.name),
+      winnerNames: gameWinners(entry).map(p => p.name),
+      potSize: players.reduce((total, p) => total + (Number(p.buyin) || 0), 0),
+      totalEntries: players.reduce((total, p) => total + (Array.isArray(p.entryLog) ? p.entryLog.length : 0), 0),
+      isBalanced: !!entry.isBalanced,
+    };
+  }
+  // Deviation (documented): a participant is eligible when their identity matches any
+  // GroupMember of the group, active or former. Ad-hoc game guests who never joined are excluded.
+  function isLeaderboardEligible(participant, members) {
+    return (Array.isArray(members) ? members : []).some(m => m && sameIdentity(m, participant));
+  }
+  // Ranking: total net desc, then gamesPlayed desc, then displayName (he). Ties in net share a rank.
+  // The returned entries never carry a money field.
+  function buildLeaderboard(history, members, groupId) {
+    const groupMembersList = (Array.isArray(members) ? members : []).filter(m => m && m.groupId === groupId);
+    const stats = new Map();
+    groupClosedGames(history, groupId).forEach(entry => {
+      const players = Array.isArray(entry.players) ? entry.players : [];
+      const winners = gameWinners(entry);
+      players.forEach(player => {
+        const ref = { userId: null, guestId: player.guestId || null, displayName: player.name || "" };
+        if (!isLeaderboardEligible(ref, groupMembersList)) return;
+        const key = identityKey(ref);
+        if (!stats.has(key)) {
+          const member = groupMembersList.find(m => sameIdentity(m, ref));
+          stats.set(key, {
+            identityKey: key, displayName: ref.displayName, net: 0, gamesPlayed: 0, wins: 0,
+            isFormerMember: !member || member.status !== "active",
+          });
+        }
+        const row = stats.get(key);
+        row.displayName = ref.displayName || row.displayName;
+        row.net += Number(player.net) || 0;
+        row.gamesPlayed += 1;
+        if (winners.includes(player)) row.wins += 1;
+      });
+    });
+    const rows = Array.from(stats.values()).sort((a, b) => {
+      if (b.net !== a.net) return b.net - a.net;
+      if (b.gamesPlayed !== a.gamesPlayed) return b.gamesPlayed - a.gamesPlayed;
+      return a.displayName.localeCompare(b.displayName, "he");
+    });
+    let rank = 0, lastNet = null;
+    return rows.map((row, index) => {
+      if (lastNet === null || row.net !== lastNet) rank = index + 1;
+      lastNet = row.net;
+      return { rank, identityKey: row.identityKey, displayName: row.displayName, gamesPlayed: row.gamesPlayed, wins: row.wins, isFormerMember: row.isFormerMember };
+    });
+  }
+  function getGroupSummary(collections, groupId, meName) {
+    const c = collections || {};
+    const groups = Array.isArray(c.groups) ? c.groups : [];
+    const group = groups.find(g => g && g.id === groupId);
+    if (!group) return null;
+    const members = Array.isArray(c.groupMembers) ? c.groupMembers : [];
+    const history = Array.isArray(c.history) ? c.history : [];
+    const active = activeMembers(members, groupId);
+    const games = groupClosedGames(history, groupId);
+    const currentGame = c.currentGame || {};
+    const hasActiveGame = !currentGame.example && currentGame.groupId === groupId &&
+      (currentGame.phase === "active" || currentGame.phase === "settlement");
+    const leaderboard = buildLeaderboard(history, members, groupId);
+    const topRank = leaderboard.length ? leaderboard[0].rank : null;
+    const leaderNames = topRank === null ? [] : leaderboard.filter(l => l.rank === topRank).map(l => l.displayName);
+    return {
+      groupId: group.id,
+      name: group.name,
+      avatarDataUrl: group.avatarDataUrl,
+      memberCount: active.length,
+      members: active.map(m => m.displayName),
+      hasActiveGame,
+      activeGamePhase: hasActiveGame ? currentGame.phase : null,
+      gameCount: games.length,
+      lastGameAt: games.length ? games[0].at : null,
+      leaderNames,
+      isAdmin: isGroupAdmin(members, groupId, meName),
+      isMember: !!findMyMembership(members, groupId, meName),
+    };
+  }
+  function getGroupSummaries(collections, meName) {
+    const c = collections || {};
+    return visibleGroups(Array.isArray(c.groups) ? c.groups : [])
+      .map(g => getGroupSummary(c, g.id, meName))
+      .filter(Boolean);
+  }
+  // The engine has one current-game slot: a group can have at most one open game, and the
+  // whole device can have only one open game at a time (documented limitation, see plan).
+  function canStartGroupGame(collections, groupId) {
+    const c = collections || {};
+    const groups = Array.isArray(c.groups) ? c.groups : [];
+    const group = groups.find(g => g && g.id === groupId);
+    if (group && (group.archivedAt || group.deletedAt)) return { ok: false, reason: "group-archived" };
+    const currentGame = c.currentGame || {};
+    const isOpen = !currentGame.example && (currentGame.phase === "active" || currentGame.phase === "settlement");
+    if (isOpen && currentGame.groupId === groupId) return { ok: false, reason: "group-has-open-game" };
+    if (isOpen) return { ok: false, reason: "another-game-open" };
+    return { ok: true, reason: null };
+  }
+  // Rebuilds the current-game slot for a new/reset game while preserving every other
+  // collection on state (fixes a latent data-loss bug in the old hand-built object literals).
+  function newCurrentGame(base, patch) {
+    return {
+      ...base,
+      example: false,
+      phase: "closed",
+      gameId: newId(),
+      players: [],
+      settlementStatuses: {},
+      groupId: null,
+      startedAt: null,
+      leaderRef: null,
+      ...patch,
+    };
+  }
+  // Builds a new Group and its creator GroupMember (role "admin", status "active") from a
+  // typed name and optional avatar. The caller pushes both records and calls save().
+  function buildGroupCreation(meName, name, avatarDataUrl, guestId, at) {
+    const group = normalizeGroup({
+      id: newId(),
+      name: String(name || "").trim(),
+      avatarDataUrl: avatarDataUrl || null,
+      createdBy: { userId: null, guestId, displayName: meName },
+      createdAt: at,
+    });
+    const member = normalizeGroupMember({
+      id: newId(),
+      groupId: group.id,
+      guestId,
+      displayName: meName,
+      role: "admin",
+      status: "active",
+      joinedAt: at,
+    });
+    return { group, member };
+  }
+  // Adds a guest member by ParticipantRef (userId always null pre-backend). Refused (returns
+  // null) when an ACTIVE member with the same identity (sameIdentity) or the same trimmed
+  // displayName already exists in this group. A former (left/removed) member with the same
+  // identity is re-activated in place instead of creating a second record, so game-history
+  // attribution (guestId) stays stable across a remove-then-rejoin.
+  function addGroupMember(members, group, ref, role, at) {
+    const list = Array.isArray(members) ? members : [];
+    const groupId = group && group.id;
+    const displayName = String((ref && ref.displayName) || "").trim();
+    if (!groupId || !displayName) return null;
+    const activeDuplicate = list.some(m => m && m.groupId === groupId && m.status === "active" &&
+      (sameIdentity(m, ref) || m.displayName.trim() === displayName));
+    if (activeDuplicate) return null;
+    const former = list.find(m => m && m.groupId === groupId && m.status !== "active" && sameIdentity(m, ref));
+    if (former) {
+      former.status = "active";
+      former.leftAt = null;
+      former.joinedAt = at;
+      return former;
+    }
+    const member = normalizeGroupMember({
+      id: newId(), groupId, guestId: (ref && ref.guestId) || null,
+      displayName, role, status: "active", joinedAt: at,
+    });
+    list.push(member);
+    return member;
+  }
+  // Soft-removes an active member (status "removed", leftAt = at) so history/leaderboard
+  // attribution survives. Refused (false, no mutation) when not found, already former, or the
+  // group's last active admin — a group must always keep at least one admin.
+  function removeGroupMember(members, memberId, at) {
+    const list = Array.isArray(members) ? members : [];
+    const member = list.find(m => m && m.id === memberId);
+    if (!member || member.status !== "active") return false;
+    if (isLastActiveAdmin(list, memberId)) return false;
+    member.status = "removed";
+    member.leftAt = at;
+    return true;
+  }
+  // Self-service version of removeGroupMember: the caller leaves by their own displayName
+  // (findMyMembership's identity rule) rather than a memberId. Same last-admin guard.
+  function leaveGroup(members, groupId, meName, at) {
+    const list = Array.isArray(members) ? members : [];
+    const membership = findMyMembership(list, groupId, meName);
+    if (!membership || isLastActiveAdmin(list, membership.id)) return false;
+    membership.status = "left";
+    membership.leftAt = at;
+    return true;
+  }
+  // Promotes/demotes a member. Refused (false, no mutation) when not found, or when demoting
+  // the group's last active admin would leave it with none.
+  function setMemberRole(members, memberId, role) {
+    const list = Array.isArray(members) ? members : [];
+    const member = list.find(m => m && m.id === memberId);
+    if (!member) return false;
+    const nextRole = role === "admin" ? "admin" : "member";
+    if (member.role === "admin" && nextRole !== "admin" && isLastActiveAdmin(list, memberId)) return false;
+    member.role = nextRole;
+    return true;
+  }
+  // True when memberId is an active admin and no other active admin shares their group — i.e.
+  // removing/demoting them, or letting them leave, would leave the group without one.
+  function isLastActiveAdmin(members, memberId) {
+    const list = Array.isArray(members) ? members : [];
+    const member = list.find(m => m && m.id === memberId);
+    if (!member || member.status !== "active" || member.role !== "admin") return false;
+    return !list.some(m => m && m.id !== memberId && m.groupId === member.groupId && m.status === "active" && m.role === "admin");
+  }
+
+  // ---------- invites (pure) ----------
+  // One invite token model, three presentations (large code / link / QR placeholder). Joining
+  // through an invite needs a backend and does not exist yet: parseJoinToken only recognizes a
+  // token in the URL so boot can show a friendly notice; nothing here ever touches state.
+  var INVITE_TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
+  // randomBytes is a Uint8Array(8) the caller fills (crypto.getRandomValues, Math.random
+  // fallback) — kept as an argument so this stays a pure, deterministically testable function.
+  function generateInviteToken(randomBytes) {
+    const bytes = randomBytes || [];
+    let token = "";
+    for (let i = 0; i < 8; i++) {
+      token += INVITE_TOKEN_ALPHABET[bytes[i] % INVITE_TOKEN_ALPHABET.length];
+    }
+    return token;
+  }
+  function createInvite(invites, groupId, byRef, token, at) {
+    const invite = normalizeInvite({ id: newId(), groupId, token, createdBy: byRef, createdAt: at, revokedAt: null });
+    invites.push(invite);
+    return invite;
+  }
+  // Latest (by createdAt) non-revoked invite for the group, or null.
+  function activeInvite(invites, groupId) {
+    const open = (Array.isArray(invites) ? invites : []).filter(i => i && i.groupId === groupId && !i.revokedAt);
+    if (!open.length) return null;
+    return open.reduce((latest, i) => (i.createdAt > latest.createdAt ? i : latest));
+  }
+  function revokeInvite(invites, inviteId, at) {
+    const invite = (Array.isArray(invites) ? invites : []).find(i => i && i.id === inviteId);
+    if (!invite || invite.revokedAt) return false;
+    invite.revokedAt = at;
+    return true;
+  }
+  function inviteLink(token, origin, pathname) {
+    return origin + pathname + "?join=" + token;
+  }
+  function formatInviteCode(token) {
+    const t = String(token || "");
+    return t.slice(0, 4) + "-" + t.slice(4, 8);
+  }
+  // Reads a ?join= token out of a location.search string. Accepts a dash the way the formatted
+  // code displays it, uppercases, and only returns 8 alphabet characters — anything else is null
+  // so a malformed or foreign query can't be mistaken for a real invite.
+  function parseJoinToken(search) {
+    const match = String(search || "").match(/[?&]join=([^&]*)/);
+    if (!match) return null;
+    const token = decodeURIComponent(match[1]).toUpperCase().replace(/-/g, "");
+    return new RegExp("^[" + INVITE_TOKEN_ALPHABET + "]{8}$").test(token) ? token : null;
+  }
+
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -1084,6 +1717,35 @@
     if (plus) plus.classList.remove("open");
     m.classList.remove("open");
     setTimeout(() => { menuClosing = false; done(); }, 300);
+  }
+
+  // Opens (or closes) the inline exit/cashout capsule for a player, reusing
+  // the same .pmenu collapse animation as the buy-in menu. Only one of the
+  // two kinds of panel is ever open at a time, across the whole table.
+  function openExitPanel(name) {
+    if (markReal()) { save(); render(); return; } // first touch wipes the demo data
+    const opening = exitOpen !== name;
+    if (!opening) {
+      const closingFor = name;
+      animateMenuClose(() => {
+        if (exitOpen === closingFor) { exitOpen = null; render(); }
+      });
+      return;
+    }
+    const open = () => {
+      exitOpen = name;
+      exitJustOpened = name;
+      render();
+    };
+    if (openMenu) {
+      const closingFor = openMenu;
+      animateMenuClose(() => {
+        if (openMenu === closingFor) { openMenu = null; customOpen = null; pendingAmount = null; }
+        open();
+      });
+    } else {
+      open();
+    }
   }
 
   // Confirms a buy-in: the picker collapses, then the money lands with a
@@ -1127,7 +1789,7 @@
 
   function setAppView(nextView) {
     appView = nextView;
-    if (nextView !== "game") { openMenu = null; customOpen = null; }
+    if (nextView !== "game") { openMenu = null; customOpen = null; exitOpen = null; exitJustOpened = null; }
     if (nextView !== "settle") {
       clearCloseHold();
       forceCloseArmed = false;
@@ -1140,20 +1802,9 @@
   }
 
   function startUngroupedGame() {
-    state = {
-      example: false,
-      phase: "active",
-      gameId: newId(),
-      players: [],
-      history: state.history,
-      debts: state.debts,
-      settlementStatuses: {},
-      groupId: null,
-      startedAt: new Date().toISOString(),
-      updatedAt: state.updatedAt,
-    };
+    state = newCurrentGame(state, { phase: "active", startedAt: new Date().toISOString(), groupId: null });
     expandedEntries.clear();
-    openMenu = null; customOpen = null; pendingAmount = null;
+    openMenu = null; customOpen = null; pendingAmount = null; exitOpen = null; exitJustOpened = null;
     save();
     setAppView("game");
   }
@@ -1161,6 +1812,145 @@
   function continueCurrentGame() {
     if (state.example || state.phase === "closed") return;
     setAppView(state.phase === "settlement" ? "settle" : "game");
+  }
+
+  function openGroup(groupId) {
+    currentGroupId = String(groupId || "");
+    setAppView("group");
+  }
+
+  // Creates a group and its creator admin membership. Requires a signed-in name; when there
+  // isn't one the create panel stays open (with whatever was typed) and the user tries again
+  // once they've picked a name in the login screen.
+  function createGroup({ name, avatarDataUrl }) {
+    if (!me) { showLogin(); return; }
+    const at = new Date().toISOString();
+    const guestId = resolveGuestId(collectionsOf(state), me);
+    const { group, member } = buildGroupCreation(me, name, avatarDataUrl || null, guestId, at);
+    state.groups.push(group);
+    state.groupMembers.push(member);
+    save();
+    resetCreateGroupPanel(); // plain reset: openGroup's render replaces the dashboard next anyway
+    openGroup(group.id);
+  }
+
+  // Fills a Uint8Array(8) with real randomness for a fresh invite token: crypto.getRandomValues
+  // when available, Math.random otherwise. Not part of the pure section — it is the one place
+  // that actually reaches for randomness; generateInviteToken() itself stays deterministic.
+  function randomInviteBytes() {
+    const bytes = new Uint8Array(8);
+    if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") crypto.getRandomValues(bytes);
+    else for (let i = 0; i < 8; i++) bytes[i] = Math.floor(Math.random() * 256);
+    return bytes;
+  }
+
+  function createGroupInvite(groupId) {
+    const at = new Date().toISOString();
+    const byRef = { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me };
+    createInvite(state.invites, groupId, byRef, generateInviteToken(randomInviteBytes()), at);
+    save();
+    renderGroupPage();
+  }
+
+  function revokeGroupInvite(groupId) {
+    const invite = activeInvite(state.invites, groupId);
+    if (!invite) return;
+    revokeInvite(state.invites, invite.id, new Date().toISOString());
+    save();
+    renderGroupPage();
+  }
+
+  function resetCreateGroupPanel() {
+    createGroupOpen = false;
+    createGroupJustOpened = false;
+    createGroupName = "";
+    createGroupAvatarDataUrl = null;
+  }
+
+  function toggleCreateGroupPanel() {
+    if (createGroupOpen) { closeCreateGroupPanel(); return; }
+    createGroupOpen = true;
+    createGroupJustOpened = true;
+    renderGamesDashboard();
+  }
+
+  // Plays the panel's collapse transition (matching animateMenuClose's approach for .pmenu)
+  // before clearing the draft name/avatar and rebuilding the dashboard without it.
+  function closeCreateGroupPanel() {
+    const panel = document.querySelector(".games-create-panel.open");
+    const finish = () => { resetCreateGroupPanel(); renderGamesDashboard(); };
+    if (!panel) { finish(); return; }
+    panel.classList.remove("open");
+    setTimeout(finish, 280);
+  }
+
+  // Adds a guest member by typed name (no accounts yet — see groups-domain decision doc:
+  // userId stays null, resolveGuestId keeps one guestId per displayName on this device). A
+  // duplicate active identity/displayName in the group is refused; the caller shakes its input.
+  function addMemberByName(groupId, name) {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return null;
+    const group = state.groups.find(g => g && g.id === groupId);
+    if (!group) return null;
+    const at = new Date().toISOString();
+    const guestId = resolveGuestId(collectionsOf(state), trimmed);
+    const ref = { userId: null, guestId, displayName: trimmed };
+    const member = addGroupMember(state.groupMembers, group, ref, "member", at);
+    if (!member) return null;
+    save();
+    renderGroupPage();
+    return member;
+  }
+
+  // Removes (soft) a member from a group; see removeGroupMember for the history-preserving
+  // and last-admin-guard rules. Scoped to groupId so a stale memberId can't cross groups.
+  function removeMember(groupId, memberId) {
+    const member = state.groupMembers.find(m => m && m.id === memberId && m.groupId === groupId);
+    if (!member) return false;
+    if (!removeGroupMember(state.groupMembers, memberId, new Date().toISOString())) return false;
+    save();
+    renderGroupPage();
+    return true;
+  }
+
+  // Resizes/crops an image file to a 96×96 JPEG data URL (cover crop, quality 0.8) for a
+  // group avatar. DOM-dependent (canvas/Image), so it lives outside the pure domain section.
+  function resizeAvatarImage(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const size = 96;
+        const canvas = document.createElement("canvas");
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale, h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("avatar image failed to load")); };
+      img.src = url;
+    });
+  }
+
+  // Builds the { groups, groupMembers, history, currentGame } shape the pure groups-domain
+  // adapters take as input, from the single persisted state document.
+  function collectionsOf(state) {
+    return {
+      groups: state.groups,
+      groupMembers: state.groupMembers,
+      history: state.history,
+      currentGame: {
+        gameId: state.gameId,
+        phase: state.phase,
+        groupId: state.groupId,
+        players: state.players,
+        startedAt: state.startedAt,
+        example: state.example,
+      },
+    };
   }
 
   function getActiveGameSummaries(gameState) {
@@ -1189,13 +1979,26 @@
     }];
   }
 
-  function getGroupSummaries() { return []; }
-
   function formatGameTime(timestamp) {
     if (!timestamp) return "";
     const date = new Date(timestamp);
     if (Number.isNaN(date.getTime())) return "";
     return date.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function formatGameDate(timestamp) {
+    if (!timestamp) return "";
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+
+  // Short form for group last-game/history rows: day + short month name, no year.
+  function formatShortGameDate(timestamp) {
+    if (!timestamp) return "";
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("he-IL", { day: "numeric", month: "short" });
   }
 
   function formatPlayerNames(names) {
@@ -1213,6 +2016,10 @@
     return count === 1 ? "כניסה אחת" : count + " כניסות";
   }
 
+  function formatMemberCount(count) {
+    return count === 1 ? "חבר אחד" : count + " חברים";
+  }
+
   function renderQuickActions(parent) {
     const section = el("section", "games-section games-quick-section");
     section.appendChild(el("h3", "games-section-title", "פעולות מהירות"));
@@ -1222,15 +2029,94 @@
     start.type = "button";
     start.addEventListener("click", startUngroupedGame);
 
-    const createGroup = el("button", "games-quick-action coming-soon");
-    createGroup.type = "button";
-    createGroup.disabled = true;
-    createGroup.setAttribute("aria-disabled", "true");
-    createGroup.append(el("span", "", "+ צור קבוצה"), el("span", "games-coming-soon", "בקרוב"));
+    const createGroupBtn = el("button", "games-quick-action", "+ צור קבוצה");
+    createGroupBtn.type = "button";
+    createGroupBtn.setAttribute("aria-expanded", String(createGroupOpen));
+    createGroupBtn.addEventListener("click", toggleCreateGroupPanel);
 
-    actions.append(start, createGroup);
+    actions.append(start, createGroupBtn);
     section.appendChild(actions);
+    renderCreateGroupPanel(section);
     parent.appendChild(section);
+  }
+
+  function renderCreateGroupPanel(parent) {
+    const panel = el("div", "games-create-panel");
+    const panelIn = el("div", "games-create-panel-in");
+    const content = el("div", "games-create-panel-content");
+
+    const avatarBtn = el("button", "games-create-avatar");
+    avatarBtn.type = "button";
+    avatarBtn.setAttribute("aria-label", "הוספת תמונה לקבוצה");
+    const applyAvatarPreview = () => {
+      avatarBtn.innerHTML = "";
+      if (createGroupAvatarDataUrl) {
+        const img = document.createElement("img");
+        img.src = createGroupAvatarDataUrl;
+        img.alt = "";
+        avatarBtn.appendChild(img);
+      } else {
+        avatarBtn.textContent = (createGroupName.trim() || "?").slice(0, 1);
+      }
+    };
+    applyAvatarPreview();
+
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.hidden = true;
+    fileInput.setAttribute("aria-hidden", "true");
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = "";
+      if (!file) return;
+      try {
+        createGroupAvatarDataUrl = await resizeAvatarImage(file);
+        applyAvatarPreview();
+      } catch (e) {}
+    });
+    avatarBtn.addEventListener("click", () => fileInput.click());
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.maxLength = 40;
+    nameInput.placeholder = "שם הקבוצה";
+    nameInput.autocomplete = "off";
+    nameInput.setAttribute("aria-label", "שם הקבוצה");
+    nameInput.value = createGroupName;
+    nameInput.addEventListener("input", () => {
+      createGroupName = nameInput.value;
+      if (!createGroupAvatarDataUrl) applyAvatarPreview();
+    });
+
+    const submit = () => {
+      const name = nameInput.value.trim();
+      if (!name) { shakeEl(nameInput); return; }
+      createGroup({ name, avatarDataUrl: createGroupAvatarDataUrl });
+    };
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+    });
+
+    const submitBtn = el("button", "games-create-submit", "צור קבוצה");
+    submitBtn.type = "button";
+    submitBtn.addEventListener("click", submit);
+
+    const cancelBtn = el("button", "games-create-cancel", "ביטול");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", closeCreateGroupPanel);
+
+    content.append(avatarBtn, fileInput, nameInput, submitBtn, cancelBtn);
+    panelIn.appendChild(content);
+    panel.appendChild(panelIn);
+
+    if (createGroupOpen && createGroupJustOpened) {
+      createGroupJustOpened = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add("open")));
+    } else if (createGroupOpen) {
+      panel.classList.add("open");
+    }
+    parent.appendChild(panel);
   }
 
   function renderActiveGameCard(summary, actions) {
@@ -1299,9 +2185,16 @@
   function renderGroupCard(group, actions) {
     const card = el("article", "games-group-card");
     const head = el("div", "games-group-head");
-    if (group.avatarUrl) {
+    head.setAttribute("role", "button");
+    head.setAttribute("tabindex", "0");
+    head.setAttribute("aria-label", "פתח את " + String(group.name || "הקבוצה"));
+    head.addEventListener("click", actions.onOpen);
+    head.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); actions.onOpen(); }
+    });
+    if (group.avatarDataUrl) {
       const avatar = el("img", "games-group-avatar");
-      avatar.src = group.avatarUrl;
+      avatar.src = group.avatarDataUrl;
       avatar.alt = "";
       head.appendChild(avatar);
     } else {
@@ -1309,11 +2202,13 @@
     }
     const copy = el("div", "");
     copy.appendChild(el("span", "games-card-title", String(group.name || "")));
-    copy.appendChild(el("span", "games-card-meta", Number(group.memberCount || 0) + " חברים" + (group.hasActiveGame ? " · משחק פעיל" : "")));
+    copy.appendChild(el("span", "games-card-meta", formatMemberCount(Number(group.memberCount || 0)) + (group.hasActiveGame ? " · משחק פעיל" : "")));
     head.appendChild(copy);
     card.appendChild(head);
 
-    const hasDetails = (Array.isArray(group.members) && group.members.length) || group.lastGame || Number.isFinite(group.gameCount) || group.leader || (Array.isArray(group.topPlayers) && group.topPlayers.length);
+    const lastGameLabel = group.lastGameAt ? formatGameDate(group.lastGameAt) : "";
+    const leaderNames = Array.isArray(group.leaderNames) ? group.leaderNames : [];
+    const hasDetails = (Array.isArray(group.members) && group.members.length) || lastGameLabel || Number.isFinite(group.gameCount) || leaderNames.length;
     if (hasDetails) {
       const toggle = el("button", "games-card-toggle", "הרחב");
       toggle.type = "button";
@@ -1325,10 +2220,9 @@
       const detailsIn = el("div", "games-card-details-in");
       const content = el("div", "games-card-details-content");
       if (Array.isArray(group.members) && group.members.length) content.appendChild(el("p", "games-detail-totals", "חברים · " + group.members.join(", ")));
-      if (group.lastGame) content.appendChild(el("p", "games-detail-totals", "משחק אחרון · " + group.lastGame));
+      if (lastGameLabel) content.appendChild(el("p", "games-detail-totals", "משחק אחרון · " + lastGameLabel));
       if (Number.isFinite(group.gameCount)) content.appendChild(el("p", "games-detail-totals", "משחקים · " + group.gameCount));
-      if (group.leader) content.appendChild(el("p", "games-detail-totals", "מוביל · " + group.leader));
-      if (Array.isArray(group.topPlayers) && group.topPlayers.length) content.appendChild(el("p", "games-detail-totals", "שחקנים בולטים · " + group.topPlayers.join(", ")));
+      if (leaderNames.length) content.appendChild(el("p", "games-detail-totals", "מוביל · " + leaderNames.join(", ")));
       detailsIn.appendChild(content);
       details.appendChild(detailsIn);
       card.appendChild(details);
@@ -1350,6 +2244,7 @@
             expandedGroupCards.has(groupId) ? expandedGroupCards.delete(groupId) : expandedGroupCards.add(groupId);
             renderGamesDashboard();
           },
+          onOpen: () => openGroup(groupId),
         }));
       });
     }
@@ -1369,25 +2264,370 @@
     inner.appendChild(el("p", "games-home-lead", "המשחקים הפעילים והקבוצות שלך במקום אחד."));
     renderQuickActions(inner);
     renderActiveGamesSection(inner, getActiveGameSummaries(state));
-    renderGroupsSection(inner, getGroupSummaries());
+    renderGroupsSection(inner, getGroupSummaries(collectionsOf(state), me));
+    box.appendChild(inner);
+  }
+
+  // Back arrow, 64px avatar (image or initial), name and member count — the top of the group page.
+  function renderGroupHeader(summary) {
+    const header = el("div", "games-group-header");
+    const back = el("button", "back-arrow");
+    back.type = "button";
+    back.setAttribute("aria-label", "חזרה");
+    back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>';
+    back.addEventListener("click", () => setAppView("games"));
+    header.appendChild(back);
+    if (summary.avatarDataUrl) {
+      const avatar = el("img", "games-group-header-avatar");
+      avatar.src = summary.avatarDataUrl;
+      avatar.alt = "";
+      header.appendChild(avatar);
+    } else {
+      header.appendChild(el("span", "games-group-header-avatar", String(summary.name || "?").slice(0, 1)));
+    }
+    header.appendChild(el("h2", "games-group-header-name", summary.name));
+    header.appendChild(el("p", "games-group-header-meta", formatMemberCount(summary.memberCount)));
+    return header;
+  }
+
+  // The group's own game has an active table → jump straight into it / its settlement.
+  // Otherwise "התחל משחק" renders disabled: Task 8 wires the actual start-game handler here.
+  // canStartGroupGame()'s reason (when not ok) gets a quiet line under the button; when it IS
+  // ok the button is still disabled for this task, with no reason line to explain that away.
+  function renderGroupPrimaryAction(summary, gate) {
+    const wrap = el("div", "games-primary-action");
+    const btn = el("button", "btn-primary");
+    btn.type = "button";
+    let reason = null;
+    if (summary.hasActiveGame) {
+      btn.textContent = summary.activeGamePhase === "settlement" ? "המשך סגירה" : "כנס לשולחן";
+      btn.addEventListener("click", continueCurrentGame);
+    } else {
+      btn.textContent = "התחל משחק";
+      btn.disabled = true;
+      btn.setAttribute("aria-disabled", "true");
+      if (gate && gate.ok === false) {
+        const reasons = {
+          "group-has-open-game": "יש כבר משחק פתוח בקבוצה",
+          "another-game-open": "יש משחק פעיל אחר — סגור אותו קודם",
+          "group-archived": "הקבוצה בארכיון",
+        };
+        reason = reasons[gate.reason] || null;
+      }
+    }
+    wrap.appendChild(btn);
+    if (reason) wrap.appendChild(el("p", "games-primary-reason", reason));
+    return wrap;
+  }
+
+  // Top 3 LeaderboardEntry rows, names only — no amounts (Global Constraint 10).
+  function renderGroupLeaders(entries) {
+    const section = el("section", "games-section");
+    section.appendChild(el("h3", "games-section-title", "דירוג"));
+    const top = (Array.isArray(entries) ? entries : []).slice(0, 3);
+    if (!top.length) {
+      section.appendChild(el("p", "games-empty", "הדירוג יופיע אחרי המשחק הראשון"));
+    } else {
+      top.forEach(entry => section.appendChild(el("p", "games-leader-row", entry.rank + ". " + entry.displayName)));
+    }
+    return section;
+  }
+
+  // Newest GroupGameSummary. Returns null (nothing to append) when there isn't one yet, so the
+  // "no games" empty state lives only once, in renderGroupHistory, instead of twice.
+  function renderGroupLastGame(gameSummary) {
+    if (!gameSummary) return null;
+    const section = el("section", "games-section");
+    section.appendChild(el("h3", "games-section-title", "המשחק האחרון"));
+    section.appendChild(el("p", "games-card-meta", [formatShortGameDate(gameSummary.at), formatPlayerCount(gameSummary.playerCount)].filter(Boolean).join(" · ")));
+    const winners = (Array.isArray(gameSummary.winnerNames) ? gameSummary.winnerNames : []).filter(Boolean);
+    if (winners.length) {
+      const label = (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ");
+      section.appendChild(el("p", "games-card-title", label));
+    }
+    return section;
+  }
+
+  // Flat member rows, name + a quiet "מנהל" tag for admins. Admins additionally get an inline
+  // "+ הוסף חבר" add action and a per-row "הסר" (except on their own row and the group's last
+  // active admin). Former members appear collapsed under a toggle, shown only when there are any.
+  function renderGroupMembers(members, former, isAdmin) {
+    const section = el("section", "games-section");
+    section.appendChild(el("h3", "games-section-title", "חברים"));
+    const list = Array.isArray(members) ? members : [];
+    list.forEach(member => section.appendChild(renderMemberRow(member, list, isAdmin)));
+    if (isAdmin) section.appendChild(renderAddMemberPanel());
+    const formerList = Array.isArray(former) ? former : [];
+    if (formerList.length) section.appendChild(renderFormerMembers(formerList));
+    return section;
+  }
+
+  // A single member row (kept as a <p>, like before, so the last-row border-hiding
+  // :last-of-type rule still targets it even once sibling <div> panels are appended below).
+  // Admins get a trailing "הסר" pushed to the far end via margin-inline-start:auto, except on
+  // their own row and on the group's last active admin (isLastActiveAdmin over this same list).
+  function renderMemberRow(member, activeList, isAdmin) {
+    const row = el("p", "games-member-row" + (isAdmin ? " with-actions" : ""));
+    const name = el("span", "games-member-name", member.displayName);
+    if (member.role === "admin") name.appendChild(el("span", "games-member-tag", "מנהל"));
+    row.appendChild(name);
+    if (isAdmin && member.displayName !== me && !isLastActiveAdmin(activeList, member.id)) {
+      row.appendChild(renderRemoveMemberButton(member));
+    }
+    return row;
+  }
+
+  // Two-step armed control, same idea as resetBtn/setClearBtn: label flips to "בטוח?" for 4s,
+  // a second click within the window confirms. Only one row is armed at a time (module-level
+  // id) and, unlike those static buttons, member rows are rebuilt on every renderGroupPage(),
+  // so arming/disarming re-renders instead of toggling a persistent element's classList.
+  function armRemoveMember(memberId) {
+    clearTimeout(removeMemberArmedTimeout);
+    removeMemberArmedId = memberId;
+    removeMemberArmedTimeout = setTimeout(() => {
+      removeMemberArmedId = null;
+      renderGroupPage();
+    }, 4000);
+  }
+  function disarmRemoveMember() {
+    clearTimeout(removeMemberArmedTimeout);
+    removeMemberArmedId = null;
+    removeMemberArmedTimeout = null;
+  }
+  function renderRemoveMemberButton(member) {
+    const armed = removeMemberArmedId === member.id;
+    const btn = el("button", "games-member-remove" + (armed ? " armed" : ""), armed ? "בטוח?" : "הסר");
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      if (removeMemberArmedId === member.id) {
+        disarmRemoveMember();
+        removeMember(member.groupId, member.id);
+        return;
+      }
+      armRemoveMember(member.id);
+      renderGroupPage();
+    });
+    return btn;
+  }
+
+  // Inline "+ הוסף חבר" add action, same collapse/expand pattern and CSS (.games-create-panel)
+  // as the create-group panel (Task 3). Guest-only for now — no accounts yet — hence the note.
+  function renderAddMemberPanel() {
+    const wrap = el("div", "games-member-add");
+    const toggle = el("button", "games-member-add-toggle", "+ הוסף חבר");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", String(addMemberOpen));
+    toggle.addEventListener("click", toggleAddMemberPanel);
+    wrap.appendChild(toggle);
+
+    const panel = el("div", "games-create-panel");
+    const panelIn = el("div", "games-create-panel-in");
+    const content = el("div", "games-create-panel-content");
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.maxLength = 40;
+    nameInput.placeholder = "שם";
+    nameInput.autocomplete = "off";
+    nameInput.setAttribute("aria-label", "שם החבר");
+    nameInput.value = addMemberName;
+    nameInput.addEventListener("input", () => { addMemberName = nameInput.value; });
+
+    const submit = () => {
+      const name = nameInput.value.trim();
+      if (!name) { shakeEl(nameInput); return; }
+      const member = addMemberByName(currentGroupId, name);
+      if (!member) { shakeEl(nameInput); return; } // duplicate active identity/name
+      closeAddMemberPanel();
+    };
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+    });
+
+    const submitBtn = el("button", "games-create-submit", "הוסף");
+    submitBtn.type = "button";
+    submitBtn.addEventListener("click", submit);
+
+    content.append(nameInput, submitBtn);
+    content.appendChild(el("p", "games-member-add-note", "חיבור חשבונות יגיע עם השרת"));
+    panelIn.appendChild(content);
+    panel.appendChild(panelIn);
+
+    if (addMemberOpen && addMemberJustOpened) {
+      addMemberJustOpened = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add("open")));
+    } else if (addMemberOpen) {
+      panel.classList.add("open");
+    }
+    wrap.appendChild(panel);
+    return wrap;
+  }
+  function toggleAddMemberPanel() {
+    if (addMemberOpen) { closeAddMemberPanel(); return; }
+    addMemberOpen = true;
+    addMemberJustOpened = true;
+    renderGroupPage();
+  }
+  // Plays the panel's collapse transition (matching closeCreateGroupPanel's approach) before
+  // clearing the draft name and rebuilding the group page without it.
+  function closeAddMemberPanel() {
+    const panel = document.querySelector(".games-member-add .games-create-panel.open");
+    const finish = () => { addMemberOpen = false; addMemberJustOpened = false; addMemberName = ""; renderGroupPage(); };
+    if (!panel) { finish(); return; }
+    panel.classList.remove("open");
+    setTimeout(finish, 280);
+  }
+
+  // Collapsed "חברים לשעבר (N)" line, shown only when the group has any (see renderGroupMembers)
+  // — expands to a flat list of names tagged "לשעבר". UI-only boolean, not persisted.
+  function renderFormerMembers(former) {
+    const wrap = el("div", "games-former-members");
+    const toggle = el("button", "games-former-toggle", "חברים לשעבר (" + former.length + ")");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", String(formerMembersOpen));
+    toggle.addEventListener("click", () => { formerMembersOpen = !formerMembersOpen; renderGroupPage(); });
+    wrap.appendChild(toggle);
+    if (formerMembersOpen) {
+      former.forEach(member => {
+        const row = el("p", "games-member-row", member.displayName);
+        row.appendChild(el("span", "games-member-tag", "לשעבר"));
+        wrap.appendChild(row);
+      });
+    }
+    return wrap;
+  }
+
+  // Last 5 GroupGameSummary rows (Task 11 extends this into a fuller history screen). Owns the
+  // shared "no games yet" empty state for both this section and the last-game section above it.
+  function renderGroupHistory(gameSummaries) {
+    const section = el("section", "games-section");
+    section.appendChild(el("h3", "games-section-title", "היסטוריית משחקים"));
+    const list = (Array.isArray(gameSummaries) ? gameSummaries : []).slice(0, 5);
+    if (!list.length) {
+      section.appendChild(el("p", "games-empty", "עוד אין משחקים"));
+      return section;
+    }
+    list.forEach(game => {
+      const winners = (Array.isArray(game.winnerNames) ? game.winnerNames : []).filter(Boolean);
+      const winnerLabel = winners.length ? (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ") : "";
+      const line = [formatShortGameDate(game.at), formatPlayerCount(game.playerCount), winnerLabel].filter(Boolean).join(" · ");
+      section.appendChild(el("p", "games-history-row", line));
+    });
+    return section;
+  }
+
+  // The group's invite: any active member sees it (returns null otherwise, same convention as
+  // renderGroupLastGame). No invite yet → "צור הזמנה". With one → the code, copy/share, a QR
+  // placeholder (rendering is deferred to a backend that can host a redemption endpoint), and,
+  // for admins only, a text action to revoke it (which brings back "צור הזמנה").
+  function renderGroupInvite(summary, invite, isAdmin) {
+    if (!summary || !summary.isMember) return null;
+    const section = el("section", "games-section games-invite-section");
+    section.appendChild(el("h3", "games-section-title", "הזמנה לקבוצה"));
+    if (!invite) {
+      const createBtn = el("button", "games-invite-create", "צור הזמנה");
+      createBtn.type = "button";
+      createBtn.addEventListener("click", () => createGroupInvite(summary.groupId));
+      section.appendChild(createBtn);
+      return section;
+    }
+    const card = el("div", "games-invite-card");
+    const code = el("p", "games-invite-code", formatInviteCode(invite.token));
+    code.dir = "ltr";
+    card.appendChild(code);
+
+    const actions = el("div", "games-invite-actions");
+    const copyBtn = el("button", "games-invite-action", "העתק קישור");
+    copyBtn.type = "button";
+    const copiedNote = el("span", "games-invite-copied", "הועתק ✓");
+    copiedNote.hidden = true;
+    copyBtn.addEventListener("click", () => {
+      const link = inviteLink(invite.token, location.origin, location.pathname);
+      const announceCopied = () => {
+        copiedNote.hidden = false;
+        setTimeout(() => { copiedNote.hidden = true; }, 2000);
+      };
+      const copyViaSelect = () => {
+        const tmp = document.createElement("textarea");
+        tmp.value = link;
+        tmp.style.position = "fixed";
+        tmp.style.opacity = "0";
+        document.body.appendChild(tmp);
+        tmp.focus();
+        tmp.select();
+        try { document.execCommand("copy"); } catch (err) { /* best effort */ }
+        document.body.removeChild(tmp);
+        announceCopied();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(announceCopied).catch(copyViaSelect);
+      } else {
+        copyViaSelect();
+      }
+    });
+    actions.appendChild(copyBtn);
+    actions.appendChild(copiedNote);
+
+    if (typeof navigator.share === "function") {
+      const shareBtn = el("button", "games-invite-action", "שתף");
+      shareBtn.type = "button";
+      shareBtn.addEventListener("click", () => {
+        const link = inviteLink(invite.token, location.origin, location.pathname);
+        navigator.share({ title: summary.name, url: link }).catch(() => {});
+      });
+      actions.appendChild(shareBtn);
+    }
+    card.appendChild(actions);
+
+    card.appendChild(el("div", "games-invite-qr", "QR יופיע עם חיבור לשרת"));
+    card.appendChild(el("p", "games-invite-note", "הצטרפות דרך הזמנה תעבוד כשהאפליקציה תתחבר לשרת."));
+
+    if (isAdmin) {
+      const revokeBtn = el("button", "games-invite-revoke", "בטל הזמנה");
+      revokeBtn.type = "button";
+      revokeBtn.addEventListener("click", () => revokeGroupInvite(summary.groupId));
+      card.appendChild(revokeBtn);
+    }
+    section.appendChild(card);
+    return section;
+  }
+
+  function renderGroupPage() {
+    const box = document.getElementById("gamesHome");
+    box.innerHTML = "";
+    const collections = collectionsOf(state);
+    const summary = getGroupSummary(collections, currentGroupId, me);
+    if (!summary) { setAppView("games"); return; } // the group is gone on this device — don't strand the user
+    const inner = el("div", "games-home-in");
+    inner.appendChild(renderGroupHeader(summary));
+    inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
+    inner.appendChild(renderGroupLeaders(buildLeaderboard(collections.history, collections.groupMembers, currentGroupId)));
+    const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
+    const lastGame = renderGroupLastGame(gameSummaries[0] || null);
+    if (lastGame) inner.appendChild(lastGame);
+    inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
+    inner.appendChild(renderGroupHistory(gameSummaries));
+    const inviteSection = renderGroupInvite(summary, activeInvite(state.invites, currentGroupId), summary.isAdmin);
+    if (inviteSection) inner.appendChild(inviteSection);
     box.appendChild(inner);
   }
 
   function render() {
     const anim = animNext; animNext = null;
-    const inGames = appView === "games" || appView === "game" || appView === "settle";
+    const inGames = appView === "games" || appView === "game" || appView === "settle" || appView === "group";
     document.body.classList.toggle("games-view", appView === "games");
+    if (appView === "group") document.body.classList.add("games-view"); // group page reuses the dashboard shell
     document.body.classList.toggle("game-view", appView === "game");
     document.getElementById("modeGames").classList.toggle("on", inGames);
     document.getElementById("modeProfile").classList.toggle("on", appView === "profile");
     document.getElementById("addrow").hidden = appView !== "game";
     document.getElementById("settingsBtn").hidden = appView !== "profile";
-    document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games";
-    document.getElementById("gamesHome").hidden = appView !== "games";
+    document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games" || appView === "group";
+    document.getElementById("gamesHome").hidden = appView !== "games" && appView !== "group";
 
     const rows = document.getElementById("rows");
     rows.innerHTML = "";
-    rows.hidden = !inGames || appView === "games";
+    rows.hidden = !inGames || appView === "games" || appView === "group";
 
     if (appView === "game" || appView === "settle") state.players.forEach((p, idx) => {
       const row = el("div", "prow");
@@ -1396,6 +2636,7 @@
       const line = el("div", "prow-line");
 
       if (appView === "game") {
+        if (isExited(p)) row.classList.add("exited");
         const heading = el("div", "player-heading");
         heading.appendChild(el("span", "pname", p.name));
         line.appendChild(heading);
@@ -1424,6 +2665,13 @@
         });
         updateExpanded();
         heading.appendChild(toggle);
+        if (!isExited(p)) {
+          const exitToggle = el("button", "exit-toggle", "יציאה");
+          exitToggle.type = "button";
+          exitToggle.setAttribute("aria-label", "יציאת " + p.name + " מהמשחק");
+          exitToggle.addEventListener("click", () => openExitPanel(p.name));
+          heading.appendChild(exitToggle);
+        }
         // Array order is the actual insertion order, including entries across midnight.
         const entries = p.entryLog.filter(entry => entry.gameId === state.gameId && entry.playerId === p.id);
         if (entries.length) {
@@ -1447,137 +2695,205 @@
         details.appendChild(detailsInner);
         const meta = el("span", "pmeta");
         meta.innerHTML = "<b>" + fmt(sum(p.buyins)) + "</b> · " + p.buyins.length + " כניסות";
+        if (isExited(p)) {
+          meta.appendChild(el("span", "exit-tag", " · יצא · " + fmt(p.cashout)));
+          const editBtn = el("button", "exit-edit", "עריכה");
+          editBtn.type = "button";
+          editBtn.setAttribute("aria-label", "עריכת סכום היציאה של " + p.name);
+          editBtn.addEventListener("click", () => openExitPanel(p.name));
+          meta.appendChild(editBtn);
+        }
         line.appendChild(meta);
 
-        const plus = el("button", "btn-plus", "+");
-        plus.type = "button";
-        plus.setAttribute("aria-label", "הוסף כניסה ל" + p.name);
-        plus.setAttribute("aria-expanded", openMenu === p.name ? "true" : "false");
-        if (openMenu === p.name) plus.classList.add("open");
-        plus.addEventListener("click", () => {
-          if (markReal()) { save(); render(); return; } // first touch wipes the demo data
-          const opening = openMenu !== p.name;
-          if (!opening) {
-            // animate the collapse before removing the menu from the DOM
-            const closingFor = p.name;
-            animateMenuClose(() => {
-              // don't slam shut a different menu the user opened meanwhile
-              if (openMenu === closingFor) {
-                openMenu = null; customOpen = null; pendingAmount = null;
-                render();
-              }
-            });
-            return;
-          }
-          openMenu = p.name;
-          menuJustOpened = p.name;
-          customOpen = null;
-          pendingAmount = null;
-          render();
-        });
-        line.appendChild(plus);
-        row.appendChild(line);
-
-        const isOpen = openMenu === p.name;
-        const menu = el("div", "pmenu");
-        if (isOpen && menuJustOpened === p.name) {
-          // fresh open: start collapsed and let the transition play
-          menuJustOpened = null;
-          requestAnimationFrame(() => requestAnimationFrame(() => menu.classList.add("open")));
-        } else if (isOpen) {
-          menu.classList.add("open");
-        }
-        const inner = el("div", "pmenu-in");
-        const mrow = el("div", "pmenu-row");
-        // the "other" capsule collapses back to a plain chip
-        const collapseOther = () => {
-          customOpen = null;
-          mrow.classList.remove("other-mode");
-          cinp.value = "";
-          cgo.hidden = true;
-        };
-        BUYIN_OPTIONS.forEach(amount => {
-          const selected = isOpen && pendingAmount === amount;
-          const chip = el("button", "chip" + (selected ? " active" : ""), "₪" + amount + "+");
-          chip.type = "button";
-          chip.setAttribute("aria-pressed", selected ? "true" : "false");
-          chip.addEventListener("click", () => {
-            if (pendingAmount === amount) {
-              confirmBuyin(p, idx, amount); // second tap on the selected amount = confirm
+        if (!isExited(p)) {
+          const plus = el("button", "btn-plus", "+");
+          plus.type = "button";
+          plus.setAttribute("aria-label", "הוסף כניסה ל" + p.name);
+          plus.setAttribute("aria-expanded", openMenu === p.name ? "true" : "false");
+          if (openMenu === p.name) plus.classList.add("open");
+          plus.addEventListener("click", () => {
+            if (markReal()) { save(); render(); return; } // first touch wipes the demo data
+            const opening = openMenu !== p.name;
+            if (!opening) {
+              // animate the collapse before removing the menu from the DOM
+              const closingFor = p.name;
+              animateMenuClose(() => {
+                // don't slam shut a different menu the user opened meanwhile
+                if (openMenu === closingFor) {
+                  openMenu = null; customOpen = null; pendingAmount = null;
+                  render();
+                }
+              });
+              return;
+            }
+            const openBuyinMenu = () => {
+              openMenu = p.name;
+              menuJustOpened = p.name;
+              customOpen = null;
+              pendingAmount = null;
+              render();
+            };
+            if (exitOpen) {
+              // an exit panel elsewhere is open — collapse it first
+              const closingFor = exitOpen;
+              animateMenuClose(() => {
+                if (exitOpen === closingFor) exitOpen = null;
+                openBuyinMenu();
+              });
             } else {
-              pendingAmount = amount;       // first tap = select and highlight, in place
-              collapseOther();
-              mrow.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
-              chip.classList.add("active");
+              openBuyinMenu();
             }
           });
-          mrow.appendChild(chip);
-        });
+          line.appendChild(plus);
+          row.appendChild(line);
 
-        // "other": the chip itself stretches into an input capsule
-        const other = el("div", "chip chip-other");
-        other.setAttribute("role", "button");
-        other.setAttribute("tabindex", "0");
-        const olabel = el("span", "other-label", "אחר");
-        const cinp = document.createElement("input");
-        cinp.type = "number";
-        cinp.className = "other-input";
-        cinp.min = String(MIN_BUYIN);
-        cinp.step = "1";
-        cinp.inputMode = "decimal";
-        cinp.placeholder = "סכום · מינ' ₪" + MIN_BUYIN;
-        cinp.setAttribute("aria-label", "סכום כניסה חופשי עבור " + p.name);
-        const cgo = el("button", "other-go", "הוסף");
-        cgo.type = "button";
-        cgo.hidden = customOpen !== p.name;
-        const confirmCustom = () => {
-          const amount = Number(cinp.value);
-          if (!cinp.value || !isFinite(amount) || amount < MIN_BUYIN) { shakeEl(cinp); return; }
-          confirmBuyin(p, idx, Math.round(amount));
-        };
-        const expandOther = () => {
-          customOpen = p.name;
-          pendingAmount = null;
-          mrow.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
-          mrow.classList.add("other-mode");
-          cgo.hidden = false;
-          setTimeout(() => cinp.focus(), 180);
-        };
-        other.addEventListener("click", (e) => {
-          if (e.target === cinp || e.target === cgo) return;
-          if (mrow.classList.contains("other-mode")) collapseOther();
-          else expandOther();
-        });
-        other.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" && !mrow.classList.contains("other-mode")) { e.preventDefault(); expandOther(); }
-        });
-        cinp.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") { e.preventDefault(); confirmCustom(); }
-        });
-        cgo.addEventListener("click", confirmCustom);
-        other.appendChild(olabel);
-        other.appendChild(cinp);
-        other.appendChild(cgo);
-        mrow.appendChild(other);
-        if (customOpen === p.name) { mrow.classList.add("other-mode"); cgo.hidden = false; }
-        if (p.buyins.length > 0) {
-          const undo = el("button", "undo", "בטל אחרונה (₪" + p.buyins[p.buyins.length - 1] + ")");
-          undo.type = "button";
-          undo.addEventListener("click", () => {
-            if (markReal()) { save(); render(); return; }
-            p.buyins.pop();
-            p.entryLog.pop();
-            if (p.buyins.length === 0) state.players.splice(idx, 1); // no entries left = out of the game
-            save(); render();
+          const isOpen = openMenu === p.name;
+          const menu = el("div", "pmenu");
+          if (isOpen && menuJustOpened === p.name) {
+            // fresh open: start collapsed and let the transition play
+            menuJustOpened = null;
+            requestAnimationFrame(() => requestAnimationFrame(() => menu.classList.add("open")));
+          } else if (isOpen) {
+            menu.classList.add("open");
+          }
+          const inner = el("div", "pmenu-in");
+          const mrow = el("div", "pmenu-row");
+          // the "other" capsule collapses back to a plain chip
+          const collapseOther = () => {
+            customOpen = null;
+            mrow.classList.remove("other-mode");
+            cinp.value = "";
+            cgo.hidden = true;
+          };
+          BUYIN_OPTIONS.forEach(amount => {
+            const selected = isOpen && pendingAmount === amount;
+            const chip = el("button", "chip" + (selected ? " active" : ""), "₪" + amount + "+");
+            chip.type = "button";
+            chip.setAttribute("aria-pressed", selected ? "true" : "false");
+            chip.addEventListener("click", () => {
+              if (pendingAmount === amount) {
+                confirmBuyin(p, idx, amount); // second tap on the selected amount = confirm
+              } else {
+                pendingAmount = amount;       // first tap = select and highlight, in place
+                collapseOther();
+                mrow.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+                chip.classList.add("active");
+              }
+            });
+            mrow.appendChild(chip);
           });
-          mrow.appendChild(undo);
+
+          // "other": the chip itself stretches into an input capsule
+          const other = el("div", "chip chip-other");
+          other.setAttribute("role", "button");
+          other.setAttribute("tabindex", "0");
+          const olabel = el("span", "other-label", "אחר");
+          const cinp = document.createElement("input");
+          cinp.type = "number";
+          cinp.className = "other-input";
+          cinp.min = String(MIN_BUYIN);
+          cinp.step = "1";
+          cinp.inputMode = "decimal";
+          cinp.placeholder = "סכום · מינ' ₪" + MIN_BUYIN;
+          cinp.setAttribute("aria-label", "סכום כניסה חופשי עבור " + p.name);
+          const cgo = el("button", "other-go", "הוסף");
+          cgo.type = "button";
+          cgo.hidden = customOpen !== p.name;
+          const confirmCustom = () => {
+            const amount = Number(cinp.value);
+            if (!cinp.value || !isFinite(amount) || amount < MIN_BUYIN) { shakeEl(cinp); return; }
+            confirmBuyin(p, idx, Math.round(amount));
+          };
+          const expandOther = () => {
+            customOpen = p.name;
+            pendingAmount = null;
+            mrow.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+            mrow.classList.add("other-mode");
+            cgo.hidden = false;
+            setTimeout(() => cinp.focus(), 180);
+          };
+          other.addEventListener("click", (e) => {
+            if (e.target === cinp || e.target === cgo) return;
+            if (mrow.classList.contains("other-mode")) collapseOther();
+            else expandOther();
+          });
+          other.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !mrow.classList.contains("other-mode")) { e.preventDefault(); expandOther(); }
+          });
+          cinp.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); confirmCustom(); }
+          });
+          cgo.addEventListener("click", confirmCustom);
+          other.appendChild(olabel);
+          other.appendChild(cinp);
+          other.appendChild(cgo);
+          mrow.appendChild(other);
+          if (customOpen === p.name) { mrow.classList.add("other-mode"); cgo.hidden = false; }
+          if (p.buyins.length > 0) {
+            const undo = el("button", "undo", "בטל אחרונה (₪" + p.buyins[p.buyins.length - 1] + ")");
+            undo.type = "button";
+            undo.addEventListener("click", () => {
+              if (markReal()) { save(); render(); return; }
+              p.buyins.pop();
+              p.entryLog.pop();
+              if (p.buyins.length === 0) state.players.splice(idx, 1); // no entries left = out of the game
+              save(); render();
+            });
+            mrow.appendChild(undo);
+          }
+          inner.appendChild(mrow);
+          menu.appendChild(inner);
+          row.appendChild(menu);
+        } else {
+          row.appendChild(line);
         }
-        inner.appendChild(mrow);
-        menu.appendChild(inner);
-        row.appendChild(menu);
+
+        // inline exit/cashout capsule — reuses the .pmenu/.pmenu-in grid transition;
+        // shown for an active player exiting, or an exited player editing their cashout.
+        const exitPanelOpen = exitOpen === p.name;
+        const exitPanel = el("div", "pmenu exit-panel");
+        if (exitPanelOpen && exitJustOpened === p.name) {
+          exitJustOpened = null;
+          requestAnimationFrame(() => requestAnimationFrame(() => exitPanel.classList.add("open")));
+        } else if (exitPanelOpen) {
+          exitPanel.classList.add("open");
+        }
+        const exitInner = el("div", "pmenu-in");
+        const exitRow = el("div", "pmenu-row exit-row");
+        const cashInp = document.createElement("input");
+        cashInp.type = "number";
+        cashInp.min = "0";
+        cashInp.step = "1";
+        cashInp.inputMode = "decimal";
+        cashInp.className = "exit-cashout-input";
+        cashInp.placeholder = "צ'יפים ביציאה";
+        cashInp.setAttribute("aria-label", "צ'יפים ביציאה של " + p.name);
+        if (isExited(p)) cashInp.value = String(p.cashout);
+        const confirmExit = () => {
+          const raw = cashInp.value;
+          const amount = Math.round(Number(raw));
+          if (raw === "" || !Number.isFinite(amount) || amount < 0) { shakeEl(cashInp); return; }
+          const ok = isExited(p) ? updateExitCashout(p, amount) : exitPlayer(p, amount, new Date().toISOString());
+          if (!ok) { shakeEl(cashInp); return; }
+          exitOpen = null;
+          save();
+          render();
+        };
+        cashInp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); confirmExit(); }
+        });
+        const exitConfirmBtn = el("button", "chip exit-confirm", "אשר יציאה");
+        exitConfirmBtn.type = "button";
+        exitConfirmBtn.addEventListener("click", confirmExit);
+        exitRow.appendChild(cashInp);
+        exitRow.appendChild(exitConfirmBtn);
+        exitInner.appendChild(exitRow);
+        exitPanel.appendChild(exitInner);
+        row.appendChild(exitPanel);
         row.appendChild(details);
       } else {
         line.appendChild(el("span", "pname", p.name));
+        if (isExited(p)) line.appendChild(el("span", "exit-tag", "יצא"));
         const inp = document.createElement("input");
         inp.type = "number";
         inp.min = "0";
@@ -1608,6 +2924,7 @@
     renderDerived();
     renderProfile();
     if (appView === "games") renderGamesDashboard();
+    else if (appView === "group") renderGroupPage();
   }
 
   function renderDerived() {
@@ -1633,11 +2950,14 @@
     }
 
     const stat = document.getElementById("statline");
-    stat.hidden = appView === "profile" || appView === "games";
+    stat.hidden = appView === "profile" || appView === "games" || appView === "group";
     if (appView === "game") {
+      const exitedCount = exitedPlayers(state.players).length;
+      const exitedLabel = exitedCount === 0 ? "" :
+        '<span class="sep">·</span>' + (exitedCount === 1 ? "יצא אחד" : exitedCount + " יצאו");
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
-        state.players.length + " שחקנים" +
+        state.players.length + " שחקנים" + exitedLabel +
         (state.example ? '<span class="sep">·</span><span class="example-tag">נתוני דוגמה — כל עריכה מאפסת אותם</span>' : "");
     } else if (appView === "settle") {
       stat.innerHTML =
@@ -2007,6 +3327,23 @@
     parent.appendChild(group);
   }
 
+  // Flat .debt-row-style rows for one friends list (friends / incoming / outgoing). No action
+  // buttons in this phase: createFriendRequest/respondToFriendRequest exist and are tested for
+  // the backend, but nothing in the UI may call them yet (no fake local friendships).
+  function renderFriendGroup(parent, title, refs, metaLabel) {
+    const group = el("div", "debt-group");
+    group.appendChild(el("h3", "", title));
+    refs.forEach(ref => {
+      const row = el("div", "debt-row");
+      const copy = el("div", "debt-copy");
+      copy.appendChild(el("span", "debt-person", ref.displayName));
+      if (metaLabel) copy.appendChild(el("span", "debt-meta", metaLabel));
+      row.appendChild(copy);
+      group.appendChild(row);
+    });
+    parent.appendChild(group);
+  }
+
   function renderProfile() {
     const box = document.getElementById("profile");
     box.hidden = appView !== "profile";
@@ -2046,6 +3383,7 @@
     [
       ["balance", "מאזן"],
       ["debts", "חובות"],
+      ["friends", "חברים"],
     ].forEach(([key, label]) => {
       const tab = el("button", "profile-tab" + (profileTab === key ? " active" : ""), label);
       tab.type = "button";
@@ -2096,6 +3434,30 @@
     renderDebtGroup(debtPane, selectedDebtTab[1], selectedDebtTab[2], selectedDebtTab[3], false);
     debtSec.appendChild(debtPane);
     box.appendChild(debtSec);
+
+    // friends
+    const friendsSec = el("section", "psection debt-section");
+    friendsSec.style.animationDelay = ".09s";
+    friendsSec.hidden = profileTab !== "friends";
+    friendsSec.appendChild(el("h2", "ptitle", "חברים"));
+    const meRef = { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me };
+    const friendData = friendRequestsFor(state.friendships || [], meRef);
+    const hasFriendData = friendData.friends.length || friendData.incoming.length || friendData.outgoing.length;
+    if (!hasFriendData) {
+      friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים. בקשות חברות יעבדו כשהאפליקציה תתחבר לשרת."));
+    } else {
+      renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
+      renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך");
+      renderFriendGroup(friendsSec, "בקשות שנשלחו", friendData.outgoing.map(f => f.addressee), "ממתין לאישור");
+    }
+    const addFriendBtn = el("button", "btn-primary", "הוסף חבר");
+    addFriendBtn.type = "button";
+    addFriendBtn.disabled = true;
+    addFriendBtn.setAttribute("aria-disabled", "true");
+    addFriendBtn.style.marginTop = "14px";
+    friendsSec.appendChild(addFriendBtn);
+    friendsSec.appendChild(el("p", "friend-helper", "דורש חיבור לשרת"));
+    box.appendChild(friendsSec);
 
     // total balance
     const balSec = el("section", "psection");
@@ -2150,7 +3512,7 @@
       shakeEl(inp); // duplicate names would merge menus, records and transfers
       return;
     }
-    const player = { id: newId(), name, buyins: [], entryLog: [], cashout: "" };
+    const player = { id: newId(), name, buyins: [], entryLog: [], cashout: "", status: "active", exitedAt: null };
     addEntry(player, MIN_BUYIN);
     state.players.push(player);
     inp.value = "";
@@ -2190,10 +3552,7 @@
     resetArmed = null;
     btn.classList.remove("danger-armed");
     label.textContent = "איפוס";
-    state = {
-      example: false, phase: "closed", gameId: newId(), players: [], history: state.history,
-      debts: state.debts, settlementStatuses: {}, groupId: state.groupId || null,
-    };
+    state = newCurrentGame(state, { phase: "closed" });
     expandedEntries.clear();
     openMenu = null; customOpen = null;
     save();
@@ -2288,7 +3647,22 @@
   // ---------- boot ----------
   appView = initialAppView(state);
   render();
-  if (!me) showLogin();
+  const joinToken = parseJoinToken(location.search);
+  if (joinToken) {
+    // Nothing is joined here — this only shows the code and strips the query. Real redemption
+    // needs a backend (see the invite section's note); if the user isn't signed in yet, the
+    // normal login screen still follows once they dismiss the notice.
+    document.getElementById("joinNoticeCode").textContent = formatInviteCode(joinToken);
+    const notice = document.getElementById("joinNotice");
+    notice.hidden = false;
+    document.getElementById("joinNoticeContinueBtn").addEventListener("click", () => {
+      notice.hidden = true;
+      if (!me) showLogin();
+    }, { once: true });
+    history.replaceState(null, "", location.pathname);
+  } else if (!me) {
+    showLogin();
+  }
 })();
 </script>
 <script>
