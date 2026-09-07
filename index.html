@@ -335,6 +335,10 @@
   .profile .pgrid { justify-items: center; width: 100%; max-width: 340px; }
   .profile .hgame { justify-content: center; width: 100%; }
   .profile .hgame .hnet { margin-inline-start: 0; min-width: 74px; text-align: start; }
+  .profile-tabs { display: flex; justify-content: center; gap: 4px; margin-top: 16px; border-bottom: 1px solid var(--line); }
+  .profile-tab { color: var(--dim); font-size: 14px; font-weight: 500; padding: 7px 18px 8px; border-bottom: 2px solid transparent; }
+  .profile-tab:hover { color: var(--text); }
+  .profile-tab.active { color: var(--text); border-bottom-color: var(--accent); }
   .who-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .bignum {
     font-size: 52px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1;
@@ -484,7 +488,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 30</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 31</p>
   </div>
 </div>
 
@@ -583,6 +587,7 @@
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
   let animName = null;        // the player to animate when animNext === "one"
   let me = loadMe();
+  let profileTab = "debts";
 
   // ---------- theme (default: dark), floating sun/moon toggle ----------
   const SUN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19"></path></svg>';
@@ -1598,16 +1603,31 @@
     // identity
     const idSec = el("section", "psection pid");
     const idName = el("div", "pname-big", me);
-    const swap = el("button", "btn-skip", "החלף שחקן");
-    swap.type = "button";
-    swap.addEventListener("click", () => showLogin());
     idSec.appendChild(idName);
-    idSec.appendChild(swap);
+    const tabs = el("div", "profile-tabs");
+    tabs.setAttribute("role", "tablist");
+    [
+      ["debts", "חובות"],
+      ["balance", "מאזן"],
+    ].forEach(([key, label]) => {
+      const tab = el("button", "profile-tab" + (profileTab === key ? " active" : ""), label);
+      tab.type = "button";
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", String(profileTab === key));
+      tab.addEventListener("click", () => {
+        if (profileTab === key) return;
+        profileTab = key;
+        renderProfile();
+      });
+      tabs.appendChild(tab);
+    });
+    idSec.appendChild(tabs);
     box.appendChild(idSec);
 
     const openDebts = (state.debts || []).filter(debt => debt.status === "open");
     const debtSec = el("section", "psection debt-section");
     debtSec.style.animationDelay = ".03s";
+    debtSec.hidden = profileTab !== "debts";
     debtSec.appendChild(el("h2", "ptitle", "חובות"));
     renderDebtGroup(debtSec, "אני חייב", openDebts.filter(debt => debt.debtorName === me), false);
     renderDebtGroup(debtSec, "חייבים לי", openDebts.filter(debt => debt.creditorName === me), true);
@@ -1616,6 +1636,7 @@
     // total balance
     const balSec = el("section", "psection");
     balSec.style.animationDelay = ".06s";
+    balSec.hidden = profileTab !== "balance";
     balSec.appendChild(el("h2", "ptitle", "מאזן כולל"));
     const big = el("div", "bignum " + (total > 0.005 ? "pos" : total < -0.005 ? "neg" : "zero"), fmtSigned(total));
     balSec.appendChild(big);
@@ -1637,6 +1658,7 @@
     // recent nights
     const histSec = el("section", "psection");
     histSec.style.animationDelay = ".12s";
+    histSec.hidden = profileTab !== "balance";
     histSec.appendChild(el("h2", "ptitle", "ערבים אחרונים"));
     if (games.length === 0) {
       histSec.appendChild(el("p", "empty-note", "עוד אין ערבים ברקורד. אחרי שסוגרים שולחן בטאב “חישוב”, הערב יופיע כאן."));
