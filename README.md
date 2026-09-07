@@ -17,3 +17,8 @@ every push to this branch redeploys automatically.
 
 `poker-settle.html` is a frozen legacy version kept only for an old
 published artifact URL — do not edit it.
+
+### Archive
+
+`archive/all-in-cash/` holds an earlier, unrelated Vite prototype ("ALL IN") kept
+for reference only. It is git-ignored and excluded from the Vercel deployment.
