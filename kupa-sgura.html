@@ -1,4 +1,4 @@
-<title>קופה סגורה</title>
+<title>סוגרים קופה</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap">
 <style>
   :root {
@@ -243,39 +243,85 @@
   .hgame .hplayers { color: var(--faint); font-size: 12px; font-weight: 300; }
   .hgame .hnet { margin-inline-start: auto; font-weight: 700; font-size: 17px; }
   .hnet.pos { color: var(--accent); } .hnet.neg { color: var(--bad); } .hnet.zero { color: var(--faint); font-weight: 300; }
-  .toggle-row { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
-  .toggle {
-    width: 52px; height: 30px; border-radius: 999px; border: 1px solid var(--line);
-    position: relative; flex: 0 0 52px;
-  }
-  .toggle::after {
-    content: ""; position: absolute; top: 3px; inset-inline-start: 3px;
-    width: 22px; height: 22px; border-radius: 50%; background: var(--dim);
-    transition: transform .25s ease, background-color .25s;
-  }
-  .toggle.on { border-color: var(--accent); }
-  .toggle.on::after { transform: translateX(-22px); background: var(--accent); }
-  :root[data-theme="light"] .toggle.on::after { transform: translateX(-22px); }
-  .toggle-label { color: var(--dim); font-size: 14px; font-weight: 300; }
   .empty-note { color: var(--faint); font-size: 14px; font-weight: 300; margin-top: 10px; }
 
-  /* ---------- footer ---------- */
-  .footer { margin-top: 28px; display: flex; flex-direction: column; gap: 16px; }
-  .btn-reset { color: var(--faint); font-size: 13px; align-self: flex-start; }
-  .btn-reset:hover { color: var(--bad); }
-  .roadmap { border-top: 1px solid var(--line); padding-top: 12px; color: var(--faint); font-size: 11.5px; font-weight: 300; line-height: 1.6; }
-  .roadmap b { color: var(--dim); font-weight: 500; letter-spacing: .1em; }
   .example-tag { color: var(--accent); font-size: 12px; font-weight: 400; }
+
+  /* ---------- floating corner controls (top-left) ---------- */
+  .corner {
+    position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); left: 14px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    z-index: 30;
+  }
+  .corner-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    color: var(--dim); font-size: 10px; font-weight: 500;
+  }
+  .corner-btn .cicon {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 1px solid var(--line); background: var(--bar-bg);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color .2s, color .2s, transform .25s ease;
+  }
+  .corner-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .corner-btn:hover .cicon { border-color: var(--accent); color: var(--accent); }
+  .corner-btn:active .cicon { transform: scale(.9) rotate(-30deg); }
+  .corner-btn.danger-armed { color: var(--bad); }
+  .corner-btn.danger-armed .cicon { border-color: var(--bad); color: var(--bad); }
+  header { padding-inline-end: 56px; }
+
+  /* ---------- login overlay ---------- */
+  .login {
+    position: fixed; inset: 0; z-index: 40;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .login-in { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 18px; animation: rise .45s ease both; }
+  .login .eyebrow { justify-content: flex-start; }
+  .login h2 { font-weight: 900; font-size: 34px; margin: 0; line-height: 1.1; }
+  .login p { color: var(--dim); font-size: 14px; font-weight: 300; margin: -8px 0 0; }
+  .login .who-row { margin-top: 0; }
+  .btn-primary {
+    border: 1px solid var(--accent); border-radius: 999px;
+    color: var(--accent); font-weight: 700; font-size: 15px;
+    padding: 12px 26px; min-height: 48px; align-self: flex-start;
+  }
+  .btn-primary:hover { background: var(--accent); color: var(--bg); }
+  .btn-skip { color: var(--faint); font-size: 13px; align-self: flex-start; }
 
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
 </style>
 
+<div class="corner load-in" style="animation-delay:.2s">
+  <button type="button" class="corner-btn" id="themeBtn" aria-label="החלף בין מצב כהה למצב בהיר">
+    <span class="cicon" id="themeIcon"></span>
+  </button>
+  <button type="button" class="corner-btn" id="resetBtn" aria-label="איפוס משחק">
+    <span class="cicon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 1 2.2 5.3"></path><path d="M4.5 21v-4.5H9"></path></svg></span>
+    <span id="resetLabel">איפוס</span>
+  </button>
+</div>
+
+<div class="login" id="login" hidden>
+  <div class="login-in">
+    <div class="eyebrow"><span>סוגרים קופה</span><span>·</span><span>קאש · מינימום ₪50</span></div>
+    <h2>מי אתה?</h2>
+    <p>בחר את השם שלך או הקלד אחד חדש — ככה הרקורד שלך יישמר בין ערבים.</p>
+    <div class="who-row" id="loginChips"></div>
+    <input type="text" id="loginName" placeholder="השם שלך" autocomplete="off" aria-label="השם שלך">
+    <button type="button" class="btn-primary" id="loginGo">המשך</button>
+    <button type="button" class="btn-skip" id="loginSkip">דלג בינתיים</button>
+  </div>
+</div>
+
 <div class="wrap">
   <header class="load-in">
     <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span></div>
-    <h1>קופה <em>סגורה</em></h1>
+    <h1>סוגרים <em>קופה</em></h1>
     <p class="sub">כניסות תוך כדי המשחק, צ'יפים בסוף — ומי משלם למי במינימום העברות.</p>
   </header>
 
@@ -312,13 +358,6 @@
 
   <section class="profile" id="profile" hidden></section>
 
-  <div class="footer load-in" style="animation-delay:.42s">
-    <button type="button" class="btn-reset" id="resetBtn">איפוס משחק</button>
-    <div class="roadmap">
-      <b>מתוכנן</b><br>
-      חשבון אישי לכל שחקן — מתחברים בתחילת המשחק, וסגירת השולחן מעדכנת אוטומטית את הרקורד של כולם · יומן פעולות בלתי ניתן לשינוי — כל כניסה, עדכון ומחיקה נרשמים עם מי ומתי. הפרופיל כאן הוא דמו מקומי של הרעיון.
-    </div>
-  </div>
 </div>
 
 <script>
@@ -349,10 +388,25 @@
   let animName = null;        // the player to animate when animNext === "one"
   let me = loadMe();
 
-  // theme (default: dark)
+  // ---------- theme (default: dark), floating sun/moon toggle ----------
+  const SUN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19"></path></svg>';
+  const MOON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13.5A8 8 0 0 1 10.5 4a8 8 0 1 0 9.5 9.5Z"></path></svg>';
   try {
     if (localStorage.getItem(THEME_KEY) === "light") document.documentElement.dataset.theme = "light";
   } catch (e) {}
+  function renderThemeIcon() {
+    const isLight = document.documentElement.dataset.theme === "light";
+    // show the mode you'll switch TO: moon while in light mode, sun while in dark
+    document.getElementById("themeIcon").innerHTML = isLight ? MOON_SVG : SUN_SVG;
+  }
+  document.getElementById("themeBtn").addEventListener("click", () => {
+    const nowLight = document.documentElement.dataset.theme !== "light";
+    if (nowLight) document.documentElement.dataset.theme = "light";
+    else delete document.documentElement.dataset.theme;
+    try { localStorage.setItem(THEME_KEY, nowLight ? "light" : "dark"); } catch (e) {}
+    renderThemeIcon();
+  });
+  renderThemeIcon();
 
   function loadMe() {
     try { return localStorage.getItem(ME_KEY) || null; } catch (e) { return null; }
@@ -516,6 +570,9 @@
     if (cls) e.className = cls;
     if (text !== undefined) e.textContent = text;
     return e;
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   // Adds a buy-in for the player and replays the feedback animations
@@ -768,6 +825,46 @@
     render();
   });
 
+  // ---------- login (who are you — asked once per device, on first open) ----------
+  function showLogin() {
+    const box = document.getElementById("login");
+    box.hidden = false;
+    const chips = document.getElementById("loginChips");
+    chips.innerHTML = "";
+    knownNames().forEach(n => {
+      const chip = el("button", "chip", n);
+      chip.type = "button";
+      chip.addEventListener("click", () => {
+        me = n; saveMe();
+        box.hidden = true;
+        render();
+      });
+      chips.appendChild(chip);
+    });
+  }
+  function confirmLogin() {
+    const inp = document.getElementById("loginName");
+    const name = inp.value.trim();
+    if (!name) {
+      inp.classList.remove("shake");
+      void inp.offsetWidth;
+      inp.classList.add("shake");
+      inp.focus();
+      return;
+    }
+    me = name; saveMe();
+    inp.value = "";
+    document.getElementById("login").hidden = true;
+    render();
+  }
+  document.getElementById("loginGo").addEventListener("click", confirmLogin);
+  document.getElementById("loginName").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); confirmLogin(); }
+  });
+  document.getElementById("loginSkip").addEventListener("click", () => {
+    document.getElementById("login").hidden = true;
+  });
+
   // ---------- profile ----------
   function knownNames() {
     const names = [];
@@ -782,24 +879,25 @@
     if (mode !== "profile") return;
     box.innerHTML = "";
 
-    // who am I
+    // who am I (set at login; changeable here)
     const whoSec = el("section", "psection");
-    whoSec.appendChild(el("h2", "ptitle", "מי אתה"));
-    const whoRow = el("div", "who-row");
-    const names = knownNames();
-    if (names.length === 0) {
-      whoSec.appendChild(el("p", "empty-note", "עוד אין שחקנים ברקורד — שחקו ערב אחד, סגרו שולחן בטאב \"חישוב\", והשמות יופיעו כאן."));
+    if (me) {
+      const line = el("div", "pstats");
+      line.innerHTML = "מחובר כ־<b>" + esc(me) + "</b>";
+      const swap = el("button", "btn-skip", "החלף משתמש");
+      swap.type = "button";
+      swap.addEventListener("click", () => showLogin());
+      whoSec.appendChild(line);
+      whoSec.appendChild(swap);
+      whoSec.style.display = "flex";
+      whoSec.style.alignItems = "baseline";
+      whoSec.style.gap = "14px";
     } else {
-      names.forEach(n => {
-        const chip = el("button", "chip" + (me === n ? " active" : ""), n);
-        chip.type = "button";
-        chip.addEventListener("click", () => {
-          me = me === n ? null : n;
-          saveMe(); renderProfile();
-        });
-        whoRow.appendChild(chip);
-      });
-      whoSec.appendChild(whoRow);
+      const connect = el("button", "btn-primary", "התחברות");
+      connect.type = "button";
+      connect.addEventListener("click", () => showLogin());
+      whoSec.appendChild(el("p", "empty-note", "לא בחרת מי אתה — בלי זה אין רקורד אישי."));
+      whoSec.appendChild(connect);
     }
     box.appendChild(whoSec);
 
@@ -845,30 +943,7 @@
         });
       }
       box.appendChild(histSec);
-    } else if (names.length) {
-      box.appendChild(el("p", "empty-note", "בחר מי אתה כדי לראות מאזן והיסטוריה."));
     }
-
-    // theme
-    const themeSec = el("section", "psection");
-    themeSec.style.animationDelay = ".24s";
-    themeSec.appendChild(el("h2", "ptitle", "תצוגה"));
-    const trow = el("div", "toggle-row");
-    const isLight = document.documentElement.dataset.theme === "light";
-    const tg = el("button", "toggle" + (isLight ? " on" : ""));
-    tg.type = "button";
-    tg.setAttribute("aria-label", "החלף בין מצב כהה למצב בהיר");
-    tg.addEventListener("click", () => {
-      const nowLight = document.documentElement.dataset.theme !== "light";
-      if (nowLight) document.documentElement.dataset.theme = "light";
-      else delete document.documentElement.dataset.theme;
-      try { localStorage.setItem(THEME_KEY, nowLight ? "light" : "dark"); } catch (e) {}
-      renderProfile();
-    });
-    trow.appendChild(tg);
-    trow.appendChild(el("span", "toggle-label", isLight ? "מצב בהיר" : "מצב כהה"));
-    themeSec.appendChild(trow);
-    box.appendChild(themeSec);
   }
 
   function addPlayer() {
@@ -904,22 +979,27 @@
   let resetArmed = null;
   document.getElementById("resetBtn").addEventListener("click", (e) => {
     const btn = e.currentTarget;
+    const label = document.getElementById("resetLabel");
     if (!resetArmed) {
-      btn.textContent = "בטוחים? לחיצה נוספת תמחק את השולחן הנוכחי";
+      btn.classList.add("danger-armed");
+      label.textContent = "בטוח?";
       resetArmed = setTimeout(() => {
         resetArmed = null;
-        btn.textContent = "איפוס משחק";
+        btn.classList.remove("danger-armed");
+        label.textContent = "איפוס";
       }, 4000);
       return;
     }
     clearTimeout(resetArmed);
     resetArmed = null;
-    btn.textContent = "איפוס משחק";
+    btn.classList.remove("danger-armed");
+    label.textContent = "איפוס";
     state = { example: false, players: [], history: state.history };
     openMenu = null; customOpen = null;
     save(); render();
   });
 
   render();
+  if (!me) showLogin();
 })();
 </script>
