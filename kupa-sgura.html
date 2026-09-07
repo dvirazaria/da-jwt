@@ -225,6 +225,34 @@
     transition: transform .25s ease;
   }
   .entry-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .exit-toggle {
+    display: flex; align-items: center; padding: 4px 0;
+    color: var(--dim); font-size: 12px; font-weight: 400;
+    margin-inline-start: 10px;
+  }
+  .exit-toggle:hover { color: var(--bad); }
+  .exit-tag { color: var(--dim); font-size: 12px; }
+  .exit-edit {
+    color: var(--dim); font-size: 12px; font-weight: 400;
+    padding: 4px 0 4px 8px; margin-inline-start: 4px;
+  }
+  .exit-edit:hover { color: var(--accent); }
+  .prow.exited .pname { opacity: .55; }
+  .exit-row { align-items: center; }
+  input.exit-cashout-input {
+    flex: 1 1 auto; min-width: 0; min-height: 42px;
+    border: none; border-bottom: 1px solid var(--line); background: none;
+    border-radius: 0; padding: 8px 2px; margin: 0;
+    font: inherit; color: var(--text); font-variant-numeric: tabular-nums;
+    transition: border-color .2s;
+  }
+  input.exit-cashout-input:focus-visible { outline: none; border-bottom-color: var(--accent); }
+  .exit-confirm {
+    flex: 0 0 auto; min-height: 44px;
+    border-color: var(--accent); color: var(--accent); font-weight: 700;
+    white-space: nowrap;
+  }
+  .exit-confirm:hover { background: var(--accent); color: var(--bg); }
   .entry-details { display: grid; grid-template-rows: 0fr; visibility: hidden;
     transition: grid-template-rows .28s ease, visibility .28s; }
   .entry-details.open { grid-template-rows: 1fr; visibility: visible; }
@@ -629,6 +657,8 @@
   let appView = "games";         // "games" | "game" | "settle" | "profile"
   let openMenu = null;        // player name whose buy-in menu is open
   let menuJustOpened = null;  // menu that should animate open on the next render
+  let exitOpen = null;        // player name whose exit (cashout) panel is open
+  let exitJustOpened = null;  // exit panel that should animate open on the next render
   let pendingAmount = null;   // amount selected once, waiting for the confirming second tap
   let customOpen = null;      // player name whose custom-amount input is open
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
@@ -739,7 +769,10 @@
       players: s.players.map((p, index) => {
         const id = p.id || gameId + "-player-" + index;
         const buyins = Array.isArray(p.buyins) ? [...p.buyins] : [];
-        return { ...p, id, buyins, entryLog: buyins.map((amount, i) => {
+        return { ...p, id, buyins,
+          status: p.status === "exited" ? "exited" : "active",
+          exitedAt: typeof p.exitedAt === "string" ? p.exitedAt : null,
+          entryLog: buyins.map((amount, i) => {
           const saved = p.entryLog && p.entryLog[i];
           return saved && saved.amount === amount && saved.playerId === id && saved.gameId === gameId
             ? { ...saved }
@@ -956,6 +989,8 @@
         buyin: sum(p.buyins),
         cashout: Number(p.cashout) || 0,
         net: (Number(p.cashout) || 0) - sum(p.buyins),
+        status: p.status === "exited" ? "exited" : "active",
+        exitedAt: p.exitedAt || null,
       })),
     };
   }
@@ -1034,6 +1069,33 @@
     return moves;
   }
 
+  // ---------- player exit (pure) ----------
+  function exitPlayer(player, cashout, at) {
+    if (!player || player.status === "exited") return false;
+    const amount = Math.round(Number(cashout));
+    if (!Number.isFinite(amount) || amount < 0) return false;
+    player.status = "exited";
+    player.exitedAt = at;
+    player.cashout = amount;
+    return true;
+  }
+  function updateExitCashout(player, cashout) {
+    if (!player || player.status !== "exited") return false;
+    const amount = Math.round(Number(cashout));
+    if (!Number.isFinite(amount) || amount < 0) return false;
+    player.cashout = amount;
+    return true;
+  }
+  function activePlayers(players) {
+    return players.filter(p => p.status !== "exited");
+  }
+  function exitedPlayers(players) {
+    return players.filter(p => p.status === "exited");
+  }
+  function isExited(player) {
+    return !!player && player.status === "exited";
+  }
+
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -1068,6 +1130,35 @@
     if (plus) plus.classList.remove("open");
     m.classList.remove("open");
     setTimeout(() => { menuClosing = false; done(); }, 300);
+  }
+
+  // Opens (or closes) the inline exit/cashout capsule for a player, reusing
+  // the same .pmenu collapse animation as the buy-in menu. Only one of the
+  // two kinds of panel is ever open at a time, across the whole table.
+  function openExitPanel(name) {
+    if (markReal()) { save(); render(); return; } // first touch wipes the demo data
+    const opening = exitOpen !== name;
+    if (!opening) {
+      const closingFor = name;
+      animateMenuClose(() => {
+        if (exitOpen === closingFor) { exitOpen = null; render(); }
+      });
+      return;
+    }
+    const open = () => {
+      exitOpen = name;
+      exitJustOpened = name;
+      render();
+    };
+    if (openMenu) {
+      const closingFor = openMenu;
+      animateMenuClose(() => {
+        if (openMenu === closingFor) { openMenu = null; customOpen = null; pendingAmount = null; }
+        open();
+      });
+    } else {
+      open();
+    }
   }
 
   // Confirms a buy-in: the picker collapses, then the money lands with a
@@ -1111,7 +1202,7 @@
 
   function setAppView(nextView) {
     appView = nextView;
-    if (nextView !== "game") { openMenu = null; customOpen = null; }
+    if (nextView !== "game") { openMenu = null; customOpen = null; exitOpen = null; exitJustOpened = null; }
     if (nextView !== "settle") {
       clearCloseHold();
       forceCloseArmed = false;
@@ -1137,7 +1228,7 @@
       updatedAt: state.updatedAt,
     };
     expandedEntries.clear();
-    openMenu = null; customOpen = null; pendingAmount = null;
+    openMenu = null; customOpen = null; pendingAmount = null; exitOpen = null; exitJustOpened = null;
     save();
     setAppView("game");
   }
@@ -1380,6 +1471,7 @@
       const line = el("div", "prow-line");
 
       if (appView === "game") {
+        if (isExited(p)) row.classList.add("exited");
         const heading = el("div", "player-heading");
         heading.appendChild(el("span", "pname", p.name));
         line.appendChild(heading);
@@ -1408,6 +1500,13 @@
         });
         updateExpanded();
         heading.appendChild(toggle);
+        if (!isExited(p)) {
+          const exitToggle = el("button", "exit-toggle", "יציאה");
+          exitToggle.type = "button";
+          exitToggle.setAttribute("aria-label", "יציאת " + p.name + " מהמשחק");
+          exitToggle.addEventListener("click", () => openExitPanel(p.name));
+          heading.appendChild(exitToggle);
+        }
         // Array order is the actual insertion order, including entries across midnight.
         const entries = p.entryLog.filter(entry => entry.gameId === state.gameId && entry.playerId === p.id);
         if (entries.length) {
@@ -1431,137 +1530,205 @@
         details.appendChild(detailsInner);
         const meta = el("span", "pmeta");
         meta.innerHTML = "<b>" + fmt(sum(p.buyins)) + "</b> · " + p.buyins.length + " כניסות";
+        if (isExited(p)) {
+          meta.appendChild(el("span", "exit-tag", " · יצא · " + fmt(p.cashout)));
+          const editBtn = el("button", "exit-edit", "עריכה");
+          editBtn.type = "button";
+          editBtn.setAttribute("aria-label", "עריכת סכום היציאה של " + p.name);
+          editBtn.addEventListener("click", () => openExitPanel(p.name));
+          meta.appendChild(editBtn);
+        }
         line.appendChild(meta);
 
-        const plus = el("button", "btn-plus", "+");
-        plus.type = "button";
-        plus.setAttribute("aria-label", "הוסף כניסה ל" + p.name);
-        plus.setAttribute("aria-expanded", openMenu === p.name ? "true" : "false");
-        if (openMenu === p.name) plus.classList.add("open");
-        plus.addEventListener("click", () => {
-          if (markReal()) { save(); render(); return; } // first touch wipes the demo data
-          const opening = openMenu !== p.name;
-          if (!opening) {
-            // animate the collapse before removing the menu from the DOM
-            const closingFor = p.name;
-            animateMenuClose(() => {
-              // don't slam shut a different menu the user opened meanwhile
-              if (openMenu === closingFor) {
-                openMenu = null; customOpen = null; pendingAmount = null;
-                render();
-              }
-            });
-            return;
-          }
-          openMenu = p.name;
-          menuJustOpened = p.name;
-          customOpen = null;
-          pendingAmount = null;
-          render();
-        });
-        line.appendChild(plus);
-        row.appendChild(line);
-
-        const isOpen = openMenu === p.name;
-        const menu = el("div", "pmenu");
-        if (isOpen && menuJustOpened === p.name) {
-          // fresh open: start collapsed and let the transition play
-          menuJustOpened = null;
-          requestAnimationFrame(() => requestAnimationFrame(() => menu.classList.add("open")));
-        } else if (isOpen) {
-          menu.classList.add("open");
-        }
-        const inner = el("div", "pmenu-in");
-        const mrow = el("div", "pmenu-row");
-        // the "other" capsule collapses back to a plain chip
-        const collapseOther = () => {
-          customOpen = null;
-          mrow.classList.remove("other-mode");
-          cinp.value = "";
-          cgo.hidden = true;
-        };
-        BUYIN_OPTIONS.forEach(amount => {
-          const selected = isOpen && pendingAmount === amount;
-          const chip = el("button", "chip" + (selected ? " active" : ""), "₪" + amount + "+");
-          chip.type = "button";
-          chip.setAttribute("aria-pressed", selected ? "true" : "false");
-          chip.addEventListener("click", () => {
-            if (pendingAmount === amount) {
-              confirmBuyin(p, idx, amount); // second tap on the selected amount = confirm
+        if (!isExited(p)) {
+          const plus = el("button", "btn-plus", "+");
+          plus.type = "button";
+          plus.setAttribute("aria-label", "הוסף כניסה ל" + p.name);
+          plus.setAttribute("aria-expanded", openMenu === p.name ? "true" : "false");
+          if (openMenu === p.name) plus.classList.add("open");
+          plus.addEventListener("click", () => {
+            if (markReal()) { save(); render(); return; } // first touch wipes the demo data
+            const opening = openMenu !== p.name;
+            if (!opening) {
+              // animate the collapse before removing the menu from the DOM
+              const closingFor = p.name;
+              animateMenuClose(() => {
+                // don't slam shut a different menu the user opened meanwhile
+                if (openMenu === closingFor) {
+                  openMenu = null; customOpen = null; pendingAmount = null;
+                  render();
+                }
+              });
+              return;
+            }
+            const openBuyinMenu = () => {
+              openMenu = p.name;
+              menuJustOpened = p.name;
+              customOpen = null;
+              pendingAmount = null;
+              render();
+            };
+            if (exitOpen) {
+              // an exit panel elsewhere is open — collapse it first
+              const closingFor = exitOpen;
+              animateMenuClose(() => {
+                if (exitOpen === closingFor) exitOpen = null;
+                openBuyinMenu();
+              });
             } else {
-              pendingAmount = amount;       // first tap = select and highlight, in place
-              collapseOther();
-              mrow.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
-              chip.classList.add("active");
+              openBuyinMenu();
             }
           });
-          mrow.appendChild(chip);
-        });
+          line.appendChild(plus);
+          row.appendChild(line);
 
-        // "other": the chip itself stretches into an input capsule
-        const other = el("div", "chip chip-other");
-        other.setAttribute("role", "button");
-        other.setAttribute("tabindex", "0");
-        const olabel = el("span", "other-label", "אחר");
-        const cinp = document.createElement("input");
-        cinp.type = "number";
-        cinp.className = "other-input";
-        cinp.min = String(MIN_BUYIN);
-        cinp.step = "1";
-        cinp.inputMode = "decimal";
-        cinp.placeholder = "סכום · מינ' ₪" + MIN_BUYIN;
-        cinp.setAttribute("aria-label", "סכום כניסה חופשי עבור " + p.name);
-        const cgo = el("button", "other-go", "הוסף");
-        cgo.type = "button";
-        cgo.hidden = customOpen !== p.name;
-        const confirmCustom = () => {
-          const amount = Number(cinp.value);
-          if (!cinp.value || !isFinite(amount) || amount < MIN_BUYIN) { shakeEl(cinp); return; }
-          confirmBuyin(p, idx, Math.round(amount));
-        };
-        const expandOther = () => {
-          customOpen = p.name;
-          pendingAmount = null;
-          mrow.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
-          mrow.classList.add("other-mode");
-          cgo.hidden = false;
-          setTimeout(() => cinp.focus(), 180);
-        };
-        other.addEventListener("click", (e) => {
-          if (e.target === cinp || e.target === cgo) return;
-          if (mrow.classList.contains("other-mode")) collapseOther();
-          else expandOther();
-        });
-        other.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" && !mrow.classList.contains("other-mode")) { e.preventDefault(); expandOther(); }
-        });
-        cinp.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") { e.preventDefault(); confirmCustom(); }
-        });
-        cgo.addEventListener("click", confirmCustom);
-        other.appendChild(olabel);
-        other.appendChild(cinp);
-        other.appendChild(cgo);
-        mrow.appendChild(other);
-        if (customOpen === p.name) { mrow.classList.add("other-mode"); cgo.hidden = false; }
-        if (p.buyins.length > 0) {
-          const undo = el("button", "undo", "בטל אחרונה (₪" + p.buyins[p.buyins.length - 1] + ")");
-          undo.type = "button";
-          undo.addEventListener("click", () => {
-            if (markReal()) { save(); render(); return; }
-            p.buyins.pop();
-            p.entryLog.pop();
-            if (p.buyins.length === 0) state.players.splice(idx, 1); // no entries left = out of the game
-            save(); render();
+          const isOpen = openMenu === p.name;
+          const menu = el("div", "pmenu");
+          if (isOpen && menuJustOpened === p.name) {
+            // fresh open: start collapsed and let the transition play
+            menuJustOpened = null;
+            requestAnimationFrame(() => requestAnimationFrame(() => menu.classList.add("open")));
+          } else if (isOpen) {
+            menu.classList.add("open");
+          }
+          const inner = el("div", "pmenu-in");
+          const mrow = el("div", "pmenu-row");
+          // the "other" capsule collapses back to a plain chip
+          const collapseOther = () => {
+            customOpen = null;
+            mrow.classList.remove("other-mode");
+            cinp.value = "";
+            cgo.hidden = true;
+          };
+          BUYIN_OPTIONS.forEach(amount => {
+            const selected = isOpen && pendingAmount === amount;
+            const chip = el("button", "chip" + (selected ? " active" : ""), "₪" + amount + "+");
+            chip.type = "button";
+            chip.setAttribute("aria-pressed", selected ? "true" : "false");
+            chip.addEventListener("click", () => {
+              if (pendingAmount === amount) {
+                confirmBuyin(p, idx, amount); // second tap on the selected amount = confirm
+              } else {
+                pendingAmount = amount;       // first tap = select and highlight, in place
+                collapseOther();
+                mrow.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+                chip.classList.add("active");
+              }
+            });
+            mrow.appendChild(chip);
           });
-          mrow.appendChild(undo);
+
+          // "other": the chip itself stretches into an input capsule
+          const other = el("div", "chip chip-other");
+          other.setAttribute("role", "button");
+          other.setAttribute("tabindex", "0");
+          const olabel = el("span", "other-label", "אחר");
+          const cinp = document.createElement("input");
+          cinp.type = "number";
+          cinp.className = "other-input";
+          cinp.min = String(MIN_BUYIN);
+          cinp.step = "1";
+          cinp.inputMode = "decimal";
+          cinp.placeholder = "סכום · מינ' ₪" + MIN_BUYIN;
+          cinp.setAttribute("aria-label", "סכום כניסה חופשי עבור " + p.name);
+          const cgo = el("button", "other-go", "הוסף");
+          cgo.type = "button";
+          cgo.hidden = customOpen !== p.name;
+          const confirmCustom = () => {
+            const amount = Number(cinp.value);
+            if (!cinp.value || !isFinite(amount) || amount < MIN_BUYIN) { shakeEl(cinp); return; }
+            confirmBuyin(p, idx, Math.round(amount));
+          };
+          const expandOther = () => {
+            customOpen = p.name;
+            pendingAmount = null;
+            mrow.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+            mrow.classList.add("other-mode");
+            cgo.hidden = false;
+            setTimeout(() => cinp.focus(), 180);
+          };
+          other.addEventListener("click", (e) => {
+            if (e.target === cinp || e.target === cgo) return;
+            if (mrow.classList.contains("other-mode")) collapseOther();
+            else expandOther();
+          });
+          other.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !mrow.classList.contains("other-mode")) { e.preventDefault(); expandOther(); }
+          });
+          cinp.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); confirmCustom(); }
+          });
+          cgo.addEventListener("click", confirmCustom);
+          other.appendChild(olabel);
+          other.appendChild(cinp);
+          other.appendChild(cgo);
+          mrow.appendChild(other);
+          if (customOpen === p.name) { mrow.classList.add("other-mode"); cgo.hidden = false; }
+          if (p.buyins.length > 0) {
+            const undo = el("button", "undo", "בטל אחרונה (₪" + p.buyins[p.buyins.length - 1] + ")");
+            undo.type = "button";
+            undo.addEventListener("click", () => {
+              if (markReal()) { save(); render(); return; }
+              p.buyins.pop();
+              p.entryLog.pop();
+              if (p.buyins.length === 0) state.players.splice(idx, 1); // no entries left = out of the game
+              save(); render();
+            });
+            mrow.appendChild(undo);
+          }
+          inner.appendChild(mrow);
+          menu.appendChild(inner);
+          row.appendChild(menu);
+        } else {
+          row.appendChild(line);
         }
-        inner.appendChild(mrow);
-        menu.appendChild(inner);
-        row.appendChild(menu);
+
+        // inline exit/cashout capsule — reuses the .pmenu/.pmenu-in grid transition;
+        // shown for an active player exiting, or an exited player editing their cashout.
+        const exitPanelOpen = exitOpen === p.name;
+        const exitPanel = el("div", "pmenu exit-panel");
+        if (exitPanelOpen && exitJustOpened === p.name) {
+          exitJustOpened = null;
+          requestAnimationFrame(() => requestAnimationFrame(() => exitPanel.classList.add("open")));
+        } else if (exitPanelOpen) {
+          exitPanel.classList.add("open");
+        }
+        const exitInner = el("div", "pmenu-in");
+        const exitRow = el("div", "pmenu-row exit-row");
+        const cashInp = document.createElement("input");
+        cashInp.type = "number";
+        cashInp.min = "0";
+        cashInp.step = "1";
+        cashInp.inputMode = "decimal";
+        cashInp.className = "exit-cashout-input";
+        cashInp.placeholder = "צ'יפים ביציאה";
+        cashInp.setAttribute("aria-label", "צ'יפים ביציאה של " + p.name);
+        if (isExited(p)) cashInp.value = String(p.cashout);
+        const confirmExit = () => {
+          const raw = cashInp.value;
+          const amount = Math.round(Number(raw));
+          if (raw === "" || !Number.isFinite(amount) || amount < 0) { shakeEl(cashInp); return; }
+          const ok = isExited(p) ? updateExitCashout(p, amount) : exitPlayer(p, amount, new Date().toISOString());
+          if (!ok) { shakeEl(cashInp); return; }
+          exitOpen = null;
+          save();
+          render();
+        };
+        cashInp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); confirmExit(); }
+        });
+        const exitConfirmBtn = el("button", "chip exit-confirm", "אשר יציאה");
+        exitConfirmBtn.type = "button";
+        exitConfirmBtn.addEventListener("click", confirmExit);
+        exitRow.appendChild(cashInp);
+        exitRow.appendChild(exitConfirmBtn);
+        exitInner.appendChild(exitRow);
+        exitPanel.appendChild(exitInner);
+        row.appendChild(exitPanel);
         row.appendChild(details);
       } else {
         line.appendChild(el("span", "pname", p.name));
+        if (isExited(p)) line.appendChild(el("span", "exit-tag", "יצא"));
         const inp = document.createElement("input");
         inp.type = "number";
         inp.min = "0";
@@ -1619,9 +1786,12 @@
     const stat = document.getElementById("statline");
     stat.hidden = appView === "profile" || appView === "games";
     if (appView === "game") {
+      const exitedCount = exitedPlayers(state.players).length;
+      const exitedLabel = exitedCount === 0 ? "" :
+        '<span class="sep">·</span>' + (exitedCount === 1 ? "יצא אחד" : exitedCount + " יצאו");
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
-        state.players.length + " שחקנים" +
+        state.players.length + " שחקנים" + exitedLabel +
         (state.example ? '<span class="sep">·</span><span class="example-tag">נתוני דוגמה — כל עריכה מאפסת אותם</span>' : "");
     } else if (appView === "settle") {
       stat.innerHTML =
@@ -2134,7 +2304,7 @@
       shakeEl(inp); // duplicate names would merge menus, records and transfers
       return;
     }
-    const player = { id: newId(), name, buyins: [], entryLog: [], cashout: "" };
+    const player = { id: newId(), name, buyins: [], entryLog: [], cashout: "", status: "active", exitedAt: null };
     addEntry(player, MIN_BUYIN);
     state.players.push(player);
     inp.value = "";
