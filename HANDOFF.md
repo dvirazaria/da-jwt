@@ -7,7 +7,7 @@ A Hebrew, RTL, mobile-first PWA for settling home poker cash games:
 players + buy-ins on a "שולחן" tab, chip counts and a minimal-transfers
 who-pays-whom on a "חישוב" tab, per-player record on a "פרופיל" tab.
 Deployed on Vercel (static, auto-deploys from `main`), installable to the
-home screen. Version 22.
+home screen. Version 23.
 
 ## Files
 - `kupa-sgura.html` — THE app. Single file: CSS + HTML + one IIFE of vanilla JS.
