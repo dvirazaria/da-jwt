@@ -326,7 +326,7 @@
 
 <div class="wrap">
   <header class="load-in">
-    <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span><span>·</span><span style="opacity:.55">v8</span></div>
+    <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span><span>·</span><span style="opacity:.55" id="verTag">v9</span></div>
     <h1>סוגרים קופה</h1>
   </header>
 
@@ -1088,5 +1088,11 @@
 
   render();
   if (!me) showLogin();
+
+  // environment marker next to the version: installed app vs. browser tab
+  try {
+    const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+    document.getElementById("verTag").textContent += standalone ? " · אפליקציה" : " · דפדפן";
+  } catch (e) {}
 })();
 </script>
