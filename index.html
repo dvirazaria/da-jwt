@@ -97,33 +97,39 @@
   }
   .btn-add:hover { color: var(--accent-press); }
 
-  /* ---------- bottom tab bar ---------- */
-  :root { --bar-bg: rgba(5,7,10,.82); }
-  :root[data-theme="light"] { --bar-bg: rgba(245,248,249,.85); }
+  /* ---------- floating bottom tab bar ---------- */
+  :root { --bar-bg: rgba(13,17,22,.78); }
+  :root[data-theme="light"] { --bar-bg: rgba(255,255,255,.85); }
   .tabbar {
-    position: fixed; bottom: 0; right: 0; left: 0; z-index: 20;
-    display: flex; justify-content: center; gap: 4px;
+    position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    inset-inline: 0; margin-inline: auto; width: max-content; z-index: 20;
+    display: flex; align-items: center; gap: 4px;
     background: var(--bar-bg);
-    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-    border-top: 1px solid var(--line);
-    padding: 10px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px;
+    box-shadow: 0 10px 34px rgba(0,0,0,.4);
   }
+  :root[data-theme="light"] .tabbar { box-shadow: 0 10px 30px rgba(12,21,25,.16); }
   .tab {
-    flex: 1; max-width: 130px;
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    color: var(--dim); font-size: 11.5px; font-weight: 500; letter-spacing: .02em;
-    padding: 4px 0 2px; position: relative;
+    display: flex; align-items: center; gap: 8px;
+    color: var(--dim); font-size: 14px; font-weight: 700;
+    border-radius: 999px; padding: 11px 13px; min-height: 46px;
+    transition: background-color .25s ease, color .25s ease, padding .25s ease, transform .12s ease;
   }
-  .tab svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease; }
-  .tab .ind {
-    position: absolute; top: -11px; width: 24px; height: 3px; border-radius: 2px;
-    background: var(--accent); transform: scaleX(0); transition: transform .25s ease;
+  .tab svg { width: 22px; height: 22px; flex: 0 0 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tab .tlabel {
+    max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
+    transition: max-width .3s ease, opacity .22s ease;
   }
-  .tab.on { color: var(--accent); }
-  .tab.on .ind { transform: scaleX(1); }
-  .tab.on svg { transform: translateY(-1px) scale(1.08); }
-  .tab:active svg { transform: scale(.88); }
-  .tab:active { transform: none; }
+  .tab.on {
+    background: var(--accent); color: var(--bg);
+    padding: 11px 18px;
+    box-shadow: 0 4px 16px rgba(53,224,220,.35);
+  }
+  .tab.on .tlabel { max-width: 90px; opacity: 1; }
+  .tab:active { transform: scale(.94); }
 
   /* ---------- player rows ---------- */
   .prow { border-bottom: 1px solid var(--line); }
@@ -292,20 +298,17 @@
   </div>
 
   <nav class="tabbar load-in" style="animation-delay:.15s" aria-label="ניווט ראשי">
-    <button type="button" class="tab on" id="modeGame">
-      <span class="ind"></span>
+    <button type="button" class="tab on" id="modeGame" aria-label="שולחן">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="3.6"></circle><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3"></path></svg>
-      שולחן
+      <span class="tlabel">שולחן</span>
     </button>
-    <button type="button" class="tab" id="modeSettle">
-      <span class="ind"></span>
+    <button type="button" class="tab" id="modeSettle" aria-label="חישוב">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h13M14 5.5 17.5 9 14 12.5"></path><path d="M20 15H7M10 11.5 6.5 15l3.5 3.5"></path></svg>
-      חישוב
+      <span class="tlabel">חישוב</span>
     </button>
-    <button type="button" class="tab" id="modeProfile">
-      <span class="ind"></span>
+    <button type="button" class="tab" id="modeProfile" aria-label="פרופיל">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.8"></circle><path d="M4.5 20c1.6-4 4.6-5.6 7.5-5.6s5.9 1.6 7.5 5.6"></path></svg>
-      פרופיל
+      <span class="tlabel">פרופיל</span>
     </button>
   </nav>
 
