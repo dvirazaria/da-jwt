@@ -104,16 +104,18 @@ test('formatMemberCount uses the plural with a count for zero or many members', 
   assert.equal(vm.runInContext('formatMemberCount(3)', context), '3 חברים');
 });
 
-// ---------- wiring: renderGroupPage composes the six sub-renderers ----------
+// ---------- wiring: renderGroupPage composes the five sub-renderers ----------
+// (Task 11 removed the separate "last game" section: it was fully redundant with the first
+// row of the now-unlimited history list, which shows the same date/players/winner line.)
 
-test('renderGroupPage calls each of the six sub-renderers', () => {
+test('renderGroupPage calls each of the five sub-renderers', () => {
   const source = sourceBetween('  function renderGroupPage() {', '  function render() {');
   assert.match(source, /renderGroupHeader\(summary\)/);
   assert.match(source, /renderGroupPrimaryAction\(summary, canStartGroupGame\(/);
   assert.match(source, /renderGroupLeaders\(buildLeaderboard\(/);
-  assert.match(source, /renderGroupLastGame\(gameSummaries\[0\] \|\| null\)/);
   assert.match(source, /renderGroupMembers\(activeMembers\(/);
   assert.match(source, /renderGroupHistory\(gameSummaries\)/);
+  assert.doesNotMatch(source, /renderGroupLastGame/);
   // bails out to the dashboard rather than stranding the user on a deleted group
   assert.match(source, /if \(!summary\) \{ setAppView\("games"\); return; \}/);
 });
@@ -144,23 +146,18 @@ test('the primary action renders "התחל משחק" disabled with the right qui
   assert.match(source, /הקבוצה בארכיון/);
 });
 
-// ---------- wiring: shared empty state between last game and history ----------
+// ---------- wiring: history owns the empty state, shows every game ----------
 
-test('renderGroupLastGame returns null when there is no game yet, deferring the empty state to history', () => {
-  const source = sourceBetween('  function renderGroupLastGame(gameSummary) {', '  function renderGroupMembers(');
-  assert.match(source, /if \(!gameSummary\) return null;/);
-});
-
-test('renderGroupHistory owns the "no games yet" empty state and caps the list at 5', () => {
-  const source = sourceBetween('  function renderGroupHistory(gameSummaries) {', '  function renderGroupPage(');
+test('renderGroupHistory owns the "no games yet" empty state and does not cap the list', () => {
+  const source = sourceBetween('  function renderGroupHistory(gameSummaries) {', '  function renderGroupInvite(');
   assert.match(source, /עוד אין משחקים/);
-  assert.match(source, /\.slice\(0, 5\)/);
+  assert.doesNotMatch(source, /\.slice\(0, 5\)/);
 });
 
-test('renderGroupLeaders shows the pre-first-game empty state and caps at 3 rows', () => {
-  const source = sourceBetween('  function renderGroupLeaders(entries) {', '  function renderGroupLastGame(');
+test('renderGroupLeaders shows the pre-first-game empty state and renders the full list, uncapped', () => {
+  const source = sourceBetween('  function renderGroupLeaders(entries) {', '  function renderGroupMembers(');
   assert.match(source, /הדירוג יופיע אחרי המשחק הראשון/);
-  assert.match(source, /\.slice\(0, 3\)/);
+  assert.doesNotMatch(source, /\.slice\(0, 3\)/);
 });
 
 // ---------- the group card also uses formatMemberCount (fixes "1 חברים") ----------

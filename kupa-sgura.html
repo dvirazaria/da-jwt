@@ -394,12 +394,11 @@
   .btn-primary:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--faint); }
   .btn-primary:disabled:hover { background: none; color: var(--faint); }
   .games-primary-reason { margin: 10px 0 0; color: var(--dim); font-size: 12px; font-weight: 300; }
-  .games-leader-row, .games-member-row, .games-history-row {
+  .games-leader-row, .games-member-row {
     margin: 0; padding: 8px 0; border-bottom: 1px solid var(--line);
     font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere;
   }
-  .games-leader-row:last-of-type, .games-member-row:last-of-type, .games-history-row:last-of-type { border-bottom: none; }
-  .games-history-row { font-size: 13px; font-weight: 400; color: var(--dim); }
+  .games-leader-row:last-of-type, .games-member-row:last-of-type { border-bottom: none; }
   .games-member-tag { margin-inline-start: 6px; color: var(--dim); font-size: 12px; font-weight: 400; }
 
   /* group members: admin row actions, add-member panel, former members */
@@ -417,6 +416,15 @@
   .games-former-members { margin-top: 14px; text-align: center; }
   .games-former-toggle { color: var(--dim); font-size: 12px; font-weight: 500; padding: 6px 2px; }
   .games-former-toggle:hover { color: var(--accent); }
+
+  /* group history: tappable rows expanding into a per-game ranking (Task 11) */
+  .games-history-item { padding: 8px 0; border-bottom: 1px solid var(--line); text-align: center; }
+  .games-history-item:last-of-type { border-bottom: none; }
+  .games-history-head { cursor: pointer; }
+  .games-history-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
+  .games-history-row { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+  .games-history-tag { margin-inline-start: 6px; color: var(--bad); font-size: 12px; font-weight: 500; }
+  .games-history-rank { margin: 0; padding: 4px 0; font-size: 13px; font-weight: 500; color: var(--text); }
 
   .btn-close-table {
     position: relative; overflow: hidden; isolation: isolate;
@@ -750,6 +758,7 @@
   const expandedEntries = new Set();
   const expandedGameCards = new Set();
   const expandedGroupCards = new Set();
+  const expandedGroupGames = new Set();
   let state = load();
   let appView = "games";         // "games" | "game" | "settle" | "profile" | "group"
   let currentGroupId = null;  // UI-only: which group's page is open when appView === "group"
@@ -1404,10 +1413,20 @@
   }
   // Builds a GroupGameSummary from a closed-game HistoryEntry for the group's last-game and
   // history rows. Deliberately has no net/cashout field — group screens never show another
-  // person's exact P&L (Global Constraint 10).
+  // person's exact P&L (Global Constraint 10). `ranking` is names only (net desc, ties by name).
   function toGroupGameSummary(historyEntry) {
     const entry = historyEntry || {};
     const players = Array.isArray(entry.players) ? entry.players : [];
+    const ranking = players.slice().sort((a, b) => {
+      const netA = Number(a.net) || 0, netB = Number(b.net) || 0;
+      if (netB !== netA) return netB - netA;
+      return String((a && a.name) || "").localeCompare(String((b && b.name) || ""), "he");
+    }).map(p => p.name);
+    const startedMs = entry.startedAt ? new Date(entry.startedAt).getTime() : NaN;
+    const atMs = entry.at ? new Date(entry.at).getTime() : NaN;
+    const durationMinutes = Number.isFinite(startedMs) && Number.isFinite(atMs)
+      ? Math.max(0, Math.round((atMs - startedMs) / 60000))
+      : null;
     return {
       gameId: entry.gameId,
       at: entry.at,
@@ -1415,10 +1434,22 @@
       playerCount: players.length,
       playerNames: players.map(p => p.name),
       winnerNames: gameWinners(entry).map(p => p.name),
+      ranking,
+      durationMinutes,
       potSize: players.reduce((total, p) => total + (Number(p.buyin) || 0), 0),
       totalEntries: players.reduce((total, p) => total + (Array.isArray(p.entryLog) ? p.entryLog.length : 0), 0),
       isBalanced: !!entry.isBalanced,
     };
+  }
+  // Short Hebrew duration for group history rows: "Xשע׳ Yדק׳" / "Yדק׳". Empty string when null
+  // (no startedAt on legacy/ungrouped games).
+  function formatDuration(minutes) {
+    if (minutes === null || minutes === undefined || !Number.isFinite(minutes)) return "";
+    const total = Math.max(0, Math.round(minutes));
+    const hours = Math.floor(total / 60);
+    const mins = total % 60;
+    if (hours <= 0) return mins + "דק׳";
+    return mins > 0 ? hours + "שע׳ " + mins + "דק׳" : hours + "שע׳";
   }
   // Deviation (documented): a participant is eligible when their identity matches any
   // GroupMember of the group, active or former. Ad-hoc game guests who never joined are excluded.
@@ -2004,6 +2035,14 @@
     return count === 1 ? "חבר אחד" : count + " חברים";
   }
 
+  function formatGamesPlayedCount(count) {
+    return count === 1 ? "משחק אחד" : count + " משחקים";
+  }
+
+  function formatWinsCount(count) {
+    return count === 1 ? "ניצחון אחד" : count + " ניצחונות";
+  }
+
   function renderQuickActions(parent) {
     const section = el("section", "games-section games-quick-section");
     section.appendChild(el("h3", "games-section-title", "פעולות מהירות"));
@@ -2304,30 +2343,23 @@
     return wrap;
   }
 
-  // Top 3 LeaderboardEntry rows, names only — no amounts (Global Constraint 10).
+  // Full LeaderboardEntry list, names only — no amounts (Global Constraint 10). Tie ranks share
+  // the same number. Former members get a quiet "לשעבר" tag next to their name.
   function renderGroupLeaders(entries) {
     const section = el("section", "games-section");
     section.appendChild(el("h3", "games-section-title", "דירוג"));
-    const top = (Array.isArray(entries) ? entries : []).slice(0, 3);
-    if (!top.length) {
+    const list = Array.isArray(entries) ? entries : [];
+    if (!list.length) {
       section.appendChild(el("p", "games-empty", "הדירוג יופיע אחרי המשחק הראשון"));
     } else {
-      top.forEach(entry => section.appendChild(el("p", "games-leader-row", entry.rank + ". " + entry.displayName)));
-    }
-    return section;
-  }
-
-  // Newest GroupGameSummary. Returns null (nothing to append) when there isn't one yet, so the
-  // "no games" empty state lives only once, in renderGroupHistory, instead of twice.
-  function renderGroupLastGame(gameSummary) {
-    if (!gameSummary) return null;
-    const section = el("section", "games-section");
-    section.appendChild(el("h3", "games-section-title", "המשחק האחרון"));
-    section.appendChild(el("p", "games-card-meta", [formatShortGameDate(gameSummary.at), formatPlayerCount(gameSummary.playerCount)].filter(Boolean).join(" · ")));
-    const winners = (Array.isArray(gameSummary.winnerNames) ? gameSummary.winnerNames : []).filter(Boolean);
-    if (winners.length) {
-      const label = (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ");
-      section.appendChild(el("p", "games-card-title", label));
+      list.forEach(entry => {
+        const row = el("p", "games-leader-row");
+        const name = el("span", "", entry.rank + ". " + entry.displayName);
+        if (entry.isFormerMember) name.appendChild(el("span", "games-member-tag", "לשעבר"));
+        row.appendChild(name);
+        row.appendChild(el("span", "games-card-meta", formatGamesPlayedCount(entry.gamesPlayed) + " · " + formatWinsCount(entry.wins)));
+        section.appendChild(row);
+      });
     }
     return section;
   }
@@ -2481,29 +2513,67 @@
     return wrap;
   }
 
-  // Last 5 GroupGameSummary rows (Task 11 extends this into a fuller history screen). Owns the
-  // shared "no games yet" empty state for both this section and the last-game section above it.
+  // One flat, tappable GroupGameSummary row: date · N שחקנים · winner(s), a quiet meta line
+  // (pot, duration when known, "לא מאוזן" tag when unbalanced), and — expanded via the shared
+  // grid-collapse details pattern — the full ranking by place, names only (no money).
+  function renderGroupHistoryRow(game, expanded, onToggle) {
+    const item = el("div", "games-history-item");
+    const head = el("div", "games-history-head");
+    head.setAttribute("role", "button");
+    head.setAttribute("tabindex", "0");
+    head.setAttribute("aria-expanded", expanded ? "true" : "false");
+    const winners = (Array.isArray(game.winnerNames) ? game.winnerNames : []).filter(Boolean);
+    const winnerLabel = winners.length ? (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ") : "";
+    const mainLine = [formatShortGameDate(game.at), formatPlayerCount(game.playerCount), winnerLabel].filter(Boolean).join(" · ");
+    head.setAttribute("aria-label", mainLine);
+    head.addEventListener("click", onToggle);
+    head.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); }
+    });
+    head.appendChild(el("p", "games-history-row", mainLine));
+    const metaParts = ["בקופה " + fmt(game.potSize)];
+    const durationLabel = formatDuration(game.durationMinutes);
+    if (durationLabel) metaParts.push(durationLabel);
+    const meta = el("p", "games-card-meta", metaParts.join(" · "));
+    if (!game.isBalanced) meta.appendChild(el("span", "games-history-tag", "לא מאוזן"));
+    head.appendChild(meta);
+    item.appendChild(head);
+
+    const details = el("div", "games-card-details" + (expanded ? " open" : ""));
+    const detailsIn = el("div", "games-card-details-in");
+    const content = el("div", "games-card-details-content");
+    const ranking = Array.isArray(game.ranking) ? game.ranking : [];
+    ranking.forEach((name, idx) => content.appendChild(el("p", "games-history-rank", (idx + 1) + ". " + name)));
+    detailsIn.appendChild(content);
+    details.appendChild(detailsIn);
+    item.appendChild(details);
+    return item;
+  }
+
+  // All GroupGameSummary rows, newest first (history is stored newest-first already). Owns the
+  // shared "no games yet" empty state now that the redundant "last game" section is gone — the
+  // first row here already shows date/players/winner, same as that section did.
   function renderGroupHistory(gameSummaries) {
     const section = el("section", "games-section");
     section.appendChild(el("h3", "games-section-title", "היסטוריית משחקים"));
-    const list = (Array.isArray(gameSummaries) ? gameSummaries : []).slice(0, 5);
+    const list = Array.isArray(gameSummaries) ? gameSummaries : [];
     if (!list.length) {
       section.appendChild(el("p", "games-empty", "עוד אין משחקים"));
       return section;
     }
     list.forEach(game => {
-      const winners = (Array.isArray(game.winnerNames) ? game.winnerNames : []).filter(Boolean);
-      const winnerLabel = winners.length ? (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ") : "";
-      const line = [formatShortGameDate(game.at), formatPlayerCount(game.playerCount), winnerLabel].filter(Boolean).join(" · ");
-      section.appendChild(el("p", "games-history-row", line));
+      section.appendChild(renderGroupHistoryRow(game, expandedGroupGames.has(game.gameId), () => {
+        expandedGroupGames.has(game.gameId) ? expandedGroupGames.delete(game.gameId) : expandedGroupGames.add(game.gameId);
+        renderGroupPage();
+      }));
     });
     return section;
   }
 
-  // The group's invite: any active member sees it (returns null otherwise, same convention as
-  // renderGroupLastGame). No invite yet → "צור הזמנה". With one → the code, copy/share, a QR
-  // placeholder (rendering is deferred to a backend that can host a redemption endpoint), and,
-  // for admins only, a text action to revoke it (which brings back "צור הזמנה").
+  // The group's invite: any active member sees it (returns null otherwise). No invite yet →
+  // "צור הזמנה". With one → the code, copy/share, a QR placeholder (rendering is deferred to a
+  // backend that can host a redemption endpoint), and, for admins only, a text action to revoke
+  // it (which brings back "צור הזמנה").
   function renderGroupInvite(summary, invite, isAdmin) {
     if (!summary || !summary.isMember) return null;
     const section = el("section", "games-section games-invite-section");
@@ -2587,8 +2657,6 @@
     inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
     inner.appendChild(renderGroupLeaders(buildLeaderboard(collections.history, collections.groupMembers, currentGroupId)));
     const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
-    const lastGame = renderGroupLastGame(gameSummaries[0] || null);
-    if (lastGame) inner.appendChild(lastGame);
     inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
     const inviteSection = renderGroupInvite(summary, activeInvite(state.invites, currentGroupId), summary.isAdmin);
