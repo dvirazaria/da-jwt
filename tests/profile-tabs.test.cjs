@@ -71,3 +71,11 @@ test('debts tab has nested owed and owed-to-me tabs with owed selected first', (
   assert.match(html, /const debtTabs = el\("div", "debt-tabs"\)/);
   assert.match(html, /debtTab === key/);
 });
+
+test('nested debt tabs are wider than the outer profile tabs and empty state is centered', () => {
+  assert.match(html, /\.debt-tabs\s*\{[^}]*width:\s*100%[^}]*max-width:\s*360px/s);
+  assert.match(html, /\.debt-tab\s*\{[^}]*font-size:\s*16px/s);
+  assert.match(html, /\.debt-group \.empty-note\s*\{[^}]*text-align:\s*center/s);
+  assert.match(html, /אין חובות פתוחות/);
+  assert.doesNotMatch(html, /אין חובות פתוחים/);
+});
