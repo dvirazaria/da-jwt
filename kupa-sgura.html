@@ -302,6 +302,24 @@
   .btn-primary:hover { background: var(--accent); color: var(--bg); }
   .btn-skip { color: var(--faint); font-size: 13px; align-self: flex-start; }
 
+  /* settings */
+  .set-btn {
+    width: 100%; border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px; min-height: 54px; font-size: 16px; font-weight: 500;
+    color: var(--text); text-align: center;
+  }
+  .set-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .set-btn.accent { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; }
+  .set-btn.accent:hover { color: var(--bg); }
+  .set-btn.danger { color: var(--bad); }
+  .set-btn.danger:hover, .set-btn.danger.armed { border-color: var(--bad); color: var(--bad); }
+  .set-group { display: flex; flex-direction: column; gap: 10px; text-align: start; }
+  .set-amounts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .set-amounts input {
+    border: 1px solid var(--line); border-radius: 14px; text-align: center;
+    font-size: 16px; min-height: 54px; padding: 10px;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
@@ -324,10 +342,19 @@
 <div class="login" id="settings" hidden>
   <div class="login-in">
     <h2>הגדרות</h2>
-    <button type="button" class="btn-primary" id="setSwapBtn">החלפת שחקן</button>
-    <button type="button" class="btn-clear-record" id="setClearBtn" style="align-self:flex-start">איפוס רקורד</button>
-    <button type="button" class="btn-skip" id="setCloseBtn">סגירה</button>
-    <p class="empty-note" style="margin-top:24px">סוגרים קופה · גרסה 12</p>
+    <button type="button" class="set-btn" id="setThemeBtn">מעבר למצב בהיר</button>
+    <button type="button" class="set-btn" id="setSwapBtn">החלפת שחקן</button>
+    <div class="set-group">
+      <span class="ptitle">סכומי כניסה מהירים (מינימום ₪50)</span>
+      <div class="set-amounts">
+        <input type="number" inputmode="numeric" min="50" step="10" data-amt="0" aria-label="סכום מהיר ראשון">
+        <input type="number" inputmode="numeric" min="50" step="10" data-amt="1" aria-label="סכום מהיר שני">
+        <input type="number" inputmode="numeric" min="50" step="10" data-amt="2" aria-label="סכום מהיר שלישי">
+      </div>
+    </div>
+    <button type="button" class="set-btn danger" id="setClearBtn">איפוס רקורד</button>
+    <button type="button" class="set-btn accent" id="setBackBtn">חזור</button>
+    <p class="empty-note" style="margin-top:10px">סוגרים קופה · גרסה 15</p>
   </div>
 </div>
 
@@ -389,7 +416,15 @@
 <script>
 (function () {
   const MIN_BUYIN = 50;
-  const BUYIN_OPTIONS = [50, 100, 150];
+  const BUYINS_KEY = "poker-settle-buyins";
+  let BUYIN_OPTIONS = loadBuyins();
+  function loadBuyins() {
+    try {
+      const a = JSON.parse(localStorage.getItem(BUYINS_KEY));
+      if (Array.isArray(a) && a.length === 3 && a.every(n => Number.isFinite(n) && n >= MIN_BUYIN)) return a;
+    } catch (e) {}
+    return [50, 100, 150];
+  }
   const KEY = "poker-settle-v1";
   const ME_KEY = "poker-settle-me";
   const THEME_KEY = "poker-settle-theme";
@@ -1022,36 +1057,9 @@
         row.appendChild(net);
         histSec.appendChild(row);
       });
-
-      // clear record (two-step confirm)
-      const danger = el("section", "psection");
-      danger.style.animationDelay = ".18s";
-      const clearBtn = el("button", "btn-clear-record", "איפוס רקורד");
-      clearBtn.type = "button";
-      clearBtn.addEventListener("click", () => {
-        if (!recArmed) {
-          recArmed = setTimeout(() => {
-            recArmed = null;
-            clearBtn.textContent = "איפוס רקורד";
-            clearBtn.classList.remove("armed");
-          }, 4000);
-          clearBtn.textContent = "בטוח? זה מוחק את ההיסטוריה של כולם";
-          clearBtn.classList.add("armed");
-          return;
-        }
-        clearTimeout(recArmed);
-        recArmed = null;
-        state.history = [];
-        markReal(); save(); renderProfile();
-      });
-      danger.appendChild(clearBtn);
-      box.appendChild(histSec);
-      box.appendChild(danger);
-      return;
     }
     box.appendChild(histSec);
   }
-  let recArmed = null;
 
   function addPlayer() {
     const inp = document.getElementById("newName");
@@ -1110,11 +1118,43 @@
   if (!me) showLogin();
 
   // ---------- settings overlay ----------
+  function refreshSettings() {
+    const isLight = document.documentElement.dataset.theme === "light";
+    document.getElementById("setThemeBtn").textContent = isLight ? "מעבר למצב כהה" : "מעבר למצב בהיר";
+    document.querySelectorAll(".set-amounts input").forEach((inp) => {
+      inp.value = BUYIN_OPTIONS[Number(inp.dataset.amt)];
+    });
+  }
   document.getElementById("settingsBtn").addEventListener("click", () => {
+    refreshSettings();
     document.getElementById("settings").hidden = false;
   });
-  document.getElementById("setCloseBtn").addEventListener("click", () => {
+  document.getElementById("setBackBtn").addEventListener("click", () => {
     document.getElementById("settings").hidden = true;
+  });
+  document.getElementById("setThemeBtn").addEventListener("click", () => {
+    const nowLight = document.documentElement.dataset.theme !== "light";
+    if (nowLight) document.documentElement.dataset.theme = "light";
+    else delete document.documentElement.dataset.theme;
+    try { localStorage.setItem(THEME_KEY, nowLight ? "light" : "dark"); } catch (e) {}
+    renderThemeIcon();
+    refreshSettings();
+  });
+  document.querySelectorAll(".set-amounts input").forEach((inp) => {
+    inp.addEventListener("change", () => {
+      const i = Number(inp.dataset.amt);
+      const val = Math.round(Number(inp.value));
+      if (!Number.isFinite(val) || val < MIN_BUYIN) {
+        inp.classList.remove("shake");
+        void inp.offsetWidth;
+        inp.classList.add("shake");
+        inp.value = BUYIN_OPTIONS[i];
+        return;
+      }
+      BUYIN_OPTIONS[i] = val;
+      try { localStorage.setItem(BUYINS_KEY, JSON.stringify(BUYIN_OPTIONS)); } catch (e) {}
+      render();
+    });
   });
   document.getElementById("setSwapBtn").addEventListener("click", () => {
     document.getElementById("settings").hidden = true;
