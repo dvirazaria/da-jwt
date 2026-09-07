@@ -281,7 +281,7 @@
   /* ---------- corner controls (top-left, scroll with the page) ---------- */
   .corner {
     position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); left: 18px;
-    display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 18px;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
     z-index: 30;
   }
   .corner-btn {
@@ -331,6 +331,20 @@
     <span class="cicon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 1 2.2 5.3"></path><path d="M4.5 21v-4.5H9"></path></svg></span>
     <span id="resetLabel">איפוס</span>
   </button>
+  <button type="button" class="corner-btn" id="settingsBtn" aria-label="הגדרות" hidden>
+    <span class="cicon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8"></path></svg></span>
+    <span>הגדרות</span>
+  </button>
+</div>
+
+<div class="login" id="settings" hidden>
+  <div class="login-in">
+    <h2>הגדרות</h2>
+    <button type="button" class="btn-primary" id="setSwapBtn">החלפת שחקן</button>
+    <button type="button" class="btn-clear-record" id="setClearBtn" style="align-self:flex-start">איפוס רקורד</button>
+    <button type="button" class="btn-skip" id="setCloseBtn">סגירה</button>
+    <p class="empty-note" style="margin-top:24px">סוגרים קופה · גרסה 12</p>
+  </div>
 </div>
 
 <div class="login" id="login" hidden>
@@ -347,7 +361,7 @@
 
 <div class="wrap">
   <header class="load-in">
-    <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span><span>·</span><span style="opacity:.55" id="verTag">v11</span></div>
+    <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span></div>
     <h1>סוגרים קופה</h1>
   </header>
 
@@ -624,6 +638,7 @@
     document.getElementById("modeSettle").classList.toggle("on", mode === "settle");
     document.getElementById("modeProfile").classList.toggle("on", mode === "profile");
     document.getElementById("addrow").hidden = mode !== "game";
+    document.getElementById("settingsBtn").hidden = mode !== "profile";
 
     const rows = document.getElementById("rows");
     rows.innerHTML = "";
@@ -1112,6 +1127,40 @@
   render();
   if (!me) showLogin();
 
+  // ---------- settings overlay ----------
+  document.getElementById("settingsBtn").addEventListener("click", () => {
+    document.getElementById("settings").hidden = false;
+  });
+  document.getElementById("setCloseBtn").addEventListener("click", () => {
+    document.getElementById("settings").hidden = true;
+  });
+  document.getElementById("setSwapBtn").addEventListener("click", () => {
+    document.getElementById("settings").hidden = true;
+    showLogin();
+  });
+  let setClearArmed = null;
+  document.getElementById("setClearBtn").addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    if (!setClearArmed) {
+      setClearArmed = setTimeout(() => {
+        setClearArmed = null;
+        btn.textContent = "איפוס רקורד";
+        btn.classList.remove("armed");
+      }, 4000);
+      btn.textContent = "בטוח? זה מוחק את ההיסטוריה של כולם";
+      btn.classList.add("armed");
+      return;
+    }
+    clearTimeout(setClearArmed);
+    setClearArmed = null;
+    btn.textContent = "איפוס רקורד";
+    btn.classList.remove("armed");
+    state.history = [];
+    markReal(); save();
+    document.getElementById("settings").hidden = true;
+    render();
+  });
+
   // Hide the tab bar while the on-screen keyboard is open — iOS moves
   // fixed-bottom elements around with the keyboard, so we duck out instead.
   let kbTimer = null;
@@ -1131,11 +1180,6 @@
     }, 150);
   });
 
-  // environment marker next to the version: installed app vs. browser tab
-  try {
-    const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
-    document.getElementById("verTag").textContent += standalone ? " · אפליקציה" : " · דפדפן";
-  } catch (e) {}
 })();
 </script>
 
