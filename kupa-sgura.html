@@ -500,6 +500,7 @@
   .debt-amount { flex: 0 0 auto; color: var(--text); font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .debt-paid-btn { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); font-size: 12px; font-weight: 500; padding: 4px 10px; min-height: 30px; }
   .debt-paid-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .friend-helper { color: var(--faint); font-size: 12px; font-weight: 300; margin-top: 8px; text-align: center; }
   .empty-note { color: var(--faint); font-size: 14px; font-weight: 300; margin-top: 10px; }
   .pid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .pname-big { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
@@ -1156,6 +1157,58 @@
       if (winners[j].net < 0.005) j++;
     }
     return moves;
+  }
+
+  // ---------- friends (pure) ----------
+  // FriendRequests = { incoming: [Friendship], outgoing: [Friendship], friends: [ParticipantRef] }
+  // incoming/outgoing keep the raw Friendship (so a future UI can act on its id); friends
+  // flattens to the other party's ref since there is no pending action on an accepted friendship.
+  function friendRequestsFor(friendships, meRef) {
+    const list = Array.isArray(friendships) ? friendships : [];
+    const incoming = [];
+    const outgoing = [];
+    const friends = [];
+    list.forEach(f => {
+      if (!f) return;
+      if (f.status === "pending") {
+        if (sameIdentity(f.addressee, meRef)) incoming.push(f);
+        else if (sameIdentity(f.requester, meRef)) outgoing.push(f);
+      } else if (f.status === "accepted") {
+        if (sameIdentity(f.requester, meRef)) friends.push(f.addressee);
+        else if (sameIdentity(f.addressee, meRef)) friends.push(f.requester);
+      }
+    });
+    return { incoming, outgoing, friends };
+  }
+  // Returns the new pending Friendship (pushed onto `friendships`), or null for a self-request,
+  // or when a pending/accepted friendship already exists between the two in either direction.
+  function createFriendRequest(friendships, fromRef, toRef, at) {
+    const list = Array.isArray(friendships) ? friendships : [];
+    if (sameIdentity(fromRef, toRef)) return null;
+    const exists = list.some(f => f && (f.status === "pending" || f.status === "accepted") &&
+      ((sameIdentity(f.requester, fromRef) && sameIdentity(f.addressee, toRef)) ||
+       (sameIdentity(f.requester, toRef) && sameIdentity(f.addressee, fromRef))));
+    if (exists) return null;
+    const friendship = {
+      id: newId(),
+      requester: fromRef,
+      addressee: toRef,
+      status: "pending",
+      createdAt: at,
+      respondedAt: null,
+    };
+    friendships.push(friendship);
+    return friendship;
+  }
+  // Returns false unless `id` names a pending friendship whose addressee is `meRef`; else sets
+  // status to accepted/rejected and stamps respondedAt.
+  function respondToFriendRequest(friendships, id, meRef, accept, at) {
+    const list = Array.isArray(friendships) ? friendships : [];
+    const friendship = list.find(f => f && f.id === id);
+    if (!friendship || friendship.status !== "pending" || !sameIdentity(friendship.addressee, meRef)) return false;
+    friendship.status = accept ? "accepted" : "rejected";
+    friendship.respondedAt = at;
+    return true;
   }
 
   // ---------- player exit (pure) ----------
@@ -3068,6 +3121,23 @@
     parent.appendChild(group);
   }
 
+  // Flat .debt-row-style rows for one friends list (friends / incoming / outgoing). No action
+  // buttons in this phase: createFriendRequest/respondToFriendRequest exist and are tested for
+  // the backend, but nothing in the UI may call them yet (no fake local friendships).
+  function renderFriendGroup(parent, title, refs, metaLabel) {
+    const group = el("div", "debt-group");
+    group.appendChild(el("h3", "", title));
+    refs.forEach(ref => {
+      const row = el("div", "debt-row");
+      const copy = el("div", "debt-copy");
+      copy.appendChild(el("span", "debt-person", ref.displayName));
+      if (metaLabel) copy.appendChild(el("span", "debt-meta", metaLabel));
+      row.appendChild(copy);
+      group.appendChild(row);
+    });
+    parent.appendChild(group);
+  }
+
   function renderProfile() {
     const box = document.getElementById("profile");
     box.hidden = appView !== "profile";
@@ -3107,6 +3177,7 @@
     [
       ["balance", "מאזן"],
       ["debts", "חובות"],
+      ["friends", "חברים"],
     ].forEach(([key, label]) => {
       const tab = el("button", "profile-tab" + (profileTab === key ? " active" : ""), label);
       tab.type = "button";
@@ -3157,6 +3228,30 @@
     renderDebtGroup(debtPane, selectedDebtTab[1], selectedDebtTab[2], selectedDebtTab[3], false);
     debtSec.appendChild(debtPane);
     box.appendChild(debtSec);
+
+    // friends
+    const friendsSec = el("section", "psection debt-section");
+    friendsSec.style.animationDelay = ".09s";
+    friendsSec.hidden = profileTab !== "friends";
+    friendsSec.appendChild(el("h2", "ptitle", "חברים"));
+    const meRef = { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me };
+    const friendData = friendRequestsFor(state.friendships || [], meRef);
+    const hasFriendData = friendData.friends.length || friendData.incoming.length || friendData.outgoing.length;
+    if (!hasFriendData) {
+      friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים. בקשות חברות יעבדו כשהאפליקציה תתחבר לשרת."));
+    } else {
+      renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
+      renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך");
+      renderFriendGroup(friendsSec, "בקשות שנשלחו", friendData.outgoing.map(f => f.addressee), "ממתין לאישור");
+    }
+    const addFriendBtn = el("button", "btn-primary", "הוסף חבר");
+    addFriendBtn.type = "button";
+    addFriendBtn.disabled = true;
+    addFriendBtn.setAttribute("aria-disabled", "true");
+    addFriendBtn.style.marginTop = "14px";
+    friendsSec.appendChild(addFriendBtn);
+    friendsSec.appendChild(el("p", "friend-helper", "דורש חיבור לשרת"));
+    box.appendChild(friendsSec);
 
     // total balance
     const balSec = el("section", "psection");
