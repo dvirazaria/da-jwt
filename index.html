@@ -223,6 +223,30 @@
   .undo:hover { color: var(--bad); }
 
 
+  /* entry details — quiet, inline, using the existing row language */
+  .player-heading { flex: 1; min-width: 0; }
+  .entry-toggle {
+    display: flex; align-items: center; gap: 5px; padding: 4px 0;
+    color: var(--dim); font-size: 12px; font-weight: 400;
+  }
+  .entry-toggle:hover { color: var(--accent); }
+  .entry-toggle svg {
+    width: 12px; height: 12px; fill: none; stroke: currentColor;
+    stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+    transition: transform .25s ease;
+  }
+  .entry-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .entry-details { display: grid; grid-template-rows: 0fr; visibility: hidden;
+    transition: grid-template-rows .28s ease, visibility .28s; }
+  .entry-details.open { grid-template-rows: 1fr; visibility: visible; }
+  .entry-details-in { overflow: hidden; min-height: 0; }
+  .entry-list { margin: 0; padding: 2px 0 12px; list-style: none; }
+  .entry-item { display: flex; justify-content: space-between; align-items: baseline;
+    gap: 16px; padding: 5px 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .entry-time { color: var(--dim); font-weight: 300; }
+  .entry-amount { color: var(--text); font-weight: 500; }
+  .entry-empty { color: var(--dim); font-size: 12px; margin: 0; padding: 4px 0 12px; }
+
   /* settle rows */
   input[type="number"].srow-input { width: 104px; flex: 0 0 104px; text-align: end; font-size: 17px; }
   .net { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 16px; min-width: 74px; text-align: left; }
@@ -416,7 +440,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 21</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 22</p>
   </div>
 </div>
 
@@ -497,6 +521,7 @@
     history: [],
   };
 
+  const expandedEntries = new Set();
   let state = load();
   let mode = "game";          // "game" | "settle" | "profile"
   let openMenu = null;        // player name whose buy-in menu is open
@@ -530,12 +555,37 @@
 
   function normalize(s) {
     if (!s || !Array.isArray(s.players)) return null;
+    // Deterministic legacy IDs let devices migrate the same old snapshot consistently.
+    // Old amounts have no recorded time: never manufacture a timestamp for them.
+    const gameId = s.gameId || "legacy-" + encodeURIComponent(JSON.stringify([
+      s.updatedAt || "", s.players.map(p => p.name),
+    ]));
     return {
       example: !!s.example,
-      players: s.players,
+      gameId,
+      players: s.players.map((p, index) => {
+        const id = p.id || gameId + "-player-" + index;
+        const buyins = Array.isArray(p.buyins) ? [...p.buyins] : [];
+        return { ...p, id, buyins, entryLog: buyins.map((amount, i) => {
+          const saved = p.entryLog && p.entryLog[i];
+          return saved && saved.amount === amount && saved.playerId === id && saved.gameId === gameId
+            ? { ...saved }
+            : { id: id + "-entry-" + i, timestamp: null, amount, playerId: id, gameId };
+        }) };
+      }),
       history: Array.isArray(s.history) ? s.history : [],
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
     };
+  }
+  function newId() {
+    return typeof crypto.randomUUID === "function" ? crypto.randomUUID()
+      : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+  }
+  function addEntry(player, amount) {
+    const entry = { id: newId(), timestamp: new Date().toISOString(),
+      amount, playerId: player.id, gameId: state.gameId };
+    player.buyins.push(amount);
+    player.entryLog.push(entry);
   }
   function load() {
     try {
@@ -545,7 +595,7 @@
         if (s) return s;
       }
     } catch (e) {}
-    return JSON.parse(JSON.stringify(EXAMPLE));
+    return normalize(JSON.parse(JSON.stringify(EXAMPLE)));
   }
   function save() {
     pendingRemote = null; // a local edit supersedes any remote state parked for later
@@ -569,6 +619,7 @@
   function remoteBody() {
     return {
       by: CLIENT_ID,
+      gameId: state.gameId,
       example: !!state.example,
       players: state.players,
       history: state.history,
@@ -589,14 +640,15 @@
   function applyRemote(data) {
     // Snapshot bodies are frozen objects — deep-clone so later edits
     // (push into buyins, cashout assignment) don't silently fail.
-    const incoming = JSON.parse(JSON.stringify({
+    const incoming = normalize(JSON.parse(JSON.stringify({
+      gameId: data.gameId,
       example: !!data.example,
       players: Array.isArray(data.players) ? data.players : [],
       history: Array.isArray(data.history) ? data.history : [],
       updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
-    }));
-    if (JSON.stringify({ e: incoming.example, p: incoming.players, h: incoming.history }) ===
-        JSON.stringify({ e: state.example, p: state.players, h: state.history })) return;
+    })));
+    if (JSON.stringify({ g: incoming.gameId, e: incoming.example, p: incoming.players, h: incoming.history }) ===
+        JSON.stringify({ g: state.gameId, e: state.example, p: state.players, h: state.history })) return;
     // Don't yank the UI out from under an active edit — apply on blur.
     const ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT")) { pendingRemote = incoming; return; }
@@ -669,7 +721,8 @@
   // Returns true when it wiped, so callers can stop their own action.
   function markReal() {
     if (!state.example) return false;
-    state = { example: false, players: [], history: state.history, updatedAt: state.updatedAt };
+    state = { example: false, gameId: newId(), players: [], history: state.history, updatedAt: state.updatedAt };
+    expandedEntries.clear();
     return true;
   }
 
@@ -748,11 +801,11 @@
     const closingFor = p.name;
     animateMenuClose(() => {
       // re-resolve the player: a remote sync may have replaced `state` meanwhile
-      const player = state.players.find(x => x.name === closingFor);
+      const player = state.players.find(x => x.id === p.id);
       if (openMenu === closingFor) { openMenu = null; customOpen = null; }
       if (!player) { render(); return; }
       const from = sum(player.buyins);
-      player.buyins.push(amount);
+      addEntry(player, amount);
       save();
       try { if (navigator.vibrate) navigator.vibrate(20); } catch (e) {}
       render();
@@ -796,9 +849,56 @@
       else if (anim === "one" && p.name === animName) { row.classList.add("anim"); }
       const line = el("div", "prow-line");
 
-      line.appendChild(el("span", "pname", p.name));
-
       if (mode === "game") {
+        const heading = el("div", "player-heading");
+        heading.appendChild(el("span", "pname", p.name));
+        line.appendChild(heading);
+        const details = el("div", "entry-details");
+        details.id = "entry-details-" + idx;
+        const detailsInner = el("div", "entry-details-in");
+        const toggle = el("button", "entry-toggle", "פירוט כניסות");
+        toggle.type = "button";
+        toggle.setAttribute("aria-label", "פירוט כניסות של " + p.name);
+        toggle.setAttribute("aria-controls", details.id);
+        const arrow = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        arrow.setAttribute("viewBox", "0 0 12 12");
+        arrow.setAttribute("aria-hidden", "true");
+        arrow.innerHTML = '<path d="M3 4.5 6 7.5 9 4.5"/>';
+        toggle.appendChild(arrow);
+        const updateExpanded = () => {
+          const expanded = expandedEntries.has(p.id);
+          toggle.setAttribute("aria-expanded", String(expanded));
+          details.setAttribute("aria-hidden", String(!expanded));
+          details.classList.toggle("open", expanded);
+        };
+        toggle.addEventListener("click", () => {
+          if (expandedEntries.has(p.id)) expandedEntries.delete(p.id);
+          else expandedEntries.add(p.id);
+          updateExpanded();
+        });
+        updateExpanded();
+        heading.appendChild(toggle);
+        // Array order is the actual insertion order, including entries across midnight.
+        const entries = p.entryLog.filter(entry => entry.gameId === state.gameId && entry.playerId === p.id);
+        if (entries.length) {
+          const list = el("ol", "entry-list");
+          entries.forEach(entry => {
+            const item = el("li", "entry-item");
+            const date = entry.timestamp ? new Date(entry.timestamp) : null;
+            const knownTime = date && Number.isFinite(date.getTime());
+            const time = el("time", "entry-time", knownTime
+              ? date.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }) : "—");
+            time.dir = "ltr";
+            if (knownTime) { time.dateTime = entry.timestamp; time.title = date.toLocaleString("he-IL"); }
+            else { time.title = "שעת הכניסה לא תועדה"; time.setAttribute("aria-label", time.title); }
+            const amount = el("span", "entry-amount", fmt(entry.amount));
+            amount.dir = "ltr";
+            item.append(time, amount);
+            list.appendChild(item);
+          });
+          detailsInner.appendChild(list);
+        } else detailsInner.appendChild(el("p", "entry-empty", "אין כניסות עדיין"));
+        details.appendChild(detailsInner);
         const meta = el("span", "pmeta");
         meta.innerHTML = "<b>" + fmt(sum(p.buyins)) + "</b> · " + p.buyins.length + " כניסות";
         line.appendChild(meta);
@@ -920,6 +1020,7 @@
           undo.addEventListener("click", () => {
             if (markReal()) { save(); render(); return; }
             p.buyins.pop();
+            p.entryLog.pop();
             if (p.buyins.length === 0) state.players.splice(idx, 1); // no entries left = out of the game
             save(); render();
           });
@@ -928,7 +1029,9 @@
         inner.appendChild(mrow);
         menu.appendChild(inner);
         row.appendChild(menu);
+        row.appendChild(details);
       } else {
+        line.appendChild(el("span", "pname", p.name));
         const inp = document.createElement("input");
         inp.type = "number";
         inp.min = "0";
@@ -1093,8 +1196,11 @@
     btn.textContent = "סגירת שולחן ורישום לרקורד";
 
     const entry = {
+      gameId: state.gameId,
       at: new Date().toISOString(),
       players: state.players.map(p => ({
+        id: p.id,
+        entryLog: p.entryLog.map(entry => ({ ...entry })),
         name: p.name,
         buyin: sum(p.buyins),
         cashout: Number(p.cashout) || 0,
@@ -1104,6 +1210,8 @@
     state.history.unshift(entry);
     if (state.history.length > HISTORY_MAX) state.history.length = HISTORY_MAX;
     state.players = [];
+    state.gameId = newId();
+    expandedEntries.clear();
     state.example = false;
     openMenu = null; customOpen = null;
     save();
@@ -1242,7 +1350,9 @@
       shakeEl(inp); // duplicate names would merge menus, records and transfers
       return;
     }
-    state.players.push({ name, buyins: [MIN_BUYIN], cashout: "" });
+    const player = { id: newId(), name, buyins: [], entryLog: [], cashout: "" };
+    addEntry(player, MIN_BUYIN);
+    state.players.push(player);
     inp.value = "";
     mode = "game";
     openMenu = name;
@@ -1287,7 +1397,8 @@
     resetArmed = null;
     btn.classList.remove("danger-armed");
     label.textContent = "איפוס";
-    state = { example: false, players: [], history: state.history };
+    state = { example: false, gameId: newId(), players: [], history: state.history };
+    expandedEntries.clear();
     openMenu = null; customOpen = null;
     save(); render();
   });

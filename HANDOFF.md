@@ -7,7 +7,7 @@ A Hebrew, RTL, mobile-first PWA for settling home poker cash games:
 players + buy-ins on a "שולחן" tab, chip counts and a minimal-transfers
 who-pays-whom on a "חישוב" tab, per-player record on a "פרופיל" tab.
 Deployed on Vercel (static, auto-deploys from `main`), installable to the
-home screen. Version 21.
+home screen. Version 22.
 
 ## Files
 - `kupa-sgura.html` — THE app. Single file: CSS + HTML + one IIFE of vanilla JS.
@@ -26,7 +26,14 @@ Floating capsule bottom tab bar (active tab = filled pill with label).
 All animations respect `prefers-reduced-motion`.
 
 ## Data model (current, local/demo)
-`state = { example, players: [{name, buyins:[], cashout}], history: [...], updatedAt }`
+`state = { example, gameId, players: [{id, name, buyins:[], entryLog:[], cashout}], history: [...], updatedAt }`
+- Each entryLog item is {id, timestamp, amount, playerId, gameId}; timestamp is ISO UTC,
+  displayed as local HH:mm. Legacy entries use null time (shown as —), never invented times.
+  Numeric buyins stay unchanged for calculation compatibility. Add/undo must update both arrays.
+  Both localStorage and the existing Claude document sync persist the log and gameId.
+  Closing archives a detached entryLog per player and rotates gameId; reset also rotates it.
+  Inline “פירוט כניסות” is current-game only; its expanded state is UI-only.
+- Regression checks: `node --test tests/entry-log.test.cjs`.
 - localStorage key `poker-settle-v1` (legacy prefix kept for continuity;
   also `poker-settle-me`, `-theme`, `-contact`).
 - Optional realtime sync via `window.claude.use("db")` (works only when
@@ -65,3 +72,5 @@ Agreed plan: Supabase free tier (auth + Postgres + RLS + realtime):
 2. Bump `VERSION` in `build.py`, run `python3 build.py`.
 3. Commit + push `main` → Vercel auto-deploys. `.vercelignore` keeps
    non-app files out of the public deployment.
+4. User preference: after a completed and verified work round, commit and push
+   the intentional changes to `main`, then wait for and verify the Vercel deployment.
