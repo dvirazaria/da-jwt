@@ -287,18 +287,30 @@
   .settle-empty { color: var(--faint); margin: 12px 0 0; font-size: 14px; font-weight: 300; }
 
   .btn-close-table {
+    position: relative; overflow: hidden; isolation: isolate;
     margin-top: 26px; border: 1px solid var(--accent); border-radius: 999px;
     color: var(--accent); font-weight: 700; font-size: 15px;
     padding: 12px 26px; min-height: 48px; touch-action: manipulation;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  .btn-close-table > span { position: relative; z-index: 1; }
+  .btn-close-table::before {
+    content: ""; position: absolute; z-index: 0;
+    inset: 50% auto auto 50%; width: 0; height: 0;
+    border-radius: 50%; transform: translate(-50%, -50%);
+    background: #05070A; pointer-events: none;
+    transition: width 1.8s linear, height 1.8s linear;
   }
   .btn-close-table:hover { background: var(--accent); color: var(--bg); }
   .btn-close-table.warn-state { border-color: var(--bad); color: var(--bad); }
   .btn-close-table.warn-state:hover { background: var(--bad); color: var(--bg); box-shadow: none; }
   .btn-close-table.blocked-state { cursor: default; opacity: .45; border-color: var(--line); color: var(--faint); }
   .btn-close-table.blocked-state:hover { background: none; color: var(--faint); }
-  .btn-close-table.force-state { border-color: var(--dim); color: var(--text); }
-  .btn-close-table.force-state:hover { background: var(--text); color: var(--bg); }
+  .btn-close-table.hold-state { opacity: 1; border-color: var(--line); color: var(--text); }
+  .btn-close-table.hold-state::before { width: 220%; height: 220%; }
+  .btn-close-table.force-state { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .btn-close-table.force-state::before { width: 0; height: 0; transition: none; }
+  .btn-close-table.force-state:hover { background: var(--accent-press); color: var(--bg); }
   .force-close-confirm { margin-top: 12px; color: var(--dim); font-size: 13px; }
   .force-close-confirm p { margin: 0 0 8px; }
   .force-close-actions { display: flex; align-items: center; gap: 14px; }
@@ -452,7 +464,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 25</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 26</p>
   </div>
 </div>
 
@@ -504,7 +516,7 @@
   <section class="results" id="results" hidden>
     <h2>מי משלם למי</h2>
     <div id="transfers"></div>
-    <button type="button" class="btn-close-table" id="closeTableBtn" hidden>סגירת שולחן ורישום לרקורד</button>
+    <button type="button" class="btn-close-table" id="closeTableBtn" hidden><span id="closeTableLabel">סגירת שולחן ורישום לרקורד</span></button>
     <div class="force-close-confirm" id="forceCloseConfirm" hidden>
       <p id="forceCloseMessage"></p>
       <div class="force-close-actions">
@@ -528,7 +540,7 @@
   const THEME_KEY = "poker-settle-theme";
   const CONTACT_KEY = "poker-settle-contact";
   const HISTORY_MAX = 60;
-  const HOLD_TO_FORCE_CLOSE_MS = 3000;
+  const HOLD_TO_FORCE_CLOSE_MS = 1800;
 
   const EXAMPLE = {
     example: true,
@@ -789,6 +801,12 @@
   function closeButtonLabel(isBalanced, forceUnlocked, closeArmed) {
     if (!isBalanced) return forceUnlocked ? "סגור בכל זאת" : "הסכום לא מאוזן, לא ניתן לסגור";
     return closeArmed ? "לסגור את השולחן? לחיצה נוספת מאשרת" : "סגירת שולחן ורישום לרקורד";
+  }
+
+  function setCloseButtonLabel(button, label) {
+    const text = button.querySelector("#closeTableLabel");
+    if (text) text.textContent = label;
+    else button.textContent = label;
   }
 
   // Greedy settlement: fewest transfers between net winners and losers.
@@ -1187,7 +1205,7 @@
       closeBtn.classList.toggle("force-state", !balanced && forceCloseUnlocked);
       closeBtn.classList.toggle("warn-state", closeArmed);
       forceConfirm.hidden = !hasTable || balanced || !forceCloseArmed;
-      closeBtn.textContent = closeButtonLabel(balanced, forceCloseUnlocked, closeArmed);
+      setCloseButtonLabel(closeBtn, closeButtonLabel(balanced, forceCloseUnlocked, closeArmed));
       if (forceCloseArmed) document.getElementById("forceCloseMessage").textContent =
         "השולחן לא מאוזן — " + balanceDescription(t.diff) + ". לסגור את המשחק בכל זאת?";
     }
@@ -1253,6 +1271,8 @@
   function clearCloseHold() {
     if (closeHoldTimer) clearTimeout(closeHoldTimer);
     closeHoldTimer = null;
+    const btn = document.getElementById("closeTableBtn");
+    if (btn) btn.classList.remove("hold-state");
   }
 
   function beginCloseHold(e) {
@@ -1261,11 +1281,13 @@
     if (e.button !== undefined && e.button !== 0) return;
     clearCloseHold();
     const btn = e.currentTarget;
+    btn.classList.add("hold-state");
     if (btn.setPointerCapture && e.pointerId !== undefined) btn.setPointerCapture(e.pointerId);
     closeHoldTimer = setTimeout(() => {
       closeHoldTimer = null;
       const current = totals();
       if (mode !== "settle" || !state.players.length || state.example || current.diff === 0) return;
+      btn.classList.remove("hold-state");
       forceCloseUnlocked = true;
       forceCloseUnlockDifference = current.diff;
       forceCloseArmed = false;
@@ -1293,7 +1315,7 @@
     forceCloseUnlockDifference = null;
     longPressJustUnlocked = false;
     btn.classList.remove("warn-state");
-    btn.textContent = "סגירת שולחן ורישום לרקורד";
+    setCloseButtonLabel(btn, "סגירת שולחן ורישום לרקורד");
     const entry = buildHistoryEntry(state, { difference: t.diff, isBalanced: balanced }, new Date().toISOString());
     state.history.unshift(entry);
     if (state.history.length > HISTORY_MAX) state.history.length = HISTORY_MAX;
@@ -1324,11 +1346,11 @@
     if (!closeArmed) {
       closeArmed = true;
       btn.classList.add("warn-state");
-      btn.textContent = "לסגור את השולחן? לחיצה נוספת מאשרת";
+      setCloseButtonLabel(btn, "לסגור את השולחן? לחיצה נוספת מאשרת");
       closeArmTimer = setTimeout(() => {
         closeArmed = false;
         btn.classList.remove("warn-state");
-        btn.textContent = "סגירת שולחן ורישום לרקורד";
+        setCloseButtonLabel(btn, "סגירת שולחן ורישום לרקורד");
       }, 5000);
       return;
     }
