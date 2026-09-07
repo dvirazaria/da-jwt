@@ -101,11 +101,55 @@ test('startedAt travels through normalization and remote persistence without leg
   assert.match(creation, /startedAt:\s*new Date\(\)\.toISOString\(\)/);
 });
 
+test('Games dashboard is composed from three modular sections', () => {
+  assert.match(html, /function renderQuickActions\(parent\)/);
+  assert.match(html, /function renderActiveGamesSection\(parent, summaries\)/);
+  assert.match(html, /function renderActiveGameCard\(summary, actions\)/);
+  assert.match(html, /function renderGroupsSection\(parent, groups\)/);
+  assert.match(html, /function renderGroupCard\(group, actions\)/);
+  assert.match(html, /renderQuickActions\(inner\)/);
+  assert.match(html, /renderActiveGamesSection\(inner, getActiveGameSummaries\(state\)\)/);
+  assert.match(html, /renderGroupsSection\(inner, getGroupSummaries\(\)\)/);
+  assert.match(html, /אין משחקים פעילים כרגע/);
+  assert.match(html, /אין לך קבוצות עדיין/);
+  assert.match(html, /בקרוב/);
+});
+
+test('active game card renderer never reads game state directly', () => {
+  const source = sourceBetween('  function renderActiveGameCard', '  function renderActiveGamesSection');
+  assert.doesNotMatch(source, /\bstate\b/);
+  assert.doesNotMatch(source, /\btotals\(/);
+});
+
+test('card expansion is UI-only and is not persisted', () => {
+  assert.match(html, /const expandedGameCards = new Set\(\)/);
+  assert.match(html, /const expandedGroupCards = new Set\(\)/);
+  const dashboardSource = sourceBetween('  function getActiveGameSummaries', '  function render\(\)');
+  assert.doesNotMatch(dashboardSource, /\bsave\(\)/);
+});
+
+test('groups adapter has no mock data', () => {
+  const source = sourceBetween('  function getGroupSummaries', '  function formatGameTime');
+  const context = vm.createContext({});
+  vm.runInContext(source, context);
+  assert.deepEqual(Array.from(vm.runInContext('getGroupSummaries()', context)), []);
+});
+
+test('player names are capped at four with a remaining count', () => {
+  const source = sourceBetween('  function formatPlayerNames', '  function renderQuickActions');
+  const context = vm.createContext({});
+  vm.runInContext(source, context);
+  assert.equal(vm.runInContext(`formatPlayerNames(['א','ב','ג','ד'])`, context), 'א, ב, ג, ד');
+  assert.equal(vm.runInContext(`formatPlayerNames(['א','ב','ג','ד','ה','ו'])`, context), 'א, ב, ג, ד +2');
+  assert.equal(vm.runInContext(`formatPlayerNames([])`, context), 'אין שחקנים עדיין');
+});
+
 test('Games dashboard centers its visible content while preserving RTL text direction', () => {
   assert.match(html, /document\.body\.classList\.toggle\("games-view", appView === "games"\)/);
   assert.match(html, /\.games-view header \{ text-align: center; \}/);
   assert.match(html, /\.games-home \{[^}]*text-align: center;/s);
-  assert.match(html, /\.games-card \{[^}]*align-items: center;[^}]*text-align: center;/s);
+  assert.match(html, /\.games-active-card, \.games-group-card \{[^}]*text-align: center;/s);
+  assert.match(html, /\.games-card-actions \{[^}]*justify-content: center;/s);
   assert.match(html, /direction: rtl;/);
 });
 
