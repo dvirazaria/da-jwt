@@ -7,7 +7,7 @@ A Hebrew, RTL, mobile-first PWA for settling home poker cash games:
 players + buy-ins on a "שולחן" tab, chip counts and a minimal-transfers
 who-pays-whom on a "חישוב" tab, per-player record on a "פרופיל" tab.
 Deployed on Vercel (static, auto-deploys from `main`), installable to the
-home screen. Version 27.
+home screen. Version 28.
 
 ## Files
 - `kupa-sgura.html` — THE app. Single file: CSS + HTML + one IIFE of vanilla JS.
@@ -34,7 +34,7 @@ All animations respect `prefers-reduced-motion`.
   Closing archives a detached entryLog per player and rotates gameId; reset also rotates it.
   Inline “פירוט כניסות” is current-game only; its expanded state is UI-only.
   Table balance is an integer `buy-ins - cashouts`. A normal close is enabled only at zero.
-  Forced unbalanced closes require a 1.8-second hold on the blocked main close button,
+  Forced unbalanced closes require a one-second hold on the blocked main close button,
   then an inline confirmation, and archive `isBalanced: false` plus `balanceDifference`
   in the history record. Positive difference means money is missing; negative means there
   is an excess.

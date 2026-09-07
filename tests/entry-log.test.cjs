@@ -86,12 +86,12 @@ test('unbalanced close stays blocked until the long-press state is unlocked', ()
   assert.ok(start >= 0, 'closeButtonLabel helper exists');
   const context = vm.createContext({});
   vm.runInContext(html.slice(start, end), context);
-  assert.equal(vm.runInContext('closeButtonLabel(false, false, false)', context), 'הסכום לא מאוזן, לא ניתן לסגור');
+  assert.equal(vm.runInContext('closeButtonLabel(false, false, false)', context), 'לחיצה ארוכה כדי לסגור למרות הפער');
   assert.equal(vm.runInContext('closeButtonLabel(false, true, false)', context), 'סגור בכל זאת');
   assert.equal(vm.runInContext('closeButtonLabel(true, false, false)', context), 'סגירת שולחן ורישום לרקורד');
 });
-test('long press unlock duration is 1.8 seconds', () => {
-  assert.equal(html.match(/const HOLD_TO_FORCE_CLOSE_MS = (\d+);/)[1], '1800');
+test('long press unlock duration is 1 second', () => {
+  assert.equal(html.match(/const HOLD_TO_FORCE_CLOSE_MS = (\d+);/)[1], '1000');
 });
 test('closed history records whether the table was balanced and the exact difference', () => {
   const start = html.indexOf('  function buildHistoryEntry');
