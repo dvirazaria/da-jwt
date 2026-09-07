@@ -104,17 +104,18 @@
   :root[data-theme="light"] { --bar-bg: rgba(245,248,249,.9); }
   html { background: var(--bg); }
   .tabbar {
-    position: fixed; bottom: 0;
-    inset-inline: 17px; margin-inline: auto; max-width: 470px; z-index: 20;
+    position: fixed; bottom: -1px; inset-inline: 0; z-index: 20;
     display: flex; align-items: center; justify-content: space-between; gap: 4px;
     background: var(--bar-bg);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 6px 10px;
-    box-shadow: 0 8px 28px rgba(0,0,0,.35);
+    border-top: 1px solid var(--line);
+    border-radius: 20px 20px 0 0;
+    padding: 7px 14px calc(7px + env(safe-area-inset-bottom, 0px));
   }
-  :root[data-theme="light"] .tabbar { box-shadow: 0 8px 24px rgba(12,21,25,.14); }
+  .tabbar-in {
+    display: flex; align-items: center; justify-content: space-between; gap: 4px;
+    width: 100%; max-width: 470px; margin-inline: auto;
+  }
   .tab {
     flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
     color: var(--dim); font-size: 14px; font-weight: 700;
@@ -342,7 +343,7 @@
 
 <div class="wrap">
   <header class="load-in">
-    <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span><span>·</span><span style="opacity:.55" id="verTag">v9</span></div>
+    <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span><span>·</span><span style="opacity:.55" id="verTag">v10</span></div>
     <h1>סוגרים קופה</h1>
   </header>
 
@@ -352,6 +353,7 @@
   </div>
 
   <nav class="tabbar load-in" style="animation-delay:.15s" aria-label="ניווט ראשי">
+    <div class="tabbar-in">
     <button type="button" class="tab on" id="modeGame" aria-label="שולחן">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="3.6"></circle><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3"></path></svg>
       <span class="tlabel">שולחן</span>
@@ -364,6 +366,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.8"></circle><path d="M4.5 20c1.6-4 4.6-5.6 7.5-5.6s5.9 1.6 7.5 5.6"></path></svg>
       <span class="tlabel">פרופיל</span>
     </button>
+    </div>
   </nav>
 
   <div class="rows" id="rows"></div>
