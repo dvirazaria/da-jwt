@@ -402,6 +402,22 @@
   .games-history-row { font-size: 13px; font-weight: 400; color: var(--dim); }
   .games-member-tag { margin-inline-start: 6px; color: var(--dim); font-size: 12px; font-weight: 400; }
 
+  /* group members: admin row actions, add-member panel, former members */
+  .games-member-row.with-actions { display: flex; align-items: center; gap: 10px; text-align: start; }
+  .games-member-name { flex: 1 1 auto; min-width: 0; display: inline-flex; align-items: center; flex-wrap: wrap; }
+  .games-member-remove {
+    flex: 0 0 auto; margin-inline-start: auto;
+    color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0 4px 8px;
+  }
+  .games-member-remove:hover, .games-member-remove.armed { color: var(--bad); }
+  .games-member-add { margin-top: 14px; text-align: center; }
+  .games-member-add-toggle { color: var(--dim); font-size: 13px; font-weight: 600; padding: 6px 2px; }
+  .games-member-add-toggle:hover { color: var(--accent); }
+  .games-member-add-note { margin: 0; color: var(--faint); font-size: 11px; font-weight: 300; }
+  .games-former-members { margin-top: 14px; text-align: center; }
+  .games-former-toggle { color: var(--dim); font-size: 12px; font-weight: 500; padding: 6px 2px; }
+  .games-former-toggle:hover { color: var(--accent); }
+
   .btn-close-table {
     position: relative; overflow: hidden; isolation: isolate;
     display: block; width: min(100%, 340px); margin: 26px auto 0;
@@ -709,6 +725,12 @@
   let createGroupJustOpened = false;   // panel should animate open on the next render
   let createGroupName = "";            // draft group name, kept across unrelated dashboard re-renders
   let createGroupAvatarDataUrl = null; // draft avatar preview (data URL), same reason
+  let addMemberOpen = false;           // whether the "+ הוסף חבר" inline panel is expanded
+  let addMemberJustOpened = false;     // panel should animate open on the next render
+  let addMemberName = "";              // draft member name, kept across unrelated re-renders
+  let removeMemberArmedId = null;      // memberId whose "הסר" is armed (two-step confirm)
+  let removeMemberArmedTimeout = null; // auto-disarm timer for the above
+  let formerMembersOpen = false;       // whether the "חברים לשעבר" collapsed list is expanded
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
   let animName = null;        // the player to animate when animNext === "one"
   let me = loadMe();
@@ -1437,6 +1459,74 @@
     });
     return { group, member };
   }
+  // Adds a guest member by ParticipantRef (userId always null pre-backend). Refused (returns
+  // null) when an ACTIVE member with the same identity (sameIdentity) or the same trimmed
+  // displayName already exists in this group. A former (left/removed) member with the same
+  // identity is re-activated in place instead of creating a second record, so game-history
+  // attribution (guestId) stays stable across a remove-then-rejoin.
+  function addGroupMember(members, group, ref, role, at) {
+    const list = Array.isArray(members) ? members : [];
+    const groupId = group && group.id;
+    const displayName = String((ref && ref.displayName) || "").trim();
+    if (!groupId || !displayName) return null;
+    const activeDuplicate = list.some(m => m && m.groupId === groupId && m.status === "active" &&
+      (sameIdentity(m, ref) || m.displayName.trim() === displayName));
+    if (activeDuplicate) return null;
+    const former = list.find(m => m && m.groupId === groupId && m.status !== "active" && sameIdentity(m, ref));
+    if (former) {
+      former.status = "active";
+      former.leftAt = null;
+      former.joinedAt = at;
+      return former;
+    }
+    const member = normalizeGroupMember({
+      id: newId(), groupId, guestId: (ref && ref.guestId) || null,
+      displayName, role, status: "active", joinedAt: at,
+    });
+    list.push(member);
+    return member;
+  }
+  // Soft-removes an active member (status "removed", leftAt = at) so history/leaderboard
+  // attribution survives. Refused (false, no mutation) when not found, already former, or the
+  // group's last active admin — a group must always keep at least one admin.
+  function removeGroupMember(members, memberId, at) {
+    const list = Array.isArray(members) ? members : [];
+    const member = list.find(m => m && m.id === memberId);
+    if (!member || member.status !== "active") return false;
+    if (isLastActiveAdmin(list, memberId)) return false;
+    member.status = "removed";
+    member.leftAt = at;
+    return true;
+  }
+  // Self-service version of removeGroupMember: the caller leaves by their own displayName
+  // (findMyMembership's identity rule) rather than a memberId. Same last-admin guard.
+  function leaveGroup(members, groupId, meName, at) {
+    const list = Array.isArray(members) ? members : [];
+    const membership = findMyMembership(list, groupId, meName);
+    if (!membership || isLastActiveAdmin(list, membership.id)) return false;
+    membership.status = "left";
+    membership.leftAt = at;
+    return true;
+  }
+  // Promotes/demotes a member. Refused (false, no mutation) when not found, or when demoting
+  // the group's last active admin would leave it with none.
+  function setMemberRole(members, memberId, role) {
+    const list = Array.isArray(members) ? members : [];
+    const member = list.find(m => m && m.id === memberId);
+    if (!member) return false;
+    const nextRole = role === "admin" ? "admin" : "member";
+    if (member.role === "admin" && nextRole !== "admin" && isLastActiveAdmin(list, memberId)) return false;
+    member.role = nextRole;
+    return true;
+  }
+  // True when memberId is an active admin and no other active admin shares their group — i.e.
+  // removing/demoting them, or letting them leave, would leave the group without one.
+  function isLastActiveAdmin(members, memberId) {
+    const list = Array.isArray(members) ? members : [];
+    const member = list.find(m => m && m.id === memberId);
+    if (!member || member.status !== "active" || member.role !== "admin") return false;
+    return !list.some(m => m && m.id !== memberId && m.groupId === member.groupId && m.status === "active" && m.role === "admin");
+  }
 
   function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -1611,6 +1701,35 @@
     if (!panel) { finish(); return; }
     panel.classList.remove("open");
     setTimeout(finish, 280);
+  }
+
+  // Adds a guest member by typed name (no accounts yet — see groups-domain decision doc:
+  // userId stays null, resolveGuestId keeps one guestId per displayName on this device). A
+  // duplicate active identity/displayName in the group is refused; the caller shakes its input.
+  function addMemberByName(groupId, name) {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return null;
+    const group = state.groups.find(g => g && g.id === groupId);
+    if (!group) return null;
+    const at = new Date().toISOString();
+    const guestId = resolveGuestId(collectionsOf(state), trimmed);
+    const ref = { userId: null, guestId, displayName: trimmed };
+    const member = addGroupMember(state.groupMembers, group, ref, "member", at);
+    if (!member) return null;
+    save();
+    renderGroupPage();
+    return member;
+  }
+
+  // Removes (soft) a member from a group; see removeGroupMember for the history-preserving
+  // and last-admin-guard rules. Scoped to groupId so a stale memberId can't cross groups.
+  function removeMember(groupId, memberId) {
+    const member = state.groupMembers.find(m => m && m.id === memberId && m.groupId === groupId);
+    if (!member) return false;
+    if (!removeGroupMember(state.groupMembers, memberId, new Date().toISOString())) return false;
+    save();
+    renderGroupPage();
+    return true;
   }
 
   // Resizes/crops an image file to a 96×96 JPEG data URL (cover crop, quality 0.8) for a
@@ -2048,18 +2167,153 @@
     return section;
   }
 
-  // Flat member rows, name + a quiet "מנהל" tag for admins. Former members are not shown here.
-  // isAdmin is accepted now (not yet used) so Task 9 can add member-management actions without
-  // changing this function's call site.
-  function renderGroupMembers(members, isAdmin) {
+  // Flat member rows, name + a quiet "מנהל" tag for admins. Admins additionally get an inline
+  // "+ הוסף חבר" add action and a per-row "הסר" (except on their own row and the group's last
+  // active admin). Former members appear collapsed under a toggle, shown only when there are any.
+  function renderGroupMembers(members, former, isAdmin) {
     const section = el("section", "games-section");
     section.appendChild(el("h3", "games-section-title", "חברים"));
-    (Array.isArray(members) ? members : []).forEach(member => {
-      const row = el("p", "games-member-row", member.displayName);
-      if (member.role === "admin") row.appendChild(el("span", "games-member-tag", "מנהל"));
-      section.appendChild(row);
-    });
+    const list = Array.isArray(members) ? members : [];
+    list.forEach(member => section.appendChild(renderMemberRow(member, list, isAdmin)));
+    if (isAdmin) section.appendChild(renderAddMemberPanel());
+    const formerList = Array.isArray(former) ? former : [];
+    if (formerList.length) section.appendChild(renderFormerMembers(formerList));
     return section;
+  }
+
+  // A single member row (kept as a <p>, like before, so the last-row border-hiding
+  // :last-of-type rule still targets it even once sibling <div> panels are appended below).
+  // Admins get a trailing "הסר" pushed to the far end via margin-inline-start:auto, except on
+  // their own row and on the group's last active admin (isLastActiveAdmin over this same list).
+  function renderMemberRow(member, activeList, isAdmin) {
+    const row = el("p", "games-member-row" + (isAdmin ? " with-actions" : ""));
+    const name = el("span", "games-member-name", member.displayName);
+    if (member.role === "admin") name.appendChild(el("span", "games-member-tag", "מנהל"));
+    row.appendChild(name);
+    if (isAdmin && member.displayName !== me && !isLastActiveAdmin(activeList, member.id)) {
+      row.appendChild(renderRemoveMemberButton(member));
+    }
+    return row;
+  }
+
+  // Two-step armed control, same idea as resetBtn/setClearBtn: label flips to "בטוח?" for 4s,
+  // a second click within the window confirms. Only one row is armed at a time (module-level
+  // id) and, unlike those static buttons, member rows are rebuilt on every renderGroupPage(),
+  // so arming/disarming re-renders instead of toggling a persistent element's classList.
+  function armRemoveMember(memberId) {
+    clearTimeout(removeMemberArmedTimeout);
+    removeMemberArmedId = memberId;
+    removeMemberArmedTimeout = setTimeout(() => {
+      removeMemberArmedId = null;
+      renderGroupPage();
+    }, 4000);
+  }
+  function disarmRemoveMember() {
+    clearTimeout(removeMemberArmedTimeout);
+    removeMemberArmedId = null;
+    removeMemberArmedTimeout = null;
+  }
+  function renderRemoveMemberButton(member) {
+    const armed = removeMemberArmedId === member.id;
+    const btn = el("button", "games-member-remove" + (armed ? " armed" : ""), armed ? "בטוח?" : "הסר");
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      if (removeMemberArmedId === member.id) {
+        disarmRemoveMember();
+        removeMember(member.groupId, member.id);
+        return;
+      }
+      armRemoveMember(member.id);
+      renderGroupPage();
+    });
+    return btn;
+  }
+
+  // Inline "+ הוסף חבר" add action, same collapse/expand pattern and CSS (.games-create-panel)
+  // as the create-group panel (Task 3). Guest-only for now — no accounts yet — hence the note.
+  function renderAddMemberPanel() {
+    const wrap = el("div", "games-member-add");
+    const toggle = el("button", "games-member-add-toggle", "+ הוסף חבר");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", String(addMemberOpen));
+    toggle.addEventListener("click", toggleAddMemberPanel);
+    wrap.appendChild(toggle);
+
+    const panel = el("div", "games-create-panel");
+    const panelIn = el("div", "games-create-panel-in");
+    const content = el("div", "games-create-panel-content");
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.maxLength = 40;
+    nameInput.placeholder = "שם";
+    nameInput.autocomplete = "off";
+    nameInput.setAttribute("aria-label", "שם החבר");
+    nameInput.value = addMemberName;
+    nameInput.addEventListener("input", () => { addMemberName = nameInput.value; });
+
+    const submit = () => {
+      const name = nameInput.value.trim();
+      if (!name) { shakeEl(nameInput); return; }
+      const member = addMemberByName(currentGroupId, name);
+      if (!member) { shakeEl(nameInput); return; } // duplicate active identity/name
+      closeAddMemberPanel();
+    };
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+    });
+
+    const submitBtn = el("button", "games-create-submit", "הוסף");
+    submitBtn.type = "button";
+    submitBtn.addEventListener("click", submit);
+
+    content.append(nameInput, submitBtn);
+    content.appendChild(el("p", "games-member-add-note", "חיבור חשבונות יגיע עם השרת"));
+    panelIn.appendChild(content);
+    panel.appendChild(panelIn);
+
+    if (addMemberOpen && addMemberJustOpened) {
+      addMemberJustOpened = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add("open")));
+    } else if (addMemberOpen) {
+      panel.classList.add("open");
+    }
+    wrap.appendChild(panel);
+    return wrap;
+  }
+  function toggleAddMemberPanel() {
+    if (addMemberOpen) { closeAddMemberPanel(); return; }
+    addMemberOpen = true;
+    addMemberJustOpened = true;
+    renderGroupPage();
+  }
+  // Plays the panel's collapse transition (matching closeCreateGroupPanel's approach) before
+  // clearing the draft name and rebuilding the group page without it.
+  function closeAddMemberPanel() {
+    const panel = document.querySelector(".games-member-add .games-create-panel.open");
+    const finish = () => { addMemberOpen = false; addMemberJustOpened = false; addMemberName = ""; renderGroupPage(); };
+    if (!panel) { finish(); return; }
+    panel.classList.remove("open");
+    setTimeout(finish, 280);
+  }
+
+  // Collapsed "חברים לשעבר (N)" line, shown only when the group has any (see renderGroupMembers)
+  // — expands to a flat list of names tagged "לשעבר". UI-only boolean, not persisted.
+  function renderFormerMembers(former) {
+    const wrap = el("div", "games-former-members");
+    const toggle = el("button", "games-former-toggle", "חברים לשעבר (" + former.length + ")");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", String(formerMembersOpen));
+    toggle.addEventListener("click", () => { formerMembersOpen = !formerMembersOpen; renderGroupPage(); });
+    wrap.appendChild(toggle);
+    if (formerMembersOpen) {
+      former.forEach(member => {
+        const row = el("p", "games-member-row", member.displayName);
+        row.appendChild(el("span", "games-member-tag", "לשעבר"));
+        wrap.appendChild(row);
+      });
+    }
+    return wrap;
   }
 
   // Last 5 GroupGameSummary rows (Task 11 extends this into a fuller history screen). Owns the
@@ -2094,7 +2348,7 @@
     const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
     const lastGame = renderGroupLastGame(gameSummaries[0] || null);
     if (lastGame) inner.appendChild(lastGame);
-    inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
+    inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
     box.appendChild(inner);
   }
