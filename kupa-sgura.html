@@ -380,7 +380,7 @@
   .games-create-cancel { color: var(--dim); font-size: 13px; padding: 6px 2px; }
   .games-create-cancel:hover { color: var(--text); }
 
-  /* group page header — minimal here, a later task extends this page */
+  /* group page: header, primary action, leaderboard, last game, members, history */
   .games-group-header { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 40px; text-align: center; }
   .games-group-header-avatar {
     width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
@@ -389,6 +389,18 @@
   }
   .games-group-header-name { margin: 6px 0 0; font-size: 24px; font-weight: 800; }
   .games-group-header-meta { margin: 0; color: var(--dim); font-size: 13px; font-weight: 300; }
+  .games-primary-action { margin-top: 22px; text-align: center; }
+  .games-primary-action .btn-primary { min-width: 200px; }
+  .btn-primary:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--faint); }
+  .btn-primary:disabled:hover { background: none; color: var(--faint); }
+  .games-primary-reason { margin: 10px 0 0; color: var(--dim); font-size: 12px; font-weight: 300; }
+  .games-leader-row, .games-member-row, .games-history-row {
+    margin: 0; padding: 8px 0; border-bottom: 1px solid var(--line);
+    font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere;
+  }
+  .games-leader-row:last-of-type, .games-member-row:last-of-type, .games-history-row:last-of-type { border-bottom: none; }
+  .games-history-row { font-size: 13px; font-weight: 400; color: var(--dim); }
+  .games-member-tag { margin-inline-start: 6px; color: var(--dim); font-size: 12px; font-weight: 400; }
 
   .btn-close-table {
     position: relative; overflow: hidden; isolation: isolate;
@@ -1166,7 +1178,7 @@
   //                      activeGamePhase, gameCount, lastGameAt, leaderNames: [displayName], isAdmin, isMember }
   // LeaderboardEntry = { rank, identityKey, displayName, gamesPlayed, wins, isFormerMember } -- no money field
   // GroupGameSummary = { gameId, at, startedAt, playerCount, playerNames, winnerNames, potSize, totalEntries,
-  //                      isBalanced } -- no per-player net (contract for a later task; no builder here yet)
+  //                      isBalanced } -- no per-player net; built by toGroupGameSummary(historyEntry)
   function normalizeParticipantRef(ref) {
     const r = ref && typeof ref === "object" ? ref : {};
     return {
@@ -1277,6 +1289,24 @@
     if (!players.length) return [];
     const maxNet = Math.max(...players.map(p => Number(p.net) || 0));
     return players.filter(p => (Number(p.net) || 0) === maxNet);
+  }
+  // Builds a GroupGameSummary from a closed-game HistoryEntry for the group's last-game and
+  // history rows. Deliberately has no net/cashout field — group screens never show another
+  // person's exact P&L (Global Constraint 10).
+  function toGroupGameSummary(historyEntry) {
+    const entry = historyEntry || {};
+    const players = Array.isArray(entry.players) ? entry.players : [];
+    return {
+      gameId: entry.gameId,
+      at: entry.at,
+      startedAt: entry.startedAt || null,
+      playerCount: players.length,
+      playerNames: players.map(p => p.name),
+      winnerNames: gameWinners(entry).map(p => p.name),
+      potSize: players.reduce((total, p) => total + (Number(p.buyin) || 0), 0),
+      totalEntries: players.reduce((total, p) => total + (Array.isArray(p.entryLog) ? p.entryLog.length : 0), 0),
+      isBalanced: !!entry.isBalanced,
+    };
   }
   // Deviation (documented): a participant is eligible when their identity matches any
   // GroupMember of the group, active or former. Ad-hoc game guests who never joined are excluded.
@@ -1663,6 +1693,14 @@
     return date.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
   }
 
+  // Short form for group last-game/history rows: day + short month name, no year.
+  function formatShortGameDate(timestamp) {
+    if (!timestamp) return "";
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("he-IL", { day: "numeric", month: "short" });
+  }
+
   function formatPlayerNames(names) {
     const clean = (Array.isArray(names) ? names : []).filter(Boolean);
     if (!clean.length) return "אין שחקנים עדיין";
@@ -1864,7 +1902,7 @@
     }
     const copy = el("div", "");
     copy.appendChild(el("span", "games-card-title", String(group.name || "")));
-    copy.appendChild(el("span", "games-card-meta", Number(group.memberCount || 0) + " חברים" + (group.hasActiveGame ? " · משחק פעיל" : "")));
+    copy.appendChild(el("span", "games-card-meta", formatMemberCount(Number(group.memberCount || 0)) + (group.hasActiveGame ? " · משחק פעיל" : "")));
     head.appendChild(copy);
     card.appendChild(head);
 
@@ -1930,8 +1968,7 @@
     box.appendChild(inner);
   }
 
-  // Minimal header for now (back arrow, avatar, name, member count) — a later task extends
-  // the group page with sections built the same way, each appended to #gamesHome.
+  // Back arrow, 64px avatar (image or initial), name and member count — the top of the group page.
   function renderGroupHeader(summary) {
     const header = el("div", "games-group-header");
     const back = el("button", "back-arrow");
@@ -1953,13 +1990,112 @@
     return header;
   }
 
+  // The group's own game has an active table → jump straight into it / its settlement.
+  // Otherwise "התחל משחק" renders disabled: Task 8 wires the actual start-game handler here.
+  // canStartGroupGame()'s reason (when not ok) gets a quiet line under the button; when it IS
+  // ok the button is still disabled for this task, with no reason line to explain that away.
+  function renderGroupPrimaryAction(summary, gate) {
+    const wrap = el("div", "games-primary-action");
+    const btn = el("button", "btn-primary");
+    btn.type = "button";
+    let reason = null;
+    if (summary.hasActiveGame) {
+      btn.textContent = summary.activeGamePhase === "settlement" ? "המשך סגירה" : "כנס לשולחן";
+      btn.addEventListener("click", continueCurrentGame);
+    } else {
+      btn.textContent = "התחל משחק";
+      btn.disabled = true;
+      btn.setAttribute("aria-disabled", "true");
+      if (gate && gate.ok === false) {
+        const reasons = {
+          "group-has-open-game": "יש כבר משחק פתוח בקבוצה",
+          "another-game-open": "יש משחק פעיל אחר — סגור אותו קודם",
+          "group-archived": "הקבוצה בארכיון",
+        };
+        reason = reasons[gate.reason] || null;
+      }
+    }
+    wrap.appendChild(btn);
+    if (reason) wrap.appendChild(el("p", "games-primary-reason", reason));
+    return wrap;
+  }
+
+  // Top 3 LeaderboardEntry rows, names only — no amounts (Global Constraint 10).
+  function renderGroupLeaders(entries) {
+    const section = el("section", "games-section");
+    section.appendChild(el("h3", "games-section-title", "דירוג"));
+    const top = (Array.isArray(entries) ? entries : []).slice(0, 3);
+    if (!top.length) {
+      section.appendChild(el("p", "games-empty", "הדירוג יופיע אחרי המשחק הראשון"));
+    } else {
+      top.forEach(entry => section.appendChild(el("p", "games-leader-row", entry.rank + ". " + entry.displayName)));
+    }
+    return section;
+  }
+
+  // Newest GroupGameSummary. Returns null (nothing to append) when there isn't one yet, so the
+  // "no games" empty state lives only once, in renderGroupHistory, instead of twice.
+  function renderGroupLastGame(gameSummary) {
+    if (!gameSummary) return null;
+    const section = el("section", "games-section");
+    section.appendChild(el("h3", "games-section-title", "המשחק האחרון"));
+    section.appendChild(el("p", "games-card-meta", [formatShortGameDate(gameSummary.at), formatPlayerCount(gameSummary.playerCount)].filter(Boolean).join(" · ")));
+    const winners = (Array.isArray(gameSummary.winnerNames) ? gameSummary.winnerNames : []).filter(Boolean);
+    if (winners.length) {
+      const label = (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ");
+      section.appendChild(el("p", "games-card-title", label));
+    }
+    return section;
+  }
+
+  // Flat member rows, name + a quiet "מנהל" tag for admins. Former members are not shown here.
+  // isAdmin is accepted now (not yet used) so Task 9 can add member-management actions without
+  // changing this function's call site.
+  function renderGroupMembers(members, isAdmin) {
+    const section = el("section", "games-section");
+    section.appendChild(el("h3", "games-section-title", "חברים"));
+    (Array.isArray(members) ? members : []).forEach(member => {
+      const row = el("p", "games-member-row", member.displayName);
+      if (member.role === "admin") row.appendChild(el("span", "games-member-tag", "מנהל"));
+      section.appendChild(row);
+    });
+    return section;
+  }
+
+  // Last 5 GroupGameSummary rows (Task 11 extends this into a fuller history screen). Owns the
+  // shared "no games yet" empty state for both this section and the last-game section above it.
+  function renderGroupHistory(gameSummaries) {
+    const section = el("section", "games-section");
+    section.appendChild(el("h3", "games-section-title", "היסטוריית משחקים"));
+    const list = (Array.isArray(gameSummaries) ? gameSummaries : []).slice(0, 5);
+    if (!list.length) {
+      section.appendChild(el("p", "games-empty", "עוד אין משחקים"));
+      return section;
+    }
+    list.forEach(game => {
+      const winners = (Array.isArray(game.winnerNames) ? game.winnerNames : []).filter(Boolean);
+      const winnerLabel = winners.length ? (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ") : "";
+      const line = [formatShortGameDate(game.at), formatPlayerCount(game.playerCount), winnerLabel].filter(Boolean).join(" · ");
+      section.appendChild(el("p", "games-history-row", line));
+    });
+    return section;
+  }
+
   function renderGroupPage() {
     const box = document.getElementById("gamesHome");
     box.innerHTML = "";
-    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
+    const collections = collectionsOf(state);
+    const summary = getGroupSummary(collections, currentGroupId, me);
     if (!summary) { setAppView("games"); return; } // the group is gone on this device — don't strand the user
     const inner = el("div", "games-home-in");
     inner.appendChild(renderGroupHeader(summary));
+    inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
+    inner.appendChild(renderGroupLeaders(buildLeaderboard(collections.history, collections.groupMembers, currentGroupId)));
+    const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
+    const lastGame = renderGroupLastGame(gameSummaries[0] || null);
+    if (lastGame) inner.appendChild(lastGame);
+    inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
+    inner.appendChild(renderGroupHistory(gameSummaries));
     box.appendChild(inner);
   }
 
