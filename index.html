@@ -222,10 +222,6 @@
   .undo { color: var(--faint); font-size: 13px; margin-inline-start: auto; }
   .undo:hover { color: var(--bad); }
 
-  .custom-line { display: flex; align-items: flex-end; gap: 12px; padding: 0 0 16px; animation: rise .3s ease both; }
-  .custom-line input { flex: 1; min-width: 0; font-size: 16px; }
-  .btn-confirm { color: var(--accent); font-weight: 700; font-size: 15px; padding: 8px 2px 10px; white-space: nowrap; }
-  .btn-confirm:hover { color: var(--accent-press); }
 
   /* settle rows */
   input[type="number"].srow-input { width: 104px; flex: 0 0 104px; text-align: end; font-size: 17px; }
@@ -281,8 +277,6 @@
   .profile .pgrid { justify-items: center; width: 100%; max-width: 340px; }
   .profile .hgame { justify-content: center; width: 100%; }
   .profile .hgame .hnet { margin-inline-start: 0; min-width: 74px; text-align: start; }
-  .profile .who-row { justify-content: center; }
-  .pid { flex-direction: column; gap: 2px; }
   .who-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .bignum {
     font-size: 52px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1;
@@ -303,14 +297,12 @@
   .hgame .hnet { margin-inline-start: auto; font-weight: 700; font-size: 17px; }
   .hnet.pos { color: var(--accent); } .hnet.neg { color: var(--bad); } .hnet.zero { color: var(--faint); font-weight: 300; }
   .empty-note { color: var(--faint); font-size: 14px; font-weight: 300; margin-top: 10px; }
-  .pid { display: flex; align-items: baseline; gap: 14px; }
+  .pid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .pname-big { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
   .pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; margin-top: 16px; }
   .pcell { display: flex; flex-direction: column; gap: 1px; }
   .plab { font-size: 12px; color: var(--dim); font-weight: 300; }
   .pval { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .btn-clear-record { color: var(--faint); font-size: 13px; }
-  .btn-clear-record:hover, .btn-clear-record.armed { color: var(--bad); }
 
   .example-tag { color: var(--accent); font-size: 12px; font-weight: 400; }
 
@@ -424,7 +416,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 20</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 21</p>
   </div>
 </div>
 
@@ -486,18 +478,12 @@
 <script>
 (function () {
   const MIN_BUYIN = 50;
-  const BUYINS_KEY = "poker-settle-buyins";
-  let BUYIN_OPTIONS = loadBuyins();
-  function loadBuyins() {
-    try {
-      const a = JSON.parse(localStorage.getItem(BUYINS_KEY));
-      if (Array.isArray(a) && a.length === 3 && a.every(n => Number.isFinite(n) && n >= MIN_BUYIN)) return a;
-    } catch (e) {}
-    return [50, 100, 150];
-  }
+  const BUYIN_OPTIONS = [50, 100, 150];
+  // localStorage keys keep the historical "poker-settle" prefix for data continuity
   const KEY = "poker-settle-v1";
   const ME_KEY = "poker-settle-me";
   const THEME_KEY = "poker-settle-theme";
+  const CONTACT_KEY = "poker-settle-contact";
   const HISTORY_MAX = 60;
 
   const EXAMPLE = {
@@ -532,13 +518,7 @@
     // show the mode you'll switch TO: moon while in light mode, sun while in dark
     document.getElementById("themeIcon").innerHTML = isLight ? MOON_SVG : SUN_SVG;
   }
-  document.getElementById("themeBtn").addEventListener("click", () => {
-    const nowLight = document.documentElement.dataset.theme !== "light";
-    if (nowLight) document.documentElement.dataset.theme = "light";
-    else delete document.documentElement.dataset.theme;
-    try { localStorage.setItem(THEME_KEY, nowLight ? "light" : "dark"); } catch (e) {}
-    renderThemeIcon();
-  });
+  document.getElementById("themeBtn").addEventListener("click", () => toggleTheme());
   renderThemeIcon();
 
   function loadMe() {
@@ -550,7 +530,12 @@
 
   function normalize(s) {
     if (!s || !Array.isArray(s.players)) return null;
-    return { example: !!s.example, players: s.players, history: Array.isArray(s.history) ? s.history : [] };
+    return {
+      example: !!s.example,
+      players: s.players,
+      history: Array.isArray(s.history) ? s.history : [],
+      updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
+    };
   }
   function load() {
     try {
@@ -564,6 +549,7 @@
   }
   function save() {
     pendingRemote = null; // a local edit supersedes any remote state parked for later
+    state.updatedAt = new Date().toISOString();
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     scheduleRemoteSave();
   }
@@ -586,7 +572,7 @@
       example: !!state.example,
       players: state.players,
       history: state.history,
-      updatedAt: new Date().toISOString(),
+      updatedAt: state.updatedAt || new Date().toISOString(),
     };
   }
 
@@ -607,8 +593,10 @@
       example: !!data.example,
       players: Array.isArray(data.players) ? data.players : [],
       history: Array.isArray(data.history) ? data.history : [],
+      updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
     }));
-    if (JSON.stringify(incoming) === JSON.stringify({ example: state.example, players: state.players, history: state.history })) return;
+    if (JSON.stringify({ e: incoming.example, p: incoming.players, h: incoming.history }) ===
+        JSON.stringify({ e: state.example, p: state.players, h: state.history })) return;
     // Don't yank the UI out from under an active edit — apply on blur.
     const ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT")) { pendingRemote = incoming; return; }
@@ -626,16 +614,23 @@
     }
   });
 
-  document.addEventListener("focusout", () => {
+  // Applies a parked remote snapshot once it is safe: not during an active
+  // edit and not while a local write is pending — retries instead of dropping,
+  // so an update from another device is never silently lost.
+  function tryApplyParked() {
     if (!pendingRemote) return;
-    // Let the click that caused this blur run first; if it made a local
-    // edit, that edit wins and the parked remote state is dropped.
-    setTimeout(() => {
-      if (!pendingRemote) return;
-      if (saveTimer || Date.now() < dirtyUntil) { pendingRemote = null; return; }
-      const p = pendingRemote; pendingRemote = null;
-      applyRemote({ example: p.example, players: p.players, history: p.history });
-    }, 50);
+    const ae = document.activeElement;
+    if (ae && ae.tagName === "INPUT") return; // will retry on the next focusout
+    if (saveTimer || Date.now() < dirtyUntil) {
+      setTimeout(tryApplyParked, 600);
+      return;
+    }
+    const p = pendingRemote; pendingRemote = null;
+    applyRemote(p);
+  }
+  document.addEventListener("focusout", () => {
+    // let the click that caused this blur run first
+    setTimeout(tryApplyParked, 50);
   });
 
   function initSync() {
@@ -653,6 +648,13 @@
         const data = snap.data();
         if (!data) return;
         if (data.by === CLIENT_ID) { dirtyUntil = 0; return; } // our own write confirmed
+        // Local state that is strictly newer than the server doc (e.g. edits
+        // made while a previous session's write failed) wins: push it up
+        // instead of letting the stale doc overwrite it.
+        if (state.updatedAt && data.updatedAt && state.updatedAt > data.updatedAt) {
+          scheduleRemoteSave();
+          return;
+        }
         // A fresh local edit is still on its way to the server — don't let
         // an older remote snapshot overwrite it.
         if (saveTimer || Date.now() < dirtyUntil) return;
@@ -662,8 +664,13 @@
   }
   initSync();
 
+  // Example data promises "any edit resets it": the first real interaction
+  // wipes the demo players instead of quietly turning them into real ones.
+  // Returns true when it wiped, so callers can stop their own action.
   function markReal() {
-    if (state.example) state.example = false;
+    if (!state.example) return false;
+    state = { example: false, players: [], history: state.history, updatedAt: state.updatedAt };
+    return true;
   }
 
   const fmt = (n) => "₪" + (Math.round(n * 100) / 100).toLocaleString("he-IL");
@@ -702,15 +709,29 @@
     if (text !== undefined) e.textContent = text;
     return e;
   }
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // Replays the shake animation on an input to signal invalid entry.
+  function shakeEl(inp) {
+    inp.classList.remove("shake");
+    void inp.offsetWidth; // restart the animation
+    inp.classList.add("shake");
+    inp.focus();
+  }
+  function toggleTheme() {
+    const nowLight = document.documentElement.dataset.theme !== "light";
+    if (nowLight) document.documentElement.dataset.theme = "light";
+    else delete document.documentElement.dataset.theme;
+    try { localStorage.setItem(THEME_KEY, nowLight ? "light" : "dark"); } catch (e) {}
+    renderThemeIcon();
   }
 
-  // Plays the picker's collapse transition, then runs `done`.
+  // Plays the picker's collapse transition, then runs `done`. A call that
+  // arrives while a close is already animating is DROPPED (not queued) —
+  // this is what makes a rapid double-tap on a confirm harmless.
   let menuClosing = false;
   function animateMenuClose(done) {
+    if (menuClosing) return;
     const m = document.querySelector(".pmenu.open");
-    if (!m || menuClosing) { done(); return; }
+    if (!m) { done(); return; }
     menuClosing = true;
     const plus = document.querySelector(".btn-plus.open");
     if (plus) plus.classList.remove("open");
@@ -721,14 +742,22 @@
   // Confirms a buy-in: the picker collapses, then the money lands with a
   // count-up animation on the player's total, plus a light haptic.
   function confirmBuyin(p, idx, amount) {
-    const from = sum(p.buyins);
+    if (menuClosing) return; // a confirm is already in flight
+    pendingAmount = null;
+    dirtyUntil = Date.now() + 6000; // block remote overwrites during the animation window
+    const closingFor = p.name;
     animateMenuClose(() => {
-      p.buyins.push(amount);
-      openMenu = null; customOpen = null; pendingAmount = null;
-      markReal(); save();
+      // re-resolve the player: a remote sync may have replaced `state` meanwhile
+      const player = state.players.find(x => x.name === closingFor);
+      if (openMenu === closingFor) { openMenu = null; customOpen = null; }
+      if (!player) { render(); return; }
+      const from = sum(player.buyins);
+      player.buyins.push(amount);
+      save();
       try { if (navigator.vibrate) navigator.vibrate(20); } catch (e) {}
       render();
-      const fresh = document.querySelectorAll(".prow")[idx];
+      const nidx = state.players.indexOf(player);
+      const fresh = document.querySelectorAll(".prow")[nidx];
       const totalEl = fresh && fresh.querySelector(".pmeta b");
       if (totalEl) countUp(totalEl, from, from + amount);
     });
@@ -780,12 +809,17 @@
         plus.setAttribute("aria-expanded", openMenu === p.name ? "true" : "false");
         if (openMenu === p.name) plus.classList.add("open");
         plus.addEventListener("click", () => {
+          if (markReal()) { save(); render(); return; } // first touch wipes the demo data
           const opening = openMenu !== p.name;
           if (!opening) {
             // animate the collapse before removing the menu from the DOM
+            const closingFor = p.name;
             animateMenuClose(() => {
-              openMenu = null; customOpen = null; pendingAmount = null;
-              render();
+              // don't slam shut a different menu the user opened meanwhile
+              if (openMenu === closingFor) {
+                openMenu = null; customOpen = null; pendingAmount = null;
+                render();
+              }
             });
             return;
           }
@@ -852,13 +886,7 @@
         cgo.hidden = customOpen !== p.name;
         const confirmCustom = () => {
           const amount = Number(cinp.value);
-          if (!cinp.value || !isFinite(amount) || amount < MIN_BUYIN) {
-            cinp.classList.remove("shake");
-            void cinp.offsetWidth; // restart the animation
-            cinp.classList.add("shake");
-            cinp.focus();
-            return;
-          }
+          if (!cinp.value || !isFinite(amount) || amount < MIN_BUYIN) { shakeEl(cinp); return; }
           confirmBuyin(p, idx, Math.round(amount));
         };
         const expandOther = () => {
@@ -890,9 +918,10 @@
           const undo = el("button", "undo", "בטל אחרונה (₪" + p.buyins[p.buyins.length - 1] + ")");
           undo.type = "button";
           undo.addEventListener("click", () => {
+            if (markReal()) { save(); render(); return; }
             p.buyins.pop();
             if (p.buyins.length === 0) state.players.splice(idx, 1); // no entries left = out of the game
-            markReal(); save(); render();
+            save(); render();
           });
           mrow.appendChild(undo);
         }
@@ -910,8 +939,11 @@
         inp.value = p.cashout === "" ? "" : p.cashout;
         inp.setAttribute("aria-label", "שווי צ'יפים בסוף עבור " + p.name);
         inp.addEventListener("input", () => {
-          p.cashout = inp.value === "" ? "" : Math.max(0, Number(inp.value));
-          markReal(); save(); renderDerived();
+          if (markReal()) { save(); render(); return; }
+          const raw = inp.value === "" ? "" : Number(inp.value);
+          p.cashout = raw === "" ? "" : Math.max(0, raw);
+          if (raw !== "" && raw < 0) inp.value = "0"; // keep the field consistent with the clamped state
+          save(); renderDerived();
         });
         line.appendChild(inp);
 
@@ -1100,13 +1132,7 @@
   function confirmLogin() {
     const inp = document.getElementById("loginName");
     const name = inp.value.trim();
-    if (!name) {
-      inp.classList.remove("shake");
-      void inp.offsetWidth;
-      inp.classList.add("shake");
-      inp.focus();
-      return;
-    }
+    if (!name) { shakeEl(inp); return; }
     me = name; saveMe();
     inp.value = "";
     document.getElementById("login").hidden = true;
@@ -1211,12 +1237,17 @@
     const inp = document.getElementById("newName");
     const name = inp.value.trim();
     if (!name) { inp.focus(); return; }
-    if (state.example) state = { example: false, players: [], history: state.history };
+    markReal();
+    if (state.players.some(x => x.name === name)) {
+      shakeEl(inp); // duplicate names would merge menus, records and transfers
+      return;
+    }
     state.players.push({ name, buyins: [MIN_BUYIN], cashout: "" });
     inp.value = "";
     mode = "game";
     openMenu = name;
     customOpen = null;
+    pendingAmount = null;
     animNext = "one"; animName = name;
     save(); render();
   }
@@ -1236,7 +1267,8 @@
   document.getElementById("modeSettle").addEventListener("click", () => switchMode("settle"));
   document.getElementById("modeProfile").addEventListener("click", () => switchMode("profile"));
 
-  // window.confirm is blocked in the sandboxed frame — two-step confirm instead.
+  // confirm() is blocked in the artifact sandbox; the two-step arm/confirm
+  // pattern works everywhere, so it is the deliberate choice on all builds.
   let resetArmed = null;
   document.getElementById("resetBtn").addEventListener("click", (e) => {
     const btn = e.currentTarget;
@@ -1260,11 +1292,7 @@
     save(); render();
   });
 
-  render();
-  if (!me) showLogin();
-
   // ---------- settings overlay ----------
-  const CONTACT_KEY = "poker-settle-contact";
   function loadContact() {
     try { return JSON.parse(localStorage.getItem(CONTACT_KEY)) || {}; } catch (e) { return {}; }
   }
@@ -1297,11 +1325,7 @@
     document.getElementById("settings").hidden = true;
   });
   document.getElementById("setThemeSwitch").addEventListener("click", () => {
-    const nowLight = document.documentElement.dataset.theme !== "light";
-    if (nowLight) document.documentElement.dataset.theme = "light";
-    else delete document.documentElement.dataset.theme;
-    try { localStorage.setItem(THEME_KEY, nowLight ? "light" : "dark"); } catch (e) {}
-    renderThemeIcon();
+    toggleTheme();
     refreshSettings();
   });
   document.getElementById("setSwapBtn").addEventListener("click", () => {
@@ -1352,9 +1376,12 @@
     }, 150);
   });
 
+
+  // ---------- boot ----------
+  render();
+  if (!me) showLogin();
 })();
 </script>
-
 <script>
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
