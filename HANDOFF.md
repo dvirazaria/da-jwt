@@ -7,7 +7,7 @@ A Hebrew, RTL, mobile-first PWA for settling home poker cash games:
 the Games dashboard opens a contextual "שולחן" screen for players and buy-ins,
 then a "חישוב" settlement screen with minimal transfers and a "פרופיל" record.
 Deployed on Vercel (static, auto-deploys from `main`), installable to the
-home screen. Version 37.
+home screen. Current release version: 38.
 
 ## Files
 - `kupa-sgura.html` — THE app. Single file: CSS + HTML + one IIFE of vanilla JS.
@@ -18,6 +18,16 @@ home screen. Version 37.
 - `sw.js`, `manifest.webmanifest`, `icon-180/192/512.png` — PWA assets. The
   home-screen icons use the poker-table artwork supplied for this app.
 - `poker-settle.html` — FROZEN legacy version for an old artifact URL. Do not edit.
+
+## Start here when continuing work
+
+1. Read this file and `DESIGN.md` before touching the UI.
+2. Work in `/Users/dvirazaria/פוקר` on branch `main`.
+3. Edit only `kupa-sgura.html` for runtime behavior. Generated files are updated by `python3 build.py`.
+4. Run `node --test tests/*.test.cjs` and `git diff --check` before committing.
+5. After a verified change, commit and push `main`; Vercel deploys the push automatically.
+
+Do not create a parallel React/Vite app or split the runtime into new files unless the owner explicitly changes the architecture. The current architecture is intentionally a single vanilla HTML file.
 
 ## Design system (deliberate, keep it)
 Monochrome dark (default) + light theme via `:root[data-theme="light"]` tokens.
@@ -55,7 +65,7 @@ All animations respect `prefers-reduced-motion`.
 - "סיים משחק" is a cancellable one-second pointer hold that changes only
   `phase` to `settlement`. "חזור לעריכת המשחק" changes it back to `active`.
   Only "סגור שולחן" finalizes the existing history/debt flow and routes to Games.
-- Regression checks: `node --test tests/entry-log.test.cjs`.
+- Regression checks: `node --test tests/*.test.cjs` (currently 37 tests across entry logs, navigation/game phases, and profile/debt tabs).
 - localStorage key `poker-settle-v1` (legacy prefix kept for continuity;
   also `poker-settle-me`, `-theme`, `-contact`).
 - Optional realtime sync via `window.claude.use("db")` (works only when
@@ -96,3 +106,18 @@ Agreed plan: Supabase free tier (auth + Postgres + RLS + realtime):
    non-app files out of the public deployment.
 4. User preference: after a completed and verified work round, commit and push
    the intentional changes to `main`, then wait for and verify the Vercel deployment.
+
+## Current release snapshot
+
+- Git remote: `https://github.com/dvirazaria/da-jwt.git`.
+- Current commit at handoff: `7ea1248` (the Games dashboard foundation is already on `main`).
+- Release builder version: `38`; generated service-worker cache is `kupa-v38`.
+- Live deployment: `https://poker-tau-pink.vercel.app/`.
+- `archive/all-in-cash/` is an unrelated old prototype, ignored by Git and excluded from Vercel. Do not use it as the source for this app.
+- The current local identity is a typed name (`poker-settle-me`), not authentication. Do not treat it as secure identity or build authorization on it.
+
+## Next work boundaries
+
+The next major milestone is real multi-user persistence. Before implementing it, inspect the current sync functions (`remoteBody`, `applyRemote`, `scheduleRemoteSave`, `initRemote`) and preserve the existing UI flows. Supabase is the agreed direction, but there is no Supabase schema or client in this repository yet. Never place keys in source, commits, `index.html`, or Vercel static assets.
+
+The Games dashboard currently has no group backend. `getGroupSummaries()` must stay an empty adapter until groups are real. The disabled `+ צור קבוצה` control is intentional. `ActiveGameSummary` is the only data shape the active-game dashboard UI should consume, and card expansion is in-memory UI state only.
