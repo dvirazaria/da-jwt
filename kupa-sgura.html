@@ -282,6 +282,25 @@
   .transfer-paid.is-paid { color: var(--accent); border-color: var(--accent); }
   .settle-empty { color: var(--faint); margin: 12px 0 0; font-size: 14px; font-weight: 300; }
 
+  /* ---------- Games dashboard ---------- */
+  .games-home { margin-top: 26px; animation: rise .4s ease both; }
+  .games-home-in { width: 100%; max-width: 380px; margin: 0 auto; }
+  .games-home-title { margin: 0; font-size: 24px; font-weight: 800; }
+  .games-home-lead { color: var(--dim); font-size: 14px; font-weight: 300; margin: 6px 0 24px; }
+  .games-section { margin-top: 22px; }
+  .games-section-title { color: var(--dim); font-size: 13px; font-weight: 500; margin: 0 0 8px; }
+  .games-card { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+  .games-card-copy { flex: 1; min-width: 0; }
+  .games-card-title { display: block; color: var(--text); font-size: 16px; font-weight: 700; }
+  .games-card-meta { display: block; color: var(--dim); font-size: 12px; font-weight: 300; }
+  .games-card-action { flex: 0 0 auto; color: var(--accent); font-size: 13px; font-weight: 700; padding: 6px 0; }
+  .games-card-action:hover { color: var(--accent-press); }
+  .games-card-action.muted { color: var(--faint); cursor: default; }
+  .games-card-action:disabled { opacity: .65; }
+  .games-empty { color: var(--faint); font-size: 14px; font-weight: 300; margin: 0; }
+  .games-start { display: block; width: 100%; margin-top: 12px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 15px; font-weight: 700; padding: 11px 20px; min-height: 46px; }
+  .games-start:hover { background: var(--accent); color: var(--bg); }
+
   .btn-close-table {
     position: relative; overflow: hidden; isolation: isolate;
     display: block; width: min(100%, 340px); margin: 26px auto 0;
@@ -308,6 +327,9 @@
   .btn-close-table.force-state { background: var(--accent); border-color: var(--accent); color: var(--bg); }
   .btn-close-table.force-state::before { width: 0; transition: none; }
   .btn-close-table.force-state:hover { background: var(--accent-press); color: var(--bg); }
+  .finish-game-hint { color: var(--dim); font-size: 12px; font-weight: 300; text-align: center; margin: 8px 0 0; }
+  .return-edit-btn { display: block; margin: 18px auto 0; color: var(--dim); font-size: 13px; font-weight: 500; padding: 6px 2px; }
+  .return-edit-btn:hover { color: var(--text); }
   .force-close-confirm { margin-top: 12px; color: var(--dim); font-size: 13px; }
   .force-close-confirm p { margin: 0 0 8px; }
   .force-close-actions { display: flex; align-items: center; gap: 14px; }
@@ -478,7 +500,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 34</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 35</p>
   </div>
 </div>
 
@@ -507,13 +529,9 @@
 
   <nav class="tabbar load-in" style="animation-delay:.15s" aria-label="ניווט ראשי">
     <div class="tabbar-in">
-    <button type="button" class="tab on" id="modeGame" aria-label="שולחן">
+    <button type="button" class="tab on" id="modeGames" aria-label="משחקים">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="3.6"></circle><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3"></path></svg>
-      <span class="tlabel">שולחן</span>
-    </button>
-    <button type="button" class="tab" id="modeSettle" aria-label="חישוב">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h13M14 5.5 17.5 9 14 12.5"></path><path d="M20 15H7M10 11.5 6.5 15l3.5 3.5"></path></svg>
-      <span class="tlabel">חישוב</span>
+      <span class="tlabel">משחקים</span>
     </button>
     <button type="button" class="tab" id="modeProfile" aria-label="פרופיל">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.8"></circle><path d="M4.5 20c1.6-4 4.6-5.6 7.5-5.6s5.9 1.6 7.5 5.6"></path></svg>
@@ -522,14 +540,19 @@
     </div>
   </nav>
 
+  <section class="games-home" id="gamesHome" hidden></section>
+
   <div class="rows" id="rows"></div>
 
   <div class="statline load-in" style="animation-delay:.34s" id="statline"></div>
   <div id="warnbox"></div>
+  <button type="button" class="btn-close-table" id="finishGameBtn" hidden><span>סיים משחק</span></button>
+  <p class="finish-game-hint" id="finishGameHint" hidden>המשך להחזיק כדי לסיים</p>
 
   <section class="results" id="results" hidden>
     <h2>מי משלם למי</h2>
     <div id="transfers"></div>
+    <button type="button" class="return-edit-btn" id="returnToGameBtn" hidden>חזור לעריכת המשחק</button>
     <button type="button" class="btn-close-table" id="closeTableBtn" hidden><span id="closeTableLabel">סגירת שולחן ורישום לרקורד</span></button>
     <div class="force-close-confirm" id="forceCloseConfirm" hidden>
       <p id="forceCloseMessage"></p>
@@ -556,6 +579,7 @@
   const PROFILE_DEBT_SEEN_KEY = "poker-settle-profile-debts-seen";
   const HISTORY_MAX = 60;
   const HOLD_TO_FORCE_CLOSE_MS = 1000;
+  const FINISH_GAME_HOLD_MS = 1000;
 
   const EXAMPLE = {
     example: true,
@@ -570,7 +594,7 @@
 
   const expandedEntries = new Set();
   let state = load();
-  let mode = "game";          // "game" | "settle" | "profile"
+  let appView = "games";         // "games" | "game" | "settle" | "profile"
   let openMenu = null;        // player name whose buy-in menu is open
   let menuJustOpened = null;  // menu that should animate open on the next render
   let pendingAmount = null;   // amount selected once, waiting for the confirming second tap
@@ -589,7 +613,7 @@
   } catch (e) {}
   function renderThemeIcon() {
     const isLight = document.documentElement.dataset.theme === "light";
-    // show the mode you'll switch TO: moon while in light mode, sun while in dark
+    // show the appView you'll switch TO: moon while in light appView, sun while in dark
     document.getElementById("themeIcon").innerHTML = isLight ? MOON_SVG : SUN_SVG;
   }
   document.getElementById("themeBtn").addEventListener("click", () => toggleTheme());
@@ -600,6 +624,18 @@
   }
   function saveMe() {
     try { me ? localStorage.setItem(ME_KEY, me) : localStorage.removeItem(ME_KEY); } catch (e) {}
+  }
+
+  function normalizePhase(value, source) {
+    if (value === "active" || value === "settlement" || value === "closed") return value;
+    if (source && !source.example && Array.isArray(source.players) && source.players.length) return "active";
+    return "closed";
+  }
+  function initialAppView(gameState) {
+    if (!gameState || gameState.example) return "games";
+    if (gameState.phase === "active") return "game";
+    if (gameState.phase === "settlement") return "settle";
+    return "games";
   }
 
   function profileDebtIds(debts, userName) {
@@ -667,6 +703,7 @@
     return {
       example: !!s.example,
       gameId,
+      phase: normalizePhase(s.phase, s),
       players: s.players.map((p, index) => {
         const id = p.id || gameId + "-player-" + index;
         const buyins = Array.isArray(p.buyins) ? [...p.buyins] : [];
@@ -728,6 +765,7 @@
     return {
       by: CLIENT_ID,
       gameId: state.gameId,
+      phase: state.phase,
       example: !!state.example,
       players: state.players,
       history: state.history,
@@ -753,6 +791,7 @@
     // (push into buyins, cashout assignment) don't silently fail.
     const incoming = normalize(JSON.parse(JSON.stringify({
       gameId: data.gameId,
+      phase: data.phase,
       example: !!data.example,
       players: Array.isArray(data.players) ? data.players : [],
       history: Array.isArray(data.history) ? data.history : [],
@@ -761,8 +800,8 @@
       groupId: data.groupId || data.clanId || null,
       updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
     })));
-    if (JSON.stringify({ g: incoming.gameId, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses }) ===
-        JSON.stringify({ g: state.gameId, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses })) return;
+    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses }) ===
+        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses })) return;
     // Don't yank the UI out from under an active edit — apply on blur.
     const ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT")) { pendingRemote = incoming; return; }
@@ -836,7 +875,7 @@
   function markReal() {
     if (!state.example) return false;
     state = {
-      example: false, gameId: newId(), players: [], history: state.history,
+      example: false, phase: "active", gameId: newId(), players: [], history: state.history,
       debts: state.debts, settlementStatuses: {}, groupId: state.groupId || null,
       updatedAt: state.updatedAt,
     };
@@ -1034,25 +1073,105 @@
     })(t0);
   }
 
+  function setAppView(nextView) {
+    appView = nextView;
+    if (nextView !== "game") { openMenu = null; customOpen = null; }
+    if (nextView !== "settle") {
+      clearCloseHold();
+      forceCloseArmed = false;
+      forceCloseUnlocked = false;
+      forceCloseUnlockDifference = null;
+      longPressJustUnlocked = false;
+    }
+    animNext = "all";
+    render();
+  }
+
+  function startUngroupedGame() {
+    state = {
+      example: false,
+      phase: "active",
+      gameId: newId(),
+      players: [],
+      history: state.history,
+      debts: state.debts,
+      settlementStatuses: {},
+      groupId: null,
+      updatedAt: state.updatedAt,
+    };
+    expandedEntries.clear();
+    openMenu = null; customOpen = null; pendingAmount = null;
+    save();
+    setAppView("game");
+  }
+
+  function continueCurrentGame() {
+    if (state.example || state.phase === "closed") return;
+    setAppView(state.phase === "settlement" ? "settle" : "game");
+  }
+
+  function renderGamesDashboard() {
+    const box = document.getElementById("gamesHome");
+    box.innerHTML = "";
+    const inner = el("div", "games-home-in");
+    inner.appendChild(el("h2", "games-home-title", "משחקים"));
+    inner.appendChild(el("p", "games-home-lead", "המשחקים הפעילים והקבוצות שלך במקום אחד."));
+
+    const activeSection = el("section", "games-section");
+    activeSection.appendChild(el("h3", "games-section-title", "משחקים פעילים"));
+    const hasCurrentGame = !state.example && state.phase !== "closed";
+    if (hasCurrentGame) {
+      const card = el("div", "games-card");
+      const copy = el("div", "games-card-copy");
+      copy.appendChild(el("span", "games-card-title", state.phase === "settlement" ? "סגירה וחישוב" : "משחק פעיל"));
+      copy.appendChild(el("span", "games-card-meta", state.players.length + " שחקנים · " + fmt(totals().buy) + " בקופה"));
+      const action = el("button", "games-card-action", state.phase === "settlement" ? "המשך סגירה" : "כנס לשולחן");
+      action.type = "button";
+      action.addEventListener("click", continueCurrentGame);
+      card.append(copy, action);
+      activeSection.appendChild(card);
+    } else {
+      activeSection.appendChild(el("p", "games-empty", "אין משחקים פעילים"));
+      const start = el("button", "games-start", "משחק ללא קבוצה");
+      start.type = "button";
+      start.addEventListener("click", startUngroupedGame);
+      activeSection.appendChild(start);
+    }
+    inner.appendChild(activeSection);
+
+    const groupsSection = el("section", "games-section");
+    groupsSection.appendChild(el("h3", "games-section-title", "הקבוצות שלי"));
+    groupsSection.appendChild(el("p", "games-empty", "עוד אין קבוצות"));
+    const createGroup = el("button", "games-card-action muted", "צור קבוצה");
+    createGroup.type = "button";
+    createGroup.disabled = true;
+    createGroup.setAttribute("aria-disabled", "true");
+    groupsSection.appendChild(createGroup);
+    inner.appendChild(groupsSection);
+    box.appendChild(inner);
+  }
+
   function render() {
     const anim = animNext; animNext = null;
-    document.getElementById("modeGame").classList.toggle("on", mode === "game");
-    document.getElementById("modeSettle").classList.toggle("on", mode === "settle");
-    document.getElementById("modeProfile").classList.toggle("on", mode === "profile");
-    document.getElementById("addrow").hidden = mode !== "game";
-    document.getElementById("settingsBtn").hidden = mode !== "profile";
-    document.getElementById("resetBtn").hidden = mode === "profile";
+    const inGames = appView === "games" || appView === "game" || appView === "settle";
+    document.getElementById("modeGames").classList.toggle("on", inGames);
+    document.getElementById("modeProfile").classList.toggle("on", appView === "profile");
+    document.getElementById("addrow").hidden = appView !== "game";
+    document.getElementById("settingsBtn").hidden = appView !== "profile";
+    document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games";
+    document.getElementById("gamesHome").hidden = appView !== "games";
 
     const rows = document.getElementById("rows");
     rows.innerHTML = "";
+    rows.hidden = !inGames || appView === "games";
 
-    if (mode !== "profile") state.players.forEach((p, idx) => {
+    if (appView === "game" || appView === "settle") state.players.forEach((p, idx) => {
       const row = el("div", "prow");
       if (anim === "all") { row.classList.add("anim"); row.style.animationDelay = (idx * 50) + "ms"; }
       else if (anim === "one" && p.name === animName) { row.classList.add("anim"); }
       const line = el("div", "prow-line");
 
-      if (mode === "game") {
+      if (appView === "game") {
         const heading = el("div", "player-heading");
         heading.appendChild(el("span", "pname", p.name));
         line.appendChild(heading);
@@ -1264,12 +1383,22 @@
 
     renderDerived();
     renderProfile();
+    if (appView === "games") renderGamesDashboard();
   }
 
   function renderDerived() {
     const t = totals();
 
-    if (mode === "settle") {
+    const finishBtn = document.getElementById("finishGameBtn");
+    const finishHint = document.getElementById("finishGameHint");
+    const returnBtn = document.getElementById("returnToGameBtn");
+    const canFinishGame = appView === "game" && state.phase === "active" && !state.example;
+    finishBtn.hidden = !canFinishGame;
+    returnBtn.hidden = appView !== "settle" || state.example;
+    if (!canFinishGame && finishGameHoldTimer) clearFinishGameHold();
+    if (!canFinishGame && finishHint) finishHint.hidden = true;
+
+    if (appView === "settle") {
       state.players.forEach((p, idx) => {
         const e = document.querySelector('[data-net="' + idx + '"]');
         if (!e) return;
@@ -1280,29 +1409,29 @@
     }
 
     const stat = document.getElementById("statline");
-    stat.hidden = mode === "profile";
-    if (mode === "game") {
+    stat.hidden = appView === "profile" || appView === "games";
+    if (appView === "game") {
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
         state.players.length + " שחקנים" +
         (state.example ? '<span class="sep">·</span><span class="example-tag">נתוני דוגמה — כל עריכה מאפסת אותם</span>' : "");
-    } else if (mode === "settle") {
+    } else if (appView === "settle") {
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
         'דווח <b>' + fmt(t.out) + '</b><span class="sep">·</span>' +
         'הפרש <span class="' + (t.diff === 0 ? "good" : "bad") + '">' + (t.diff === 0 ? "0 ✓" : balanceDescription(t.diff)) + "</span>";
-    }
+    } else stat.innerHTML = "";
 
     const warn = document.getElementById("warnbox");
-    if (mode === "settle" && t.diff !== 0 && t.buy > 0) {
+    if (appView === "settle" && t.diff !== 0 && t.buy > 0) {
       warn.innerHTML = '<p class="warn">השולחן לא מאוזן — ' + balanceDescription(t.diff) + '.</p>';
     } else {
       warn.innerHTML = "";
     }
 
     const results = document.getElementById("results");
-    results.hidden = mode !== "settle";
-    if (mode === "settle") {
+    results.hidden = appView !== "settle";
+    if (appView === "settle") {
       const box = document.getElementById("transfers");
       const moves = settle();
       box.innerHTML = "";
@@ -1409,6 +1538,55 @@
   let forceCloseUnlockDifference = null;
   let closeHoldTimer = null;
   let longPressJustUnlocked = false;
+  let finishGameHoldTimer = null;
+
+  function clearFinishGameHold() {
+    if (finishGameHoldTimer) clearTimeout(finishGameHoldTimer);
+    finishGameHoldTimer = null;
+    const btn = document.getElementById("finishGameBtn");
+    const hint = document.getElementById("finishGameHint");
+    if (btn) btn.classList.remove("hold-state");
+    if (hint) hint.hidden = true;
+  }
+
+  function beginFinishGameHold(e) {
+    if (appView !== "game" || state.phase !== "active" || state.example) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    clearFinishGameHold();
+    const btn = e.currentTarget;
+    const hint = document.getElementById("finishGameHint");
+    btn.classList.add("hold-state");
+    if (hint) hint.hidden = false;
+    if (btn.setPointerCapture && e.pointerId !== undefined) btn.setPointerCapture(e.pointerId);
+    finishGameHoldTimer = setTimeout(() => {
+      finishGameHoldTimer = null;
+      btn.classList.remove("hold-state");
+      if (hint) hint.hidden = true;
+      finishGame();
+    }, FINISH_GAME_HOLD_MS);
+  }
+
+  function endFinishGameHold(e) {
+    clearFinishGameHold();
+    const btn = e.currentTarget;
+    if (btn.releasePointerCapture && e.pointerId !== undefined && btn.hasPointerCapture && btn.hasPointerCapture(e.pointerId)) {
+      btn.releasePointerCapture(e.pointerId);
+    }
+  }
+
+  function finishGame() {
+    if (state.example || state.phase !== "active") return;
+    state.phase = "settlement";
+    save();
+    setAppView("settle");
+  }
+
+  function returnToGameEdit() {
+    if (state.example || state.phase === "closed") return;
+    state.phase = "active";
+    save();
+    setAppView("game");
+  }
 
   function clearCloseHold() {
     if (closeHoldTimer) clearTimeout(closeHoldTimer);
@@ -1419,7 +1597,7 @@
 
   function beginCloseHold(e) {
     const t = totals();
-    if (mode !== "settle" || !state.players.length || state.example || t.diff === 0 || forceCloseUnlocked) return;
+    if (appView !== "settle" || !state.players.length || state.example || t.diff === 0 || forceCloseUnlocked) return;
     if (e.button !== undefined && e.button !== 0) return;
     clearCloseHold();
     const btn = e.currentTarget;
@@ -1428,7 +1606,7 @@
     closeHoldTimer = setTimeout(() => {
       closeHoldTimer = null;
       const current = totals();
-      if (mode !== "settle" || !state.players.length || state.example || current.diff === 0) return;
+      if (appView !== "settle" || !state.players.length || state.example || current.diff === 0) return;
       btn.classList.remove("hold-state");
       forceCloseUnlocked = true;
       forceCloseUnlockDifference = current.diff;
@@ -1468,13 +1646,13 @@
     if (state.history.length > HISTORY_MAX) state.history.length = HISTORY_MAX;
     state.players = [];
     state.gameId = newId();
+    state.phase = "closed";
     state.settlementStatuses = {};
     expandedEntries.clear();
     state.example = false;
     openMenu = null; customOpen = null;
     save();
-    mode = "profile"; animNext = "all";
-    render();
+    setAppView("games");
     if (balanced) confetti();
   }
 
@@ -1510,6 +1688,12 @@
   closeTableBtn.addEventListener("pointerup", endCloseHold);
   closeTableBtn.addEventListener("pointercancel", endCloseHold);
   closeTableBtn.addEventListener("lostpointercapture", endCloseHold);
+  const finishGameBtn = document.getElementById("finishGameBtn");
+  finishGameBtn.addEventListener("pointerdown", beginFinishGameHold);
+  finishGameBtn.addEventListener("pointerup", endFinishGameHold);
+  finishGameBtn.addEventListener("pointercancel", endFinishGameHold);
+  finishGameBtn.addEventListener("lostpointercapture", endFinishGameHold);
+  document.getElementById("returnToGameBtn").addEventListener("click", returnToGameEdit);
   document.getElementById("forceCloseCancel").addEventListener("click", () => {
     forceCloseArmed = false;
     renderDerived();
@@ -1601,8 +1785,8 @@
 
   function renderProfile() {
     const box = document.getElementById("profile");
-    box.hidden = mode !== "profile";
-    if (mode !== "profile") return;
+    box.hidden = appView !== "profile";
+    if (appView !== "profile") return;
     box.innerHTML = "";
 
     if (!me) {
@@ -1746,7 +1930,8 @@
     addEntry(player, MIN_BUYIN);
     state.players.push(player);
     inp.value = "";
-    mode = "game";
+    state.phase = "active";
+    appView = "game";
     openMenu = name;
     customOpen = null;
     pendingAmount = null;
@@ -1758,23 +1943,8 @@
     if (e.key === "Enter") { e.preventDefault(); addPlayer(); }
   });
 
-  function switchMode(m) {
-    if (mode === m) return;
-    mode = m;
-    if (m !== "game") { openMenu = null; customOpen = null; }
-    if (m !== "settle") {
-      clearCloseHold();
-      forceCloseArmed = false;
-      forceCloseUnlocked = false;
-      forceCloseUnlockDifference = null;
-      longPressJustUnlocked = false;
-    }
-    animNext = "all";
-    render();
-  }
-  document.getElementById("modeGame").addEventListener("click", () => switchMode("game"));
-  document.getElementById("modeSettle").addEventListener("click", () => switchMode("settle"));
-  document.getElementById("modeProfile").addEventListener("click", () => switchMode("profile"));
+  document.getElementById("modeGames").addEventListener("click", () => setAppView("games"));
+  document.getElementById("modeProfile").addEventListener("click", () => setAppView("profile"));
 
   // confirm() is blocked in the artifact sandbox; the two-step arm/confirm
   // pattern works everywhere, so it is the deliberate choice on all builds.
@@ -1797,12 +1967,13 @@
     btn.classList.remove("danger-armed");
     label.textContent = "איפוס";
     state = {
-      example: false, gameId: newId(), players: [], history: state.history,
+      example: false, phase: "closed", gameId: newId(), players: [], history: state.history,
       debts: state.debts, settlementStatuses: {}, groupId: state.groupId || null,
     };
     expandedEntries.clear();
     openMenu = null; customOpen = null;
-    save(); render();
+    save();
+    setAppView("games");
   });
 
   // ---------- settings overlay ----------
@@ -1891,6 +2062,7 @@
 
 
   // ---------- boot ----------
+  appView = initialAppView(state);
   render();
   if (!me) showLogin();
 })();

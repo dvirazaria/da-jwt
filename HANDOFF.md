@@ -4,10 +4,10 @@ Context file for any coding agent picking up this project.
 
 ## What this is
 A Hebrew, RTL, mobile-first PWA for settling home poker cash games:
-players + buy-ins on a "שולחן" tab, chip counts and a minimal-transfers
-who-pays-whom on a "חישוב" tab, per-player record on a "פרופיל" tab.
+the Games dashboard opens a contextual "שולחן" screen for players and buy-ins,
+then a "חישוב" settlement screen with minimal transfers and a "פרופיל" record.
 Deployed on Vercel (static, auto-deploys from `main`), installable to the
-home screen. Version 34.
+home screen. Version 35.
 
 ## Files
 - `kupa-sgura.html` — THE app. Single file: CSS + HTML + one IIFE of vanilla JS.
@@ -26,7 +26,13 @@ Floating capsule bottom tab bar (active tab = filled pill with label).
 All animations respect `prefers-reduced-motion`.
 
 ## Data model (current, local/demo)
-`state = { example, gameId, players: [{id, name, buyins:[], entryLog:[], cashout}], history: [...], updatedAt }`
+`state = { example, phase, gameId, players: [{id, name, buyins:[], entryLog:[], cashout}], history: [...], debts: [...], settlementStatuses: {}, groupId, updatedAt }`
+- `phase` is persisted as `active`, `settlement`, or `closed`. Legacy real snapshots
+  that contain players migrate to `active`; legacy demo/empty snapshots migrate to
+  `closed` and open the Games dashboard.
+- `appView` is UI-only routing with `games`, `game`, `settle`, and `profile`.
+  Games is the primary dashboard; table and settlement remain contextual screens
+  inside the current game. Refresh derives the initial view from `state.phase`.
 - Each entryLog item is {id, timestamp, amount, playerId, gameId}; timestamp is ISO UTC,
   displayed as local HH:mm. Legacy entries use null time (shown as —), never invented times.
   Numeric buyins stay unchanged for calculation compatibility. Add/undo must update both arrays.
@@ -43,6 +49,11 @@ All animations respect `prefers-reduced-motion`.
   with `paidAt` and never changes the poker result. The current app has name-based local
   identity, so profile filtering and creditor checks use the current player name until
   the planned authenticated backend supplies stable user IDs and RLS.
+- The Games dashboard exposes active games, the current groups placeholder, and
+  "משחק ללא קבוצה". There is intentionally no generic "התחל משחק" action.
+- "סיים משחק" is a cancellable one-second pointer hold that changes only
+  `phase` to `settlement`. "חזור לעריכת המשחק" changes it back to `active`.
+  Only "סגור שולחן" finalizes the existing history/debt flow and routes to Games.
 - Regression checks: `node --test tests/entry-log.test.cjs`.
 - localStorage key `poker-settle-v1` (legacy prefix kept for continuity;
   also `poker-settle-me`, `-theme`, `-contact`).

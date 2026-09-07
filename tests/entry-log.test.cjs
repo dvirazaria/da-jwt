@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const html = fs.readFileSync('kupa-sgura.html', 'utf8');
-const normalizeSource = html.slice(html.indexOf('  function normalizeDebt'), html.indexOf('  function load()'));
+const normalizeSource = html.slice(html.indexOf('  function normalizePhase'), html.indexOf('  function load()'));
 function normalize(s) { return vm.runInNewContext(normalizeSource + '\nnormalize(input)', {input:s, crypto:require('node:crypto').webcrypto}); }
 test('legacy amounts survive migration without invented times, with stable identities', () => {
   const old = {players:[{name:'א',buyins:[50,100],cashout:150}],history:[]};
@@ -28,7 +28,7 @@ test('each added amount has a distinct identity, timestamp, player and game; sav
   const remoteSource=html.slice(html.indexOf('  function remoteBody()'),html.indexOf('  function scheduleRemoteSave()'));
   const context=vm.createContext({crypto:require('node:crypto').webcrypto});
   vm.runInContext(normalizeSource + saveSource + remoteSource + `
-    let state = {gameId:'game-one', players:[], history:[], debts:[{id:'d1',status:'open'}], settlementStatuses:{payment:true}, groupId:'group-one', example:false};
+    let state = {gameId:'game-one', phase:'active', players:[], history:[], debts:[{id:'d1',status:'open'}], settlementStatuses:{payment:true}, groupId:'group-one', example:false};
     let pendingRemote = null;
     const CLIENT_ID='test', KEY='game';
     let stored, scheduled=0;
@@ -46,6 +46,7 @@ test('each added amount has a distinct identity, timestamp, player and game; sav
   assert.ok(entries.every(e=>Number.isFinite(Date.parse(e.timestamp)) && Math.abs(Date.now()-Date.parse(e.timestamp))<5000 && e.playerId==='player-one' && e.gameId==='game-one'));
   const remote=JSON.parse(vm.runInContext('JSON.stringify(remoteBody())',context));
   assert.equal(remote.gameId,data.gameId);
+  assert.equal(remote.phase,data.phase);
   assert.deepEqual(remote.players,data.players);
   assert.deepEqual(remote.debts,data.debts);
   assert.deepEqual(remote.settlementStatuses,data.settlementStatuses);
