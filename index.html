@@ -336,9 +336,10 @@
   .profile .hgame { justify-content: center; width: 100%; }
   .profile .hgame .hnet { margin-inline-start: 0; min-width: 74px; text-align: start; }
   .profile-tabs { display: flex; justify-content: center; gap: 4px; margin-top: 16px; border-bottom: 1px solid var(--line); }
-  .profile-tab { color: var(--dim); font-size: 14px; font-weight: 500; padding: 7px 18px 8px; border-bottom: 2px solid transparent; }
+  .profile-tab { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 14px; font-weight: 500; padding: 7px 18px 8px; border-bottom: 2px solid transparent; }
   .profile-tab:hover { color: var(--text); }
   .profile-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .profile-tab-badge { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(53,224,220,.1); }
   .who-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .bignum {
     font-size: 52px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1;
@@ -359,7 +360,8 @@
   .hgame .hnet { margin-inline-start: auto; font-weight: 700; font-size: 17px; }
   .hnet.pos { color: var(--accent); } .hnet.neg { color: var(--bad); } .hnet.zero { color: var(--faint); font-weight: 300; }
   .debt-section { width: 100%; max-width: 380px; text-align: start; }
-  .debt-group + .debt-group { margin-top: 22px; }
+  .debt-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; width: 100%; direction: rtl; }
+  .debt-groups .debt-group + .debt-group { margin-top: 0; }
   .debt-group h3 { color: var(--dim); font-size: 13px; font-weight: 500; margin: 0 0 4px; }
   .debt-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
   .debt-copy { min-width: 0; flex: 1; }
@@ -488,7 +490,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 31</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 32</p>
   </div>
 </div>
 
@@ -563,6 +565,7 @@
   const ME_KEY = "poker-settle-me";
   const THEME_KEY = "poker-settle-theme";
   const CONTACT_KEY = "poker-settle-contact";
+  const PROFILE_DEBT_SEEN_KEY = "poker-settle-profile-debts-seen";
   const HISTORY_MAX = 60;
   const HOLD_TO_FORCE_CLOSE_MS = 1000;
 
@@ -587,7 +590,7 @@
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
   let animName = null;        // the player to animate when animNext === "one"
   let me = loadMe();
-  let profileTab = "debts";
+  let profileTab = "balance";
 
   // ---------- theme (default: dark), floating sun/moon toggle ----------
   const SUN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19"></path></svg>';
@@ -608,6 +611,40 @@
   }
   function saveMe() {
     try { me ? localStorage.setItem(ME_KEY, me) : localStorage.removeItem(ME_KEY); } catch (e) {}
+  }
+
+  function profileDebtIds(debts, userName) {
+    return (Array.isArray(debts) ? debts : [])
+      .filter(debt => debt && debt.status === "open" && (debt.debtorName === userName || debt.creditorName === userName))
+      .map(debt => String(debt.id));
+  }
+  function hasUnseenProfileDebt(debts, userName, seenIds) {
+    const seen = new Set(Array.isArray(seenIds) ? seenIds.map(String) : []);
+    return profileDebtIds(debts, userName).some(id => !seen.has(id));
+  }
+  function markProfileDebtsSeen(debts, userName, seenIds) {
+    return Array.from(new Set([
+      ...(Array.isArray(seenIds) ? seenIds.map(String) : []),
+      ...profileDebtIds(debts, userName),
+    ]));
+  }
+  function loadProfileDebtSeen(userName) {
+    if (!userName) return [];
+    try {
+      const saved = JSON.parse(localStorage.getItem(PROFILE_DEBT_SEEN_KEY) || "{}");
+      return Array.isArray(saved[userName]) ? saved[userName].map(String) : [];
+    } catch (e) { return []; }
+  }
+  function saveProfileDebtSeen(userName, ids) {
+    if (!userName) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(PROFILE_DEBT_SEEN_KEY) || "{}");
+      saved[userName] = Array.from(new Set(ids.map(String))).slice(-240);
+      localStorage.setItem(PROFILE_DEBT_SEEN_KEY, JSON.stringify(saved));
+    } catch (e) {}
+  }
+  function markProfileDebtsSeenForUser(debts, userName) {
+    saveProfileDebtSeen(userName, markProfileDebtsSeen(debts, userName, loadProfileDebtSeen(userName)));
   }
 
   function normalizeDebt(debt) {
@@ -1599,6 +1636,9 @@
     const wins = games.filter(g => g.mine.net > 0.005).length;
     const best = games.length ? Math.max(...games.map(g => g.mine.net)) : 0;
     const worst = games.length ? Math.min(...games.map(g => g.mine.net)) : 0;
+    const openDebts = (state.debts || []).filter(debt => debt.status === "open");
+    if (profileTab === "debts") markProfileDebtsSeenForUser(openDebts, me);
+    const hasNewProfileDebts = hasUnseenProfileDebt(openDebts, me, loadProfileDebtSeen(me));
 
     // identity
     const idSec = el("section", "psection pid");
@@ -1607,16 +1647,23 @@
     const tabs = el("div", "profile-tabs");
     tabs.setAttribute("role", "tablist");
     [
-      ["debts", "חובות"],
       ["balance", "מאזן"],
+      ["debts", "חובות"],
     ].forEach(([key, label]) => {
       const tab = el("button", "profile-tab" + (profileTab === key ? " active" : ""), label);
       tab.type = "button";
       tab.setAttribute("role", "tab");
       tab.setAttribute("aria-selected", String(profileTab === key));
+      if (key === "debts" && hasNewProfileDebts) {
+        const badge = el("span", "profile-tab-badge");
+        badge.title = "חובות חדשים";
+        badge.setAttribute("aria-label", "חובות חדשים");
+        tab.appendChild(badge);
+      }
       tab.addEventListener("click", () => {
         if (profileTab === key) return;
         profileTab = key;
+        if (key === "debts") markProfileDebtsSeenForUser(openDebts, me);
         renderProfile();
       });
       tabs.appendChild(tab);
@@ -1624,13 +1671,14 @@
     idSec.appendChild(tabs);
     box.appendChild(idSec);
 
-    const openDebts = (state.debts || []).filter(debt => debt.status === "open");
     const debtSec = el("section", "psection debt-section");
     debtSec.style.animationDelay = ".03s";
     debtSec.hidden = profileTab !== "debts";
     debtSec.appendChild(el("h2", "ptitle", "חובות"));
-    renderDebtGroup(debtSec, "אני חייב", openDebts.filter(debt => debt.debtorName === me), false);
-    renderDebtGroup(debtSec, "חייבים לי", openDebts.filter(debt => debt.creditorName === me), true);
+    const debtGroups = el("div", "debt-groups");
+    renderDebtGroup(debtGroups, "אני חייב", openDebts.filter(debt => debt.debtorName === me), false);
+    renderDebtGroup(debtGroups, "חייבים לי", openDebts.filter(debt => debt.creditorName === me), true);
+    debtSec.appendChild(debtGroups);
     box.appendChild(debtSec);
 
     // total balance
