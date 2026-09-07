@@ -1,0 +1,7 @@
+# Only the static app files belong on the public deployment.
+dvir.new.js
+package.json
+package-lock.json
+poker-settle.html
+kupa-sgura.html
+README.md
