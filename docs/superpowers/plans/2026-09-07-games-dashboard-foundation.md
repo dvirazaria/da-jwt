@@ -34,7 +34,7 @@
 - Consumes: `state` הקיים, `normalize(s)`, `remoteBody()`, `applyRemote(data)`, `startUngroupedGame()`.
 - Produces: `getActiveGameSummaries(gameState) -> ActiveGameSummary[]`, ושדה `startedAt: string | null` בתוך snapshot קיים.
 
-- [ ] **Step 1: Write failing tests for the adapter and timestamp persistence**
+- [x] **Step 1: Write failing tests for the adapter and timestamp persistence**
 
 הוסף בדיקות שמחלצות את `getActiveGameSummaries()` ומעבירות להן state מפורש:
 
@@ -81,13 +81,13 @@ test('startedAt travels through normalization and remote persistence without leg
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and verify failure**
+- [x] **Step 2: Run the focused tests and verify failure**
 
 Run: `node --test tests/games-navigation.test.cjs`
 
 Expected: FAIL because `getActiveGameSummaries` and persisted `startedAt` do not exist.
 
-- [ ] **Step 3: Implement timestamp transport and the pure adapter**
+- [x] **Step 3: Implement timestamp transport and the pure adapter**
 
 ב־`normalize()` הוסף:
 
@@ -131,13 +131,13 @@ function getActiveGameSummaries(gameState) {
 }
 ```
 
-- [ ] **Step 4: Run focused tests and verify pass**
+- [x] **Step 4: Run focused tests and verify pass**
 
 Run: `node --test tests/games-navigation.test.cjs`
 
 Expected: all Games tests PASS.
 
-- [ ] **Step 5: Commit the data layer**
+- [x] **Step 5: Commit the data layer**
 
 ```bash
 git add kupa-sgura.html tests/games-navigation.test.cjs

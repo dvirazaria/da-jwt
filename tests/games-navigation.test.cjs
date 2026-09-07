@@ -59,6 +59,48 @@ test('dashboard creation and resume actions have dedicated handlers', () => {
   assert.match(html, /setAppView\("game"\)/);
 });
 
+test('active game UI data is produced through ActiveGameSummary', () => {
+  const source = sourceBetween('  function getActiveGameSummaries', '  function getGroupSummaries');
+  const context = vm.createContext({});
+  vm.runInContext(source, context);
+  const summary = vm.runInContext(`getActiveGameSummaries({
+    example:false, phase:'active', gameId:'g1', groupId:null,
+    startedAt:'2026-09-07T16:00:00.000Z', updatedAt:'2026-09-07T17:00:00.000Z',
+    players:[
+      {id:'p1', name:'דביר', buyins:[50,100]},
+      {id:'p2', name:'רועי', buyins:[50]}
+    ]
+  })[0]`, context);
+  assert.deepEqual(JSON.parse(JSON.stringify(summary)), {
+    gameId:'g1', title:'משחק ללא קבוצה', phase:'active', playerCount:2,
+    playerNames:['דביר','רועי'],
+    players:[
+      {id:'p1', name:'דביר', buyinTotal:150, entryCount:2},
+      {id:'p2', name:'רועי', buyinTotal:50, entryCount:1}
+    ],
+    potSize:200, totalEntries:3,
+    startedAt:'2026-09-07T16:00:00.000Z', updatedAt:'2026-09-07T17:00:00.000Z'
+  });
+});
+
+test('active game adapter hides demo, closed, and invalid optional times', () => {
+  const source = sourceBetween('  function getActiveGameSummaries', '  function getGroupSummaries');
+  const context = vm.createContext({});
+  vm.runInContext(source, context);
+  assert.equal(vm.runInContext(`getActiveGameSummaries({example:true, phase:'active', players:[]}).length`, context), 0);
+  assert.equal(vm.runInContext(`getActiveGameSummaries({example:false, phase:'closed', players:[]}).length`, context), 0);
+  assert.equal(vm.runInContext(`getActiveGameSummaries({example:false, phase:'active', gameId:'g1', players:[]})[0].startedAt`, context), null);
+  assert.equal(vm.runInContext(`getActiveGameSummaries({example:false, phase:'active', gameId:'g1', updatedAt:'invalid', players:[]})[0].updatedAt`, context), null);
+});
+
+test('startedAt travels through normalization and remote persistence without legacy fabrication', () => {
+  assert.match(html, /startedAt:\s*typeof s\.startedAt === "string" \? s\.startedAt : null/);
+  assert.match(html, /startedAt:\s*state\.startedAt \|\| null/);
+  assert.match(html, /startedAt:\s*typeof data\.startedAt === "string" \? data\.startedAt : null/);
+  const creation = sourceBetween('  function startUngroupedGame', '  function continueCurrentGame');
+  assert.match(creation, /startedAt:\s*new Date\(\)\.toISOString\(\)/);
+});
+
 test('Games dashboard centers its visible content while preserving RTL text direction', () => {
   assert.match(html, /document\.body\.classList\.toggle\("games-view", appView === "games"\)/);
   assert.match(html, /\.games-view header \{ text-align: center; \}/);

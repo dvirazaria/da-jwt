@@ -721,6 +721,7 @@
       settlementStatuses: s.settlementStatuses && typeof s.settlementStatuses === "object"
         ? { ...s.settlementStatuses } : {},
       groupId: s.groupId || s.clanId || null,
+      startedAt: typeof s.startedAt === "string" ? s.startedAt : null,
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
     };
   }
@@ -774,6 +775,7 @@
       debts: state.debts,
       settlementStatuses: state.settlementStatuses,
       groupId: state.groupId || null,
+      startedAt: state.startedAt || null,
       updatedAt: state.updatedAt || new Date().toISOString(),
     };
   }
@@ -800,10 +802,11 @@
       debts: Array.isArray(data.debts) ? data.debts : [],
       settlementStatuses: data.settlementStatuses && typeof data.settlementStatuses === "object" ? data.settlementStatuses : {},
       groupId: data.groupId || data.clanId || null,
+      startedAt: typeof data.startedAt === "string" ? data.startedAt : null,
       updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
     })));
-    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses }) ===
-        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses })) return;
+    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses, a: incoming.startedAt }) ===
+        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses, a: state.startedAt })) return;
     // Don't yank the UI out from under an active edit — apply on blur.
     const ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT")) { pendingRemote = incoming; return; }
@@ -879,6 +882,7 @@
     state = {
       example: false, phase: "active", gameId: newId(), players: [], history: state.history,
       debts: state.debts, settlementStatuses: {}, groupId: state.groupId || null,
+      startedAt: new Date().toISOString(),
       updatedAt: state.updatedAt,
     };
     expandedEntries.clear();
@@ -1099,6 +1103,7 @@
       debts: state.debts,
       settlementStatuses: {},
       groupId: null,
+      startedAt: new Date().toISOString(),
       updatedAt: state.updatedAt,
     };
     expandedEntries.clear();
@@ -1111,6 +1116,34 @@
     if (state.example || state.phase === "closed") return;
     setAppView(state.phase === "settlement" ? "settle" : "game");
   }
+
+  function getActiveGameSummaries(gameState) {
+    if (!gameState || gameState.example || (gameState.phase !== "active" && gameState.phase !== "settlement")) return [];
+    const validTime = value => typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null;
+    const players = (Array.isArray(gameState.players) ? gameState.players : []).map(player => {
+      const buyins = Array.isArray(player.buyins) ? player.buyins : [];
+      return {
+        id: String(player.id || ""),
+        name: String(player.name || ""),
+        buyinTotal: buyins.reduce((total, amount) => total + Math.round(Number(amount) || 0), 0),
+        entryCount: buyins.length,
+      };
+    });
+    return [{
+      gameId: String(gameState.gameId || ""),
+      title: gameState.groupId ? null : "משחק ללא קבוצה",
+      phase: gameState.phase,
+      playerCount: players.length,
+      playerNames: players.map(player => player.name),
+      players,
+      potSize: players.reduce((total, player) => total + player.buyinTotal, 0),
+      totalEntries: players.reduce((total, player) => total + player.entryCount, 0),
+      startedAt: validTime(gameState.startedAt),
+      updatedAt: validTime(gameState.updatedAt),
+    }];
+  }
+
+  function getGroupSummaries() { return []; }
 
   function renderGamesDashboard() {
     const box = document.getElementById("gamesHome");
