@@ -9,7 +9,7 @@ Usage: python3 build.py
 """
 import re
 
-VERSION = 36
+VERSION = 37
 
 HEAD = """<!doctype html>
 <html lang="he" dir="rtl">
@@ -18,8 +18,8 @@ HEAD = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#05070A">
 <link rel="manifest" href="./manifest.webmanifest">
-<link rel="icon" type="image/png" href="./icon-192.png">
-<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

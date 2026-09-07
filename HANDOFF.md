@@ -7,7 +7,7 @@ A Hebrew, RTL, mobile-first PWA for settling home poker cash games:
 the Games dashboard opens a contextual "שולחן" screen for players and buy-ins,
 then a "חישוב" settlement screen with minimal transfers and a "פרופיל" record.
 Deployed on Vercel (static, auto-deploys from `main`), installable to the
-home screen. Version 36.
+home screen. Version 37.
 
 ## Files
 - `kupa-sgura.html` — THE app. Single file: CSS + HTML + one IIFE of vanilla JS.
@@ -15,7 +15,8 @@ home screen. Version 36.
 - `index.html` — GENERATED standalone PWA wrapper. Never edit by hand.
 - `build.py` — release script. Single source of the version number: stamps it
   into the app + `sw.js` cache name and regenerates `index.html`. Run on every release.
-- `sw.js`, `manifest.webmanifest`, `icon-192/512.png` — PWA assets.
+- `sw.js`, `manifest.webmanifest`, `icon-180/192/512.png` — PWA assets. The
+  home-screen icons use the poker-table artwork supplied for this app.
 - `poker-settle.html` — FROZEN legacy version for an old artifact URL. Do not edit.
 
 ## Design system (deliberate, keep it)
