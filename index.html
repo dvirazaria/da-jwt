@@ -49,7 +49,10 @@
     direction: rtl;
     transition: background-color .3s, color .3s;
   }
-  .wrap { max-width: 520px; margin: 0 auto; padding: 26px 18px calc(140px + env(safe-area-inset-bottom, 0px)); }
+  .wrap {
+    max-width: 520px; margin: 0 auto;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 18px calc(110px + env(safe-area-inset-bottom, 0px));
+  }
 
   /* ---------- header ---------- */
   .eyebrow {
@@ -60,11 +63,11 @@
   .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: breathe 2.6s ease-in-out infinite; }
   @keyframes breathe { 50% { box-shadow: 0 0 14px var(--accent); opacity: .7; } }
   h1 {
-    font-weight: 900; font-size: 44px; letter-spacing: -0.02em;
-    margin: 6px 0 0; line-height: 1.05; color: var(--text);
+    font-weight: 900; font-size: clamp(28px, 7.5vw, 38px); letter-spacing: -0.02em;
+    margin: 4px 0 0; line-height: 1.05; color: var(--text);
   }
   h1 em { font-style: normal; color: var(--accent); }
-  .sub { color: var(--dim); margin: 6px 0 0; font-size: 14px; font-weight: 300; }
+  .sub { color: var(--dim); margin: 4px 0 0; font-size: 13.5px; font-weight: 300; }
 
   /* ---------- shared controls ---------- */
   button {
@@ -89,7 +92,7 @@
   input[type=number]::-webkit-inner-spin-button { display: none; }
 
   /* ---------- add row ---------- */
-  .addrow { display: flex; align-items: flex-end; gap: 14px; margin: 30px 0 6px; }
+  .addrow { display: flex; align-items: flex-end; gap: 14px; margin: 18px 0 2px; }
   .addrow input { flex: 1; font-size: 17px; }
   .btn-add {
     color: var(--accent); font-weight: 700; font-size: 15px;
@@ -141,7 +144,7 @@
     40%, 80% { transform: translateX(-5px); }
   }
   .shake { animation: shake .35s ease; }
-  .prow-line { display: flex; align-items: center; gap: 12px; padding: 14px 0; min-height: 62px; }
+  .prow-line { display: flex; align-items: center; gap: 12px; padding: 10px 0; min-height: 56px; }
   .pname { font-weight: 700; font-size: 17px; flex: 1; min-width: 72px; overflow-wrap: anywhere; }
   .pmeta { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 300; }
   .pmeta b { color: var(--text); font-weight: 500; display: inline-block; }
@@ -195,7 +198,7 @@
   .statline {
     display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline;
     color: var(--dim); font-size: 14px; font-weight: 300;
-    margin: 22px 0 0; font-variant-numeric: tabular-nums;
+    margin: 16px 0 0; font-variant-numeric: tabular-nums;
   }
   .statline b { color: var(--text); font-weight: 700; font-size: 16px; }
   .statline .sep { color: var(--faint); }
@@ -204,7 +207,7 @@
 
   .warn { color: var(--bad); font-size: 14px; margin: 14px 0 0; font-weight: 400; animation: rise .3s ease both; }
 
-  .results { margin-top: 34px; }
+  .results { margin-top: 24px; }
   .results h2, .ptitle {
     font-size: 13px; letter-spacing: .16em; font-weight: 500;
     color: var(--dim); margin: 0 0 4px;
@@ -233,7 +236,7 @@
 
   /* ---------- profile ---------- */
   .profile { margin-top: 6px; }
-  .psection { margin-top: 30px; animation: rise .4s ease both; }
+  .psection { margin-top: 22px; animation: rise .4s ease both; }
   .who-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .bignum {
     font-size: 52px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1;
@@ -270,10 +273,10 @@
   .empty-note { color: var(--faint); font-size: 14px; font-weight: 300; margin-top: 10px; }
 
   /* ---------- footer ---------- */
-  .footer { margin-top: 56px; display: flex; flex-direction: column; gap: 26px; }
+  .footer { margin-top: 28px; display: flex; flex-direction: column; gap: 16px; }
   .btn-reset { color: var(--faint); font-size: 13px; align-self: flex-start; }
   .btn-reset:hover { color: var(--bad); }
-  .roadmap { border-top: 1px solid var(--line); padding-top: 18px; color: var(--faint); font-size: 12px; font-weight: 300; line-height: 1.8; }
+  .roadmap { border-top: 1px solid var(--line); padding-top: 12px; color: var(--faint); font-size: 11.5px; font-weight: 300; line-height: 1.6; }
   .roadmap b { color: var(--dim); font-weight: 500; letter-spacing: .1em; }
   .example-tag { color: var(--accent); font-size: 12px; font-weight: 400; }
 
