@@ -530,7 +530,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 37</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 38</p>
   </div>
 </div>
 
@@ -1189,6 +1189,14 @@
     return clean.length > 4 ? visible + " +" + (clean.length - 4) : visible;
   }
 
+  function formatPlayerCount(count) {
+    return count === 1 ? "שחקן אחד" : count + " שחקנים";
+  }
+
+  function formatEntryCount(count) {
+    return count === 1 ? "כניסה אחת" : count + " כניסות";
+  }
+
   function renderQuickActions(parent) {
     const section = el("section", "games-section games-quick-section");
     section.appendChild(el("h3", "games-section-title", "פעולות מהירות"));
@@ -1214,7 +1222,7 @@
     const status = el("span", "games-card-status" + (summary.phase === "settlement" ? " settlement" : ""), summary.phase === "settlement" ? "בסגירה" : "משחק פעיל");
     card.appendChild(status);
     if (summary.title) card.appendChild(el("span", "games-card-title", summary.title));
-    card.appendChild(el("span", "games-card-meta", summary.playerCount + " שחקנים · " + formatPlayerNames(summary.playerNames)));
+    card.appendChild(el("span", "games-card-meta", formatPlayerCount(summary.playerCount) + " · " + formatPlayerNames(summary.playerNames)));
     if (summary.startedAt) card.appendChild(el("span", "games-card-time", "התחיל ב־" + formatGameTime(summary.startedAt)));
 
     const cardActions = el("div", "games-card-actions");
@@ -1235,14 +1243,14 @@
     if (summary.players.length) {
       summary.players.forEach(player => {
         const row = el("div", "games-detail-row");
-        row.append(el("span", "games-detail-name", player.name), el("span", "games-detail-meta", fmt(player.buyinTotal) + " · " + player.entryCount + " כניסות"));
+        row.append(el("span", "games-detail-name", player.name), el("span", "games-detail-meta", fmt(player.buyinTotal) + " · " + formatEntryCount(player.entryCount)));
         content.appendChild(row);
       });
     } else {
       content.appendChild(el("p", "games-empty", "אין שחקנים עדיין"));
     }
     const totalsLine = el("p", "games-detail-totals");
-    totalsLine.append(el("span", "", "בקופה "), el("b", "", fmt(summary.potSize)), el("span", "", " · " + summary.totalEntries + " כניסות"));
+    totalsLine.append(el("span", "", "בקופה "), el("b", "", fmt(summary.potSize)), el("span", "", " · " + formatEntryCount(summary.totalEntries)));
     content.appendChild(totalsLine);
     if (summary.startedAt) content.appendChild(el("p", "games-detail-totals", "התחלה · " + formatGameTime(summary.startedAt)));
     if (summary.updatedAt) content.appendChild(el("p", "games-detail-totals", "עדכון אחרון · " + formatGameTime(summary.updatedAt)));

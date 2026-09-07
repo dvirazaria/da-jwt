@@ -156,7 +156,7 @@ git commit -m "feat: add active game summary adapter"
 - Consumes: `getActiveGameSummaries(state)`, `startUngroupedGame()`, `continueCurrentGame()`.
 - Produces: `getGroupSummaries()`, `renderQuickActions(parent)`, `renderActiveGamesSection(parent, summaries)`, `renderActiveGameCard(summary, actions)`, `renderGroupsSection(parent, groups)`, `renderGroupCard(group, actions)`, `enterActiveGame(gameId)`.
 
-- [ ] **Step 1: Write failing structure and isolation tests**
+- [x] **Step 1: Write failing structure and isolation tests**
 
 הוסף בדיקות שמוודאות את שלושת האזורים, נוסחי המצבים הריקים והפרדת ה־renderer מ־state:
 
@@ -193,13 +193,13 @@ test('groups adapter has no mock data', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and verify failure**
+- [x] **Step 2: Run the focused tests and verify failure**
 
 Run: `node --test tests/games-navigation.test.cjs`
 
 Expected: FAIL because the modular renderers, UI-only sets and new copy do not exist.
 
-- [ ] **Step 3: Add UI-only state and helpers**
+- [x] **Step 3: Add UI-only state and helpers**
 
 ליד `expandedEntries` הוסף:
 
@@ -218,7 +218,7 @@ function enterActiveGame(gameId) {
 }
 ```
 
-- [ ] **Step 4: Replace the monolithic dashboard renderer**
+- [x] **Step 4: Replace the monolithic dashboard renderer**
 
 `renderGamesDashboard()` ירכיב בלבד:
 
@@ -242,7 +242,7 @@ function renderGamesDashboard() {
 
 `renderGroupCard(group, actions)` יקבל summary חיצוני, יציג avatar URL או אות ראשונה, שם, מספר חברים ואינדיקציית משחק פעיל, וירנדר פרטים אופציונליים רק אם הם קיימים. `renderGroupsSection()` לא יקרא לו כאשר `getGroupSummaries()` ריק.
 
-- [ ] **Step 5: Add compact responsive styling**
+- [x] **Step 5: Add compact responsive styling**
 
 החלף את CSS של Games dashboard במחלקות ייעודיות:
 
@@ -259,7 +259,7 @@ function renderGamesDashboard() {
 
 שמור על רוחב `max-width: 380px`, מרכז אופקי, RTL, צבעים, typography ו־radius הקיימים. הוסף focus-visible, חץ שמסתובב לפי `aria-expanded`, והסתרת overflow בהרחבה.
 
-- [ ] **Step 6: Run focused and full tests**
+- [x] **Step 6: Run focused and full tests**
 
 Run:
 
@@ -270,7 +270,7 @@ node --test tests/*.test.cjs
 
 Expected: all tests PASS.
 
-- [ ] **Step 7: Commit the modular UI**
+- [x] **Step 7: Commit the modular UI**
 
 ```bash
 git add kupa-sgura.html tests/games-navigation.test.cjs
@@ -290,7 +290,7 @@ git commit -m "feat: build modular Games dashboard"
 - Consumes: completed source and tests from Tasks 1–2.
 - Produces: version 38 deployable PWA artifacts.
 
-- [ ] **Step 1: Bump and build the release**
+- [x] **Step 1: Bump and build the release**
 
 שנה ב־`build.py`:
 
@@ -302,7 +302,7 @@ Run: `python3 build.py`
 
 Expected: `built version 38: kupa-sgura.html, sw.js, index.html`.
 
-- [ ] **Step 2: Verify generated artifacts and regression tests**
+- [x] **Step 2: Verify generated artifacts and regression tests**
 
 Run:
 
@@ -315,7 +315,7 @@ git diff --check
 
 Expected: commands exit 0 and all tests PASS. Inspect `git diff --stat` to confirm only the source, tests, builder and generated artifacts changed.
 
-- [ ] **Step 3: Perform manual browser QA**
+- [x] **Step 3: Perform manual browser QA**
 
 Run a local HTTP server and inspect the app at mobile and desktop widths:
 
@@ -333,14 +333,14 @@ Verify:
 - Light/dark themes, narrow mobile width and desktop width have no overflow.
 - Browser console has no errors.
 
-- [ ] **Step 4: Commit release artifacts**
+- [x] **Step 4: Commit release artifacts**
 
 ```bash
 git add build.py kupa-sgura.html index.html sw.js tests/games-navigation.test.cjs
 git commit -m "chore: build version 38"
 ```
 
-- [ ] **Step 5: Push and verify deployment**
+- [x] **Step 5: Push and verify deployment**
 
 Run:
 

@@ -301,20 +301,48 @@
   .games-home { margin-top: 26px; animation: rise .4s ease both; text-align: center; }
   .games-home-in { width: 100%; max-width: 380px; margin: 0 auto; }
   .games-home-title { margin: 0; font-size: 24px; font-weight: 800; }
-  .games-home-lead { color: var(--dim); font-size: 14px; font-weight: 300; margin: 6px 0 24px; }
-  .games-section { margin-top: 22px; text-align: center; }
-  .games-section-title { color: var(--dim); font-size: 13px; font-weight: 500; margin: 0 0 8px; }
-  .games-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 13px 0; border-bottom: 1px solid var(--line); text-align: center; }
-  .games-card-copy { min-width: 0; text-align: center; }
+  .games-home-lead { color: var(--dim); font-size: 14px; font-weight: 300; margin: 6px 0 26px; }
+  .games-section { margin-top: 28px; text-align: center; }
+  .games-section:first-of-type { margin-top: 0; }
+  .games-section-title { color: var(--dim); font-size: 13px; font-weight: 500; margin: 0 0 10px; }
+  .games-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .games-quick-action {
+    min-width: 0; min-height: 46px; padding: 9px 12px;
+    border: 1px solid var(--line); border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    color: var(--text); font-size: 14px; font-weight: 600;
+  }
+  .games-quick-action.primary { border-color: var(--accent); color: var(--accent); }
+  .games-quick-action.primary:hover { background: var(--accent); color: var(--bg); }
+  .games-quick-action.coming-soon { color: var(--dim); opacity: .72; cursor: default; }
+  .games-quick-action.coming-soon:active { transform: none; }
+  .games-coming-soon { color: var(--faint); font-size: 9px; font-weight: 400; white-space: nowrap; }
+  .games-active-card, .games-group-card { padding: 15px 0; border-bottom: 1px solid var(--line); text-align: center; }
+  .games-card-status { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; font-weight: 400; }
+  .games-card-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .games-card-status.settlement::before { background: var(--faint); }
   .games-card-title { display: block; color: var(--text); font-size: 16px; font-weight: 700; }
-  .games-card-meta { display: block; color: var(--dim); font-size: 12px; font-weight: 300; }
-  .games-card-action { display: inline-flex; align-items: center; justify-content: center; color: var(--accent); font-size: 13px; font-weight: 700; padding: 6px 0; }
-  .games-card-action:hover { color: var(--accent-press); }
-  .games-card-action.muted { color: var(--faint); cursor: default; }
-  .games-card-action:disabled { opacity: .65; }
+  .games-card-meta, .games-card-time { display: block; color: var(--dim); font-size: 12px; font-weight: 300; }
+  .games-card-time { margin-top: 2px; }
+  .games-card-actions { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 10px; }
+  .games-card-enter { border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 13px; font-weight: 700; padding: 6px 15px; min-height: 34px; }
+  .games-card-enter:hover { background: var(--accent); color: var(--bg); }
+  .games-card-toggle { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); font-size: 12px; padding: 6px 0; }
+  .games-card-toggle:hover { color: var(--accent); }
+  .games-card-toggle svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .22s ease; }
+  .games-card-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .games-card-details { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows .25s ease, visibility .25s; }
+  .games-card-details.open { grid-template-rows: 1fr; visibility: visible; }
+  .games-card-details-in { min-height: 0; overflow: hidden; }
+  .games-card-details-content { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .games-detail-row { display: flex; align-items: baseline; justify-content: center; gap: 8px; padding: 3px 0; font-size: 12px; }
+  .games-detail-name { color: var(--text); font-weight: 600; }
+  .games-detail-meta { color: var(--dim); font-weight: 300; font-variant-numeric: tabular-nums; }
+  .games-detail-totals { color: var(--dim); font-size: 12px; font-weight: 300; margin: 8px 0 0; }
+  .games-detail-totals b { color: var(--text); font-weight: 600; }
+  .games-group-head { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .games-group-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; background: var(--line); color: var(--dim); font-weight: 700; }
   .games-empty { color: var(--faint); font-size: 14px; font-weight: 300; margin: 0; }
-  .games-start { display: block; width: 100%; margin-top: 12px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 15px; font-weight: 700; padding: 11px 20px; min-height: 46px; }
-  .games-start:hover { background: var(--accent); color: var(--bg); }
 
   .btn-close-table {
     position: relative; overflow: hidden; isolation: isolate;
@@ -518,7 +546,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 37</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 38</p>
   </div>
 </div>
 
@@ -611,6 +639,8 @@
   };
 
   const expandedEntries = new Set();
+  const expandedGameCards = new Set();
+  const expandedGroupCards = new Set();
   let state = load();
   let appView = "games";         // "games" | "game" | "settle" | "profile"
   let openMenu = null;        // player name whose buy-in menu is open
@@ -737,6 +767,7 @@
       settlementStatuses: s.settlementStatuses && typeof s.settlementStatuses === "object"
         ? { ...s.settlementStatuses } : {},
       groupId: s.groupId || s.clanId || null,
+      startedAt: typeof s.startedAt === "string" ? s.startedAt : null,
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
     };
   }
@@ -790,6 +821,7 @@
       debts: state.debts,
       settlementStatuses: state.settlementStatuses,
       groupId: state.groupId || null,
+      startedAt: state.startedAt || null,
       updatedAt: state.updatedAt || new Date().toISOString(),
     };
   }
@@ -816,10 +848,11 @@
       debts: Array.isArray(data.debts) ? data.debts : [],
       settlementStatuses: data.settlementStatuses && typeof data.settlementStatuses === "object" ? data.settlementStatuses : {},
       groupId: data.groupId || data.clanId || null,
+      startedAt: typeof data.startedAt === "string" ? data.startedAt : null,
       updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
     })));
-    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses }) ===
-        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses })) return;
+    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses, a: incoming.startedAt }) ===
+        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses, a: state.startedAt })) return;
     // Don't yank the UI out from under an active edit — apply on blur.
     const ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT")) { pendingRemote = incoming; return; }
@@ -895,6 +928,7 @@
     state = {
       example: false, phase: "active", gameId: newId(), players: [], history: state.history,
       debts: state.debts, settlementStatuses: {}, groupId: state.groupId || null,
+      startedAt: new Date().toISOString(),
       updatedAt: state.updatedAt,
     };
     expandedEntries.clear();
@@ -1115,6 +1149,7 @@
       debts: state.debts,
       settlementStatuses: {},
       groupId: null,
+      startedAt: new Date().toISOString(),
       updatedAt: state.updatedAt,
     };
     expandedEntries.clear();
@@ -1128,44 +1163,213 @@
     setAppView(state.phase === "settlement" ? "settle" : "game");
   }
 
+  function getActiveGameSummaries(gameState) {
+    if (!gameState || gameState.example || (gameState.phase !== "active" && gameState.phase !== "settlement")) return [];
+    const validTime = value => typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null;
+    const players = (Array.isArray(gameState.players) ? gameState.players : []).map(player => {
+      const buyins = Array.isArray(player.buyins) ? player.buyins : [];
+      return {
+        id: String(player.id || ""),
+        name: String(player.name || ""),
+        buyinTotal: buyins.reduce((total, amount) => total + Math.round(Number(amount) || 0), 0),
+        entryCount: buyins.length,
+      };
+    });
+    return [{
+      gameId: String(gameState.gameId || ""),
+      title: gameState.groupId ? null : "משחק ללא קבוצה",
+      phase: gameState.phase,
+      playerCount: players.length,
+      playerNames: players.map(player => player.name),
+      players,
+      potSize: players.reduce((total, player) => total + player.buyinTotal, 0),
+      totalEntries: players.reduce((total, player) => total + player.entryCount, 0),
+      startedAt: validTime(gameState.startedAt),
+      updatedAt: validTime(gameState.updatedAt),
+    }];
+  }
+
+  function getGroupSummaries() { return []; }
+
+  function formatGameTime(timestamp) {
+    if (!timestamp) return "";
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function formatPlayerNames(names) {
+    const clean = (Array.isArray(names) ? names : []).filter(Boolean);
+    if (!clean.length) return "אין שחקנים עדיין";
+    const visible = clean.slice(0, 4).join(", ");
+    return clean.length > 4 ? visible + " +" + (clean.length - 4) : visible;
+  }
+
+  function formatPlayerCount(count) {
+    return count === 1 ? "שחקן אחד" : count + " שחקנים";
+  }
+
+  function formatEntryCount(count) {
+    return count === 1 ? "כניסה אחת" : count + " כניסות";
+  }
+
+  function renderQuickActions(parent) {
+    const section = el("section", "games-section games-quick-section");
+    section.appendChild(el("h3", "games-section-title", "פעולות מהירות"));
+    const actions = el("div", "games-quick-actions");
+
+    const start = el("button", "games-quick-action primary", "משחק ללא קבוצה");
+    start.type = "button";
+    start.addEventListener("click", startUngroupedGame);
+
+    const createGroup = el("button", "games-quick-action coming-soon");
+    createGroup.type = "button";
+    createGroup.disabled = true;
+    createGroup.setAttribute("aria-disabled", "true");
+    createGroup.append(el("span", "", "+ צור קבוצה"), el("span", "games-coming-soon", "בקרוב"));
+
+    actions.append(start, createGroup);
+    section.appendChild(actions);
+    parent.appendChild(section);
+  }
+
+  function renderActiveGameCard(summary, actions) {
+    const card = el("article", "games-active-card");
+    const status = el("span", "games-card-status" + (summary.phase === "settlement" ? " settlement" : ""), summary.phase === "settlement" ? "בסגירה" : "משחק פעיל");
+    card.appendChild(status);
+    if (summary.title) card.appendChild(el("span", "games-card-title", summary.title));
+    card.appendChild(el("span", "games-card-meta", formatPlayerCount(summary.playerCount) + " · " + formatPlayerNames(summary.playerNames)));
+    if (summary.startedAt) card.appendChild(el("span", "games-card-time", "התחיל ב־" + formatGameTime(summary.startedAt)));
+
+    const cardActions = el("div", "games-card-actions");
+    const enter = el("button", "games-card-enter", "כנס לשולחן");
+    enter.type = "button";
+    enter.addEventListener("click", actions.onEnter);
+    const toggle = el("button", "games-card-toggle", "הרחב");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", actions.expanded ? "true" : "false");
+    toggle.innerHTML = '<span>הרחב</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
+    toggle.addEventListener("click", actions.onToggle);
+    cardActions.append(enter, toggle);
+    card.appendChild(cardActions);
+
+    const details = el("div", "games-card-details" + (actions.expanded ? " open" : ""));
+    const detailsIn = el("div", "games-card-details-in");
+    const content = el("div", "games-card-details-content");
+    if (summary.players.length) {
+      summary.players.forEach(player => {
+        const row = el("div", "games-detail-row");
+        row.append(el("span", "games-detail-name", player.name), el("span", "games-detail-meta", fmt(player.buyinTotal) + " · " + formatEntryCount(player.entryCount)));
+        content.appendChild(row);
+      });
+    } else {
+      content.appendChild(el("p", "games-empty", "אין שחקנים עדיין"));
+    }
+    const totalsLine = el("p", "games-detail-totals");
+    totalsLine.append(el("span", "", "בקופה "), el("b", "", fmt(summary.potSize)), el("span", "", " · " + formatEntryCount(summary.totalEntries)));
+    content.appendChild(totalsLine);
+    if (summary.startedAt) content.appendChild(el("p", "games-detail-totals", "התחלה · " + formatGameTime(summary.startedAt)));
+    if (summary.updatedAt) content.appendChild(el("p", "games-detail-totals", "עדכון אחרון · " + formatGameTime(summary.updatedAt)));
+    detailsIn.appendChild(content);
+    details.appendChild(detailsIn);
+    card.appendChild(details);
+    return card;
+  }
+
+  function renderActiveGamesSection(parent, summaries) {
+    const section = el("section", "games-section");
+    section.appendChild(el("h3", "games-section-title", "משחקים פעילים"));
+    if (!summaries.length) {
+      section.appendChild(el("p", "games-empty", "אין משחקים פעילים כרגע"));
+    } else {
+      summaries.forEach(summary => {
+        section.appendChild(renderActiveGameCard(summary, {
+          expanded: expandedGameCards.has(summary.gameId),
+          onEnter: () => enterActiveGame(summary.gameId),
+          onToggle: () => {
+            expandedGameCards.has(summary.gameId) ? expandedGameCards.delete(summary.gameId) : expandedGameCards.add(summary.gameId);
+            renderGamesDashboard();
+          },
+        }));
+      });
+    }
+    parent.appendChild(section);
+  }
+
+  function renderGroupCard(group, actions) {
+    const card = el("article", "games-group-card");
+    const head = el("div", "games-group-head");
+    if (group.avatarUrl) {
+      const avatar = el("img", "games-group-avatar");
+      avatar.src = group.avatarUrl;
+      avatar.alt = "";
+      head.appendChild(avatar);
+    } else {
+      head.appendChild(el("span", "games-group-avatar", String(group.name || "?").slice(0, 1)));
+    }
+    const copy = el("div", "");
+    copy.appendChild(el("span", "games-card-title", String(group.name || "")));
+    copy.appendChild(el("span", "games-card-meta", Number(group.memberCount || 0) + " חברים" + (group.hasActiveGame ? " · משחק פעיל" : "")));
+    head.appendChild(copy);
+    card.appendChild(head);
+
+    const hasDetails = (Array.isArray(group.members) && group.members.length) || group.lastGame || Number.isFinite(group.gameCount) || group.leader || (Array.isArray(group.topPlayers) && group.topPlayers.length);
+    if (hasDetails) {
+      const toggle = el("button", "games-card-toggle", "הרחב");
+      toggle.type = "button";
+      toggle.setAttribute("aria-expanded", actions.expanded ? "true" : "false");
+      toggle.innerHTML = '<span>הרחב</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
+      toggle.addEventListener("click", actions.onToggle);
+      card.appendChild(toggle);
+      const details = el("div", "games-card-details" + (actions.expanded ? " open" : ""));
+      const detailsIn = el("div", "games-card-details-in");
+      const content = el("div", "games-card-details-content");
+      if (Array.isArray(group.members) && group.members.length) content.appendChild(el("p", "games-detail-totals", "חברים · " + group.members.join(", ")));
+      if (group.lastGame) content.appendChild(el("p", "games-detail-totals", "משחק אחרון · " + group.lastGame));
+      if (Number.isFinite(group.gameCount)) content.appendChild(el("p", "games-detail-totals", "משחקים · " + group.gameCount));
+      if (group.leader) content.appendChild(el("p", "games-detail-totals", "מוביל · " + group.leader));
+      if (Array.isArray(group.topPlayers) && group.topPlayers.length) content.appendChild(el("p", "games-detail-totals", "שחקנים בולטים · " + group.topPlayers.join(", ")));
+      detailsIn.appendChild(content);
+      details.appendChild(detailsIn);
+      card.appendChild(details);
+    }
+    return card;
+  }
+
+  function renderGroupsSection(parent, groups) {
+    const section = el("section", "games-section");
+    section.appendChild(el("h3", "games-section-title", "הקבוצות שלי"));
+    if (!groups.length) {
+      section.appendChild(el("p", "games-empty", "אין לך קבוצות עדיין"));
+    } else {
+      groups.forEach(group => {
+        const groupId = String(group.groupId || group.id || "");
+        section.appendChild(renderGroupCard(group, {
+          expanded: expandedGroupCards.has(groupId),
+          onToggle: () => {
+            expandedGroupCards.has(groupId) ? expandedGroupCards.delete(groupId) : expandedGroupCards.add(groupId);
+            renderGamesDashboard();
+          },
+        }));
+      });
+    }
+    parent.appendChild(section);
+  }
+
+  function enterActiveGame(gameId) {
+    if (String(state.gameId || "") !== String(gameId || "")) return;
+    continueCurrentGame();
+  }
+
   function renderGamesDashboard() {
     const box = document.getElementById("gamesHome");
     box.innerHTML = "";
     const inner = el("div", "games-home-in");
     inner.appendChild(el("h2", "games-home-title", "משחקים"));
     inner.appendChild(el("p", "games-home-lead", "המשחקים הפעילים והקבוצות שלך במקום אחד."));
-
-    const activeSection = el("section", "games-section");
-    activeSection.appendChild(el("h3", "games-section-title", "משחקים פעילים"));
-    const hasCurrentGame = !state.example && state.phase !== "closed";
-    if (hasCurrentGame) {
-      const card = el("div", "games-card");
-      const copy = el("div", "games-card-copy");
-      copy.appendChild(el("span", "games-card-title", state.phase === "settlement" ? "סגירה וחישוב" : "משחק פעיל"));
-      copy.appendChild(el("span", "games-card-meta", state.players.length + " שחקנים · " + fmt(totals().buy) + " בקופה"));
-      const action = el("button", "games-card-action", state.phase === "settlement" ? "המשך סגירה" : "כנס לשולחן");
-      action.type = "button";
-      action.addEventListener("click", continueCurrentGame);
-      card.append(copy, action);
-      activeSection.appendChild(card);
-    } else {
-      activeSection.appendChild(el("p", "games-empty", "אין משחקים פעילים"));
-      const start = el("button", "games-start", "משחק ללא קבוצה");
-      start.type = "button";
-      start.addEventListener("click", startUngroupedGame);
-      activeSection.appendChild(start);
-    }
-    inner.appendChild(activeSection);
-
-    const groupsSection = el("section", "games-section");
-    groupsSection.appendChild(el("h3", "games-section-title", "הקבוצות שלי"));
-    groupsSection.appendChild(el("p", "games-empty", "עוד אין קבוצות"));
-    const createGroup = el("button", "games-card-action muted", "צור קבוצה");
-    createGroup.type = "button";
-    createGroup.disabled = true;
-    createGroup.setAttribute("aria-disabled", "true");
-    groupsSection.appendChild(createGroup);
-    inner.appendChild(groupsSection);
+    renderQuickActions(inner);
+    renderActiveGamesSection(inner, getActiveGameSummaries(state));
+    renderGroupsSection(inner, getGroupSummaries());
     box.appendChild(inner);
   }
 
