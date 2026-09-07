@@ -91,17 +91,21 @@
   :root[data-theme="light"] { --bar-bg: rgba(245,248,249,.9); }
   html { background: var(--bg); }
   .tabbar {
-    position: fixed; bottom: -1px; inset-inline: 0; z-index: 20;
-    display: flex; align-items: center; justify-content: space-between; gap: 4px;
+    position: fixed; bottom: 10px; inset-inline: 17px; margin-inline: auto;
+    max-width: 470px; z-index: 20;
     background: var(--bar-bg);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
-    border-top: 1px solid var(--line);
-    border-radius: 20px 20px 0 0;
-    padding: 7px 14px calc(7px + env(safe-area-inset-bottom, 0px));
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.35);
+    transition: transform .25s ease, opacity .25s ease;
   }
+  :root[data-theme="light"] .tabbar { box-shadow: 0 8px 24px rgba(12,21,25,.14); }
+  .tabbar.kb-open { transform: translateY(120px); opacity: 0; pointer-events: none; }
   .tabbar-in {
     display: flex; align-items: center; justify-content: space-between; gap: 4px;
-    width: 100%; max-width: 470px; margin-inline: auto;
+    width: 100%;
   }
   .tab {
     flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -327,7 +331,7 @@
 
 <div class="wrap">
   <header class="load-in">
-    <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span><span>·</span><span style="opacity:.55" id="verTag">v10</span></div>
+    <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span><span>·</span><span style="opacity:.55" id="verTag">v11</span></div>
     <h1>סוגרים קופה</h1>
   </header>
 
@@ -1091,6 +1095,25 @@
 
   render();
   if (!me) showLogin();
+
+  // Hide the tab bar while the on-screen keyboard is open — iOS moves
+  // fixed-bottom elements around with the keyboard, so we duck out instead.
+  let kbTimer = null;
+  document.addEventListener("focusin", (e) => {
+    if (e.target && e.target.tagName === "INPUT") {
+      clearTimeout(kbTimer);
+      document.querySelector(".tabbar").classList.add("kb-open");
+    }
+  });
+  document.addEventListener("focusout", () => {
+    clearTimeout(kbTimer);
+    kbTimer = setTimeout(() => {
+      const ae = document.activeElement;
+      if (!ae || ae.tagName !== "INPUT") {
+        document.querySelector(".tabbar").classList.remove("kb-open");
+      }
+    }, 150);
+  });
 
   // environment marker next to the version: installed app vs. browser tab
   try {
