@@ -380,6 +380,38 @@
   .games-create-cancel { color: var(--dim); font-size: 13px; padding: 6px 2px; }
   .games-create-cancel:hover { color: var(--text); }
 
+  /* group-page "start game" participant panel (Task 8) — checkbox rows + guest add, reusing
+     .games-create-panel above for the collapse/expand animation */
+  .group-start-panel { margin-top: 14px; }
+  .group-start-member {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px;
+    padding: 8px 4px; border-bottom: 1px solid var(--line);
+    color: var(--text); font-size: 15px; font-weight: 600; text-align: start;
+  }
+  .group-start-member:last-of-type { border-bottom: none; }
+  .group-start-check {
+    flex: 0 0 auto; width: 22px; height: 22px; border-radius: 6px;
+    border: 1px solid var(--line); display: flex; align-items: center; justify-content: center;
+    transition: border-color .18s, background-color .18s;
+  }
+  .group-start-member[aria-checked="true"] .group-start-check { background: var(--accent); border-color: var(--accent); }
+  .group-start-check svg {
+    width: 13px; height: 13px; opacity: 0; stroke: var(--bg); stroke-width: 2.4;
+    fill: none; stroke-linecap: round; stroke-linejoin: round; transition: opacity .15s;
+  }
+  .group-start-member[aria-checked="true"] .group-start-check svg { opacity: 1; }
+  .group-start-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .group-start-guests { margin-top: 4px; }
+  .group-start-guest-row {
+    display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 4px;
+    border-bottom: 1px solid var(--line); font-size: 15px; font-weight: 600; color: var(--text);
+  }
+  .group-start-guest-remove { margin-inline-start: auto; color: var(--dim); font-size: 12px; font-weight: 400; }
+  .group-start-guest-remove:hover { color: var(--bad); }
+  .group-start-add { margin-top: 10px; text-align: center; }
+  .group-start-add-label { margin: 0 0 8px; color: var(--dim); font-size: 13px; font-weight: 600; }
+  .group-start-add-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+
   /* group page: header, primary action, leaderboard, last game, members, history */
   .games-group-header { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 40px; text-align: center; }
   .games-group-header-avatar {
@@ -769,6 +801,10 @@
   let removeMemberArmedId = null;      // memberId whose "הסר" is armed (two-step confirm)
   let removeMemberArmedTimeout = null; // auto-disarm timer for the above
   let formerMembersOpen = false;       // whether the "חברים לשעבר" collapsed list is expanded
+  let startGameOpen = false;          // whether the group-page "start game" participant panel is expanded
+  let startGameJustOpened = false;    // panel should animate open on the next render
+  let startGameSelection = new Set(); // active-member ids selected as participants (creator preselected)
+  let startGameGuests = [];           // [{ name, guestId }] ad-hoc guests added in the panel — not group members
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
   let animName = null;        // the player to animate when animNext === "one"
   let me = loadMe();
@@ -1617,6 +1653,14 @@
     if (!member || member.status !== "active" || member.role !== "admin") return false;
     return !list.some(m => m && m.id !== memberId && m.groupId === member.groupId && m.status === "active" && m.role === "admin");
   }
+  // Builds a Player record for the current game. guestId/memberId stay null for an ungrouped
+  // game; addPlayer and startGroupGame resolve them for a group game (Task 8).
+  function createPlayer({ name, guestId, memberId }) {
+    return {
+      id: newId(), name, buyins: [], entryLog: [], cashout: "", status: "active", exitedAt: null,
+      guestId: guestId || null, memberId: memberId || null, userId: null,
+    };
+  }
 
   // ---------- invites (pure) ----------
   // One invite token model, three presentations (large code / link / QR placeholder). Joining
@@ -1781,6 +1825,7 @@
       forceCloseUnlockDifference = null;
       longPressJustUnlocked = false;
     }
+    resetStartGamePanel();
     animNext = "all";
     render();
   }
@@ -1791,6 +1836,31 @@
     openMenu = null; customOpen = null; pendingAmount = null; exitOpen = null; exitJustOpened = null;
     save();
     setAppView("game");
+  }
+
+  // Starts a game linked to a group: guarded by canStartGroupGame (the single-open-game rule)
+  // and needing at least one participant. Each participant becomes a Player via the shared
+  // createPlayer helper plus an immediate first buy-in (same product rule as addPlayer).
+  function startGroupGame(groupId, participants) {
+    const list = Array.isArray(participants) ? participants : [];
+    if (!canStartGroupGame(collectionsOf(state), groupId).ok || list.length < 1) return false;
+    state = newCurrentGame(state, {
+      phase: "active",
+      groupId,
+      startedAt: new Date().toISOString(),
+      leaderRef: { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me },
+    });
+    list.forEach(participant => {
+      const player = createPlayer(participant);
+      addEntry(player, MIN_BUYIN);
+      state.players.push(player);
+    });
+    expandedEntries.clear();
+    openMenu = customOpen = pendingAmount = null;
+    animNext = "all";
+    save();
+    setAppView("game");
+    return true;
   }
 
   function continueCurrentGame() {
@@ -2283,9 +2353,14 @@
     const btn = el("button", "btn-primary");
     btn.type = "button";
     let reason = null;
+    const canStart = !summary.hasActiveGame && gate && gate.ok;
     if (summary.hasActiveGame) {
       btn.textContent = summary.activeGamePhase === "settlement" ? "המשך סגירה" : "כנס לשולחן";
       btn.addEventListener("click", continueCurrentGame);
+    } else if (canStart) {
+      btn.textContent = "התחל משחק";
+      btn.setAttribute("aria-expanded", String(startGameOpen));
+      btn.addEventListener("click", toggleStartGamePanel);
     } else {
       btn.textContent = "התחל משחק";
       btn.disabled = true;
@@ -2301,7 +2376,173 @@
     }
     wrap.appendChild(btn);
     if (reason) wrap.appendChild(el("p", "games-primary-reason", reason));
+    if (canStart) wrap.appendChild(renderStartGamePanel());
     return wrap;
+  }
+
+  // Inline participant panel opened by the "התחל משחק" primary button (Task 8), gated by
+  // canStartGroupGame(...).ok. Same grid-collapse pattern/CSS as .games-create-panel. Toggling
+  // a member checkbox updates just that row + the confirm button in place (no full re-render),
+  // so a guest name mid-typing in the add-guest input below is never wiped out.
+  function renderStartGamePanel() {
+    const wrap = el("div", "group-start-panel");
+    const panel = el("div", "games-create-panel");
+    const panelIn = el("div", "games-create-panel-in");
+    const content = el("div", "games-create-panel-content");
+
+    const members = activeMembers(state.groupMembers, currentGroupId);
+    members.forEach(member => content.appendChild(renderStartGameMemberRow(member)));
+
+    if (startGameGuests.length) content.appendChild(renderStartGameGuestsList());
+    content.appendChild(renderStartGameAddGuest());
+
+    const confirmBtn = el("button", "btn-primary group-start-confirm", "פתח שולחן");
+    confirmBtn.type = "button";
+    const total = startGameSelection.size + startGameGuests.length;
+    confirmBtn.disabled = total < 1;
+    confirmBtn.setAttribute("aria-disabled", String(total < 1));
+    confirmBtn.addEventListener("click", () => {
+      if (startGameSelection.size + startGameGuests.length < 1) return;
+      const participants = members
+        .filter(m => startGameSelection.has(m.id))
+        .map(m => ({ name: m.displayName, guestId: m.guestId || null, memberId: m.id }))
+        .concat(startGameGuests.map(g => ({ name: g.name, guestId: g.guestId, memberId: null })));
+      startGroupGame(currentGroupId, participants);
+    });
+    content.appendChild(confirmBtn);
+
+    const cancelBtn = el("button", "games-create-cancel", "ביטול");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", closeStartGamePanel);
+    content.appendChild(cancelBtn);
+
+    panelIn.appendChild(content);
+    panel.appendChild(panelIn);
+    if (startGameOpen && startGameJustOpened) {
+      startGameJustOpened = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add("open")));
+    } else if (startGameOpen) {
+      panel.classList.add("open");
+    }
+    wrap.appendChild(panel);
+    return wrap;
+  }
+
+  // A single checkbox row for an active member (custom control: button[role=checkbox], ≥44px).
+  function renderStartGameMemberRow(member) {
+    const checked = startGameSelection.has(member.id);
+    const row = el("button", "group-start-member");
+    row.type = "button";
+    row.setAttribute("role", "checkbox");
+    row.setAttribute("aria-checked", String(checked));
+    const check = el("span", "group-start-check");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 12 12");
+    svg.setAttribute("aria-hidden", "true");
+    svg.innerHTML = '<path d="M2.5 6.2 5 8.7 9.5 3.2"/>';
+    check.appendChild(svg);
+    row.appendChild(check);
+    row.appendChild(el("span", "group-start-name", member.displayName));
+    row.addEventListener("click", () => {
+      const next = !startGameSelection.has(member.id);
+      if (next) startGameSelection.add(member.id); else startGameSelection.delete(member.id);
+      row.setAttribute("aria-checked", String(next));
+      updateStartGameConfirmState();
+    });
+    return row;
+  }
+
+  // Keeps the "פתח שולחן" button's disabled state in sync after an in-place row toggle.
+  function updateStartGameConfirmState() {
+    const btn = document.querySelector(".group-start-confirm");
+    if (!btn) return;
+    const total = startGameSelection.size + startGameGuests.length;
+    btn.disabled = total < 1;
+    btn.setAttribute("aria-disabled", String(total < 1));
+  }
+
+  // Ad-hoc guests added in the panel; NOT group members (no addGroupMember call — see Task 8).
+  // Removing one re-renders the group page, a low-frequency action unlike the checkbox toggle.
+  function renderStartGameGuestsList() {
+    const wrap = el("div", "group-start-guests");
+    startGameGuests.forEach((guest, idx) => {
+      const row = el("div", "group-start-guest-row");
+      row.appendChild(el("span", "group-start-name", guest.name));
+      const removeBtn = el("button", "group-start-guest-remove", "הסר");
+      removeBtn.type = "button";
+      removeBtn.addEventListener("click", () => {
+        startGameGuests.splice(idx, 1);
+        renderGroupPage();
+      });
+      row.appendChild(removeBtn);
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  // Inline "+ הוסף אורח" name input, same resolveGuestId reuse as addMemberByName. A duplicate
+  // of an already-selected member or already-added guest name shakes the input instead of
+  // silently failing (guests never become group members, so there is no addGroupMember guard).
+  function renderStartGameAddGuest() {
+    const wrap = el("div", "group-start-add");
+    wrap.appendChild(el("p", "group-start-add-label", "+ הוסף אורח"));
+    const row = el("div", "group-start-add-row");
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.maxLength = 40;
+    nameInput.placeholder = "שם";
+    nameInput.autocomplete = "off";
+    nameInput.setAttribute("aria-label", "שם האורח");
+
+    const submit = () => {
+      const name = nameInput.value.trim();
+      if (!name) { shakeEl(nameInput); return; }
+      const members = activeMembers(state.groupMembers, currentGroupId);
+      const selectedNames = members.filter(m => startGameSelection.has(m.id)).map(m => m.displayName);
+      const guestNames = startGameGuests.map(g => g.name);
+      if (selectedNames.includes(name) || guestNames.includes(name)) { shakeEl(nameInput); return; }
+      startGameGuests.push({ name, guestId: resolveGuestId(collectionsOf(state), name) });
+      renderGroupPage();
+    };
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+    });
+
+    const submitBtn = el("button", "games-create-submit", "הוסף");
+    submitBtn.type = "button";
+    submitBtn.addEventListener("click", submit);
+
+    row.append(nameInput, submitBtn);
+    wrap.appendChild(row);
+    return wrap;
+  }
+
+  function toggleStartGamePanel() {
+    if (startGameOpen) { closeStartGamePanel(); return; }
+    const members = activeMembers(state.groupMembers, currentGroupId);
+    const mine = members.find(m => m && m.displayName === me);
+    startGameOpen = true;
+    startGameJustOpened = true;
+    startGameSelection = new Set(mine ? [mine.id] : []);
+    startGameGuests = [];
+    renderGroupPage();
+  }
+
+  // Plays the panel's collapse transition (matching closeAddMemberPanel's approach) before
+  // resetting its draft state and rebuilding the group page without it.
+  function closeStartGamePanel() {
+    const panel = document.querySelector(".group-start-panel .games-create-panel.open");
+    const finish = () => { resetStartGamePanel(); renderGroupPage(); };
+    if (!panel) { finish(); return; }
+    panel.classList.remove("open");
+    setTimeout(finish, 280);
+  }
+
+  function resetStartGamePanel() {
+    startGameOpen = false;
+    startGameJustOpened = false;
+    startGameSelection = new Set();
+    startGameGuests = [];
   }
 
   // Top 3 LeaderboardEntry rows, names only — no amounts (Global Constraint 10).
@@ -2943,6 +3184,14 @@
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
         state.players.length + " שחקנים" + exitedLabel +
         (state.example ? '<span class="sep">·</span><span class="example-tag">נתוני דוגמה — כל עריכה מאפסת אותם</span>' : "");
+      // The group name comes from user data — built with DOM nodes (el/textContent), never
+      // interpolated into the innerHTML string above, so it can't inject markup.
+      const statGroup = state.groups.find(g => g && g.id === state.groupId);
+      if (statGroup) {
+        stat.appendChild(el("span", "sep", "·"));
+        stat.appendChild(document.createTextNode("קבוצה: "));
+        stat.appendChild(el("b", null, statGroup.name));
+      }
     } else if (appView === "settle") {
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
@@ -3496,7 +3745,13 @@
       shakeEl(inp); // duplicate names would merge menus, records and transfers
       return;
     }
-    const player = { id: newId(), name, buyins: [], entryLog: [], cashout: "", status: "active", exitedAt: null };
+    let guestId = null, memberId = null;
+    if (state.groupId) {
+      guestId = resolveGuestId(collectionsOf(state), name);
+      const member = activeMembers(state.groupMembers, state.groupId).find(m => m.displayName === name);
+      memberId = member ? member.id : null;
+    }
+    const player = createPlayer({ name, guestId, memberId });
     addEntry(player, MIN_BUYIN);
     state.players.push(player);
     inp.value = "";
