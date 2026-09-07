@@ -440,7 +440,7 @@
   .corner-btn.danger-armed { color: var(--bad); }
   header { padding-inline-end: 96px; }
   /* Keep the main content below the fixed corner controls after the app title was removed. */
-  .wrap > header { min-height: 64px; }
+  .game-view .wrap > header { min-height: 64px; }
 
   /* ---------- login overlay ---------- */
   .login {
@@ -1361,6 +1361,7 @@
     const anim = animNext; animNext = null;
     const inGames = appView === "games" || appView === "game" || appView === "settle";
     document.body.classList.toggle("games-view", appView === "games");
+    document.body.classList.toggle("game-view", appView === "game");
     document.getElementById("modeGames").classList.toggle("on", inGames);
     document.getElementById("modeProfile").classList.toggle("on", appView === "profile");
     document.getElementById("addrow").hidden = appView !== "game";
