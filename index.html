@@ -296,10 +296,10 @@
   .btn-close-table > span { position: relative; z-index: 1; }
   .btn-close-table::before {
     content: ""; position: absolute; z-index: 0;
-    inset: 50% auto auto 50%; width: 0; height: 0;
-    border-radius: 50%; transform: translate(-50%, -50%);
+    inset: 50% auto auto 50%; width: 0; height: calc(100% - 6px);
+    border-radius: 999px; transform: translate(-50%, -50%);
     background: #05070A; pointer-events: none;
-    transition: width 1.8s linear, height 1.8s linear;
+    transition: width 1.8s linear;
   }
   .btn-close-table:hover { background: var(--accent); color: var(--bg); }
   .btn-close-table.warn-state { border-color: var(--bad); color: var(--bad); }
@@ -307,9 +307,9 @@
   .btn-close-table.blocked-state { cursor: default; opacity: .45; border-color: var(--line); color: var(--faint); }
   .btn-close-table.blocked-state:hover { background: none; color: var(--faint); }
   .btn-close-table.hold-state { opacity: 1; border-color: var(--line); color: var(--text); }
-  .btn-close-table.hold-state::before { width: 220%; height: 220%; }
+  .btn-close-table.hold-state::before { width: 100%; }
   .btn-close-table.force-state { background: var(--accent); border-color: var(--accent); color: var(--bg); }
-  .btn-close-table.force-state::before { width: 0; height: 0; transition: none; }
+  .btn-close-table.force-state::before { width: 0; transition: none; }
   .btn-close-table.force-state:hover { background: var(--accent-press); color: var(--bg); }
   .force-close-confirm { margin-top: 12px; color: var(--dim); font-size: 13px; }
   .force-close-confirm p { margin: 0 0 8px; }
@@ -464,7 +464,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 26</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 27</p>
   </div>
 </div>
 
