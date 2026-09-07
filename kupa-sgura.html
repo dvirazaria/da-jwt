@@ -43,18 +43,17 @@
 
   /* ---------- header ---------- */
   .eyebrow {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 12px; letter-spacing: .14em; color: var(--dim); font-weight: 500;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; letter-spacing: .06em; color: var(--dim); font-weight: 400;
   }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background .4s, box-shadow .4s; }
   .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: breathe 2.6s ease-in-out infinite; }
   @keyframes breathe { 50% { box-shadow: 0 0 14px var(--accent); opacity: .7; } }
   h1 {
-    font-weight: 900; font-size: clamp(28px, 7.5vw, 38px); letter-spacing: -0.02em;
+    font-weight: 800; font-size: clamp(26px, 7vw, 34px); letter-spacing: -0.02em;
     margin: 4px 0 0; line-height: 1.05; color: var(--text);
   }
-  h1 em { font-style: normal; color: var(--accent); }
-  .sub { color: var(--dim); margin: 4px 0 0; font-size: 13.5px; font-weight: 300; }
+  h1 em { font-style: normal; color: inherit; }
 
   /* ---------- shared controls ---------- */
   button {
@@ -91,22 +90,22 @@
   :root { --bar-bg: rgba(13,17,22,.78); }
   :root[data-theme="light"] { --bar-bg: rgba(255,255,255,.85); }
   .tabbar {
-    position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    inset-inline: 0; margin-inline: auto; width: max-content; z-index: 20;
-    display: flex; align-items: center; gap: 4px;
+    position: fixed; bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    inset-inline: 12px; margin-inline: auto; max-width: 480px; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between; gap: 4px;
     background: var(--bar-bg);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
     border: 1px solid var(--line);
     border-radius: 999px;
-    padding: 8px;
-    box-shadow: 0 10px 34px rgba(0,0,0,.4);
+    padding: 8px 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.35);
   }
-  :root[data-theme="light"] .tabbar { box-shadow: 0 10px 30px rgba(12,21,25,.16); }
+  :root[data-theme="light"] .tabbar { box-shadow: 0 8px 24px rgba(12,21,25,.14); }
   .tab {
-    display: flex; align-items: center; gap: 8px;
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
     color: var(--dim); font-size: 14px; font-weight: 700;
-    border-radius: 999px; padding: 11px 13px; min-height: 46px;
-    transition: background-color .25s ease, color .25s ease, padding .25s ease, transform .12s ease;
+    border-radius: 999px; padding: 11px 10px; min-height: 46px;
+    transition: background-color .25s ease, color .25s ease, flex-grow .25s ease, transform .12s ease;
   }
   .tab svg { width: 22px; height: 22px; flex: 0 0 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .tab .tlabel {
@@ -114,9 +113,8 @@
     transition: max-width .3s ease, opacity .22s ease;
   }
   .tab.on {
+    flex-grow: 1.7;
     background: var(--accent); color: var(--bg);
-    padding: 11px 18px;
-    box-shadow: 0 4px 16px rgba(53,224,220,.35);
   }
   .tab.on .tlabel { max-width: 90px; opacity: 1; }
   .tab:active { transform: scale(.94); }
@@ -139,14 +137,14 @@
   @keyframes pulseVal { 30% { color: var(--accent); transform: scale(1.18); } }
 
   .btn-plus {
-    width: 40px; height: 40px; border-radius: 50%;
-    border: 1px solid var(--accent); color: var(--accent);
-    font-size: 22px; line-height: 1; font-weight: 400;
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 1px solid var(--line); color: var(--dim);
+    font-size: 21px; line-height: 1; font-weight: 400;
     display: flex; align-items: center; justify-content: center;
-    transition: transform .2s ease, background-color .18s, color .18s, box-shadow .18s;
+    transition: transform .2s ease, background-color .18s, color .18s, border-color .18s;
   }
-  .btn-plus:hover { box-shadow: 0 0 12px rgba(53,224,220,.35); }
-  .btn-plus.open { transform: rotate(45deg); background: var(--accent); color: var(--bg); }
+  .btn-plus:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-plus.open { transform: rotate(45deg); background: var(--accent); border-color: var(--accent); color: var(--bg); }
   .btn-plus.open:active { transform: rotate(45deg) scale(.92); }
 
   /* expanding buy-in menu */
@@ -157,14 +155,14 @@
   .chip {
     border: 1px solid var(--line); border-radius: 999px;
     padding: 8px 18px; min-height: 40px;
-    color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; font-size: 15px;
+    color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; font-size: 15px;
   }
-  .chip:hover { border-color: var(--accent); }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
   .chip:active { background: var(--accent); color: var(--bg); }
   .chip.flash { animation: flash .45s ease; }
-  .chip.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .chip.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
   @keyframes flash {
-    0% { background: var(--accent); color: var(--bg); box-shadow: 0 0 16px rgba(53,224,220,.6); }
+    0% { background: var(--accent); border-color: var(--accent); color: var(--bg); }
   }
   .undo { color: var(--faint); font-size: 13px; margin-inline-start: auto; }
   .undo:hover { color: var(--bad); }
@@ -196,7 +194,7 @@
 
   .results { margin-top: 24px; }
   .results h2, .ptitle {
-    font-size: 13px; letter-spacing: .16em; font-weight: 500;
+    font-size: 13px; letter-spacing: .04em; font-weight: 500;
     color: var(--dim); margin: 0 0 4px;
   }
   .transfer {
@@ -213,11 +211,11 @@
   .settle-empty { color: var(--faint); margin: 12px 0 0; font-size: 14px; font-weight: 300; }
 
   .btn-close-table {
-    margin-top: 30px; border: 1px solid var(--accent); border-radius: 999px;
+    margin-top: 26px; border: 1px solid var(--accent); border-radius: 999px;
     color: var(--accent); font-weight: 700; font-size: 15px;
     padding: 12px 26px; min-height: 48px;
   }
-  .btn-close-table:hover { background: var(--accent); color: var(--bg); box-shadow: 0 0 18px rgba(53,224,220,.4); }
+  .btn-close-table:hover { background: var(--accent); color: var(--bg); }
   .btn-close-table.warn-state { border-color: var(--bad); color: var(--bad); }
   .btn-close-table.warn-state:hover { background: var(--bad); color: var(--bg); box-shadow: none; }
 
@@ -244,32 +242,33 @@
   .hgame .hnet { margin-inline-start: auto; font-weight: 700; font-size: 17px; }
   .hnet.pos { color: var(--accent); } .hnet.neg { color: var(--bad); } .hnet.zero { color: var(--faint); font-weight: 300; }
   .empty-note { color: var(--faint); font-size: 14px; font-weight: 300; margin-top: 10px; }
+  .pid { display: flex; align-items: baseline; gap: 14px; }
+  .pname-big { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
+  .pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; margin-top: 16px; }
+  .pcell { display: flex; flex-direction: column; gap: 1px; }
+  .plab { font-size: 12px; color: var(--dim); font-weight: 300; }
+  .pval { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .btn-clear-record { color: var(--faint); font-size: 13px; }
+  .btn-clear-record:hover, .btn-clear-record.armed { color: var(--bad); }
 
   .example-tag { color: var(--accent); font-size: 12px; font-weight: 400; }
 
-  /* ---------- floating corner controls (top-left) ---------- */
+  /* ---------- corner controls (top-left, scroll with the page) ---------- */
   .corner {
-    position: fixed; top: calc(12px + env(safe-area-inset-top, 0px)); left: 14px;
-    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); left: 18px;
+    display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 18px;
     z-index: 30;
   }
   .corner-btn {
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
     color: var(--dim); font-size: 10px; font-weight: 500;
   }
-  .corner-btn .cicon {
-    width: 40px; height: 40px; border-radius: 50%;
-    border: 1px solid var(--line); background: var(--bar-bg);
-    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-    display: flex; align-items: center; justify-content: center;
-    transition: border-color .2s, color .2s, transform .25s ease;
-  }
-  .corner-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-  .corner-btn:hover .cicon { border-color: var(--accent); color: var(--accent); }
-  .corner-btn:active .cicon { transform: scale(.9) rotate(-30deg); }
+  .corner-btn .cicon { display: flex; transition: transform .25s ease; }
+  .corner-btn svg { width: 23px; height: 23px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .corner-btn:hover { color: var(--accent); }
+  .corner-btn:active .cicon { transform: scale(.85) rotate(-30deg); }
   .corner-btn.danger-armed { color: var(--bad); }
-  .corner-btn.danger-armed .cicon { border-color: var(--bad); color: var(--bad); }
-  header { padding-inline-end: 56px; }
+  header { padding-inline-end: 96px; }
 
   /* ---------- login overlay ---------- */
   .login {
@@ -321,8 +320,7 @@
 <div class="wrap">
   <header class="load-in">
     <div class="eyebrow"><span class="dot" id="syncDot"></span><span id="syncText">שמירה מקומית</span><span>·</span><span>קאש · מינימום ₪50</span></div>
-    <h1>סוגרים <em>קופה</em></h1>
-    <p class="sub">כניסות תוך כדי המשחק, צ'יפים בסוף — ומי משלם למי במינימום העברות.</p>
+    <h1>סוגרים קופה</h1>
   </header>
 
   <div class="addrow load-in" style="animation-delay:.08s" id="addrow">
@@ -879,72 +877,105 @@
     if (mode !== "profile") return;
     box.innerHTML = "";
 
-    // who am I (set at login; changeable here)
-    const whoSec = el("section", "psection");
-    if (me) {
-      const line = el("div", "pstats");
-      line.innerHTML = "מחובר כ־<b>" + esc(me) + "</b>";
-      const swap = el("button", "btn-skip", "החלף משתמש");
-      swap.type = "button";
-      swap.addEventListener("click", () => showLogin());
-      whoSec.appendChild(line);
-      whoSec.appendChild(swap);
-      whoSec.style.display = "flex";
-      whoSec.style.alignItems = "baseline";
-      whoSec.style.gap = "14px";
-    } else {
-      const connect = el("button", "btn-primary", "התחברות");
+    if (!me) {
+      const sec = el("section", "psection");
+      sec.appendChild(el("h2", "ptitle", "פרופיל"));
+      sec.appendChild(el("p", "empty-note", "עוד לא בחרת שם, ולכן אין רקורד אישי לשמור."));
+      const connect = el("button", "btn-primary", "בחירת שם");
       connect.type = "button";
+      connect.style.marginTop = "14px";
       connect.addEventListener("click", () => showLogin());
-      whoSec.appendChild(el("p", "empty-note", "לא בחרת מי אתה — בלי זה אין רקורד אישי."));
-      whoSec.appendChild(connect);
+      sec.appendChild(connect);
+      box.appendChild(sec);
+      return;
     }
-    box.appendChild(whoSec);
 
-    // balance
-    if (me) {
-      const games = state.history
-        .map(g => ({ at: g.at, players: g.players, mine: g.players.find(p => p.name === me) }))
-        .filter(g => g.mine);
-      const total = sum(games.map(g => g.mine.net));
-      const wins = games.filter(g => g.mine.net > 0.005).length;
-      const best = games.length ? Math.max(...games.map(g => g.mine.net)) : 0;
-      const worst = games.length ? Math.min(...games.map(g => g.mine.net)) : 0;
+    const games = state.history
+      .map(g => ({ at: g.at, players: g.players, mine: g.players.find(p => p.name === me) }))
+      .filter(g => g.mine);
+    const total = sum(games.map(g => g.mine.net));
+    const wins = games.filter(g => g.mine.net > 0.005).length;
+    const best = games.length ? Math.max(...games.map(g => g.mine.net)) : 0;
+    const worst = games.length ? Math.min(...games.map(g => g.mine.net)) : 0;
 
-      const balSec = el("section", "psection");
-      balSec.style.animationDelay = ".08s";
-      balSec.appendChild(el("h2", "ptitle", "המאזן של " + me));
-      const big = el("div", "bignum " + (total > 0.005 ? "pos" : total < -0.005 ? "neg" : "zero"), fmtSigned(total));
-      balSec.appendChild(big);
-      const stats = el("div", "pstats");
-      stats.innerHTML =
-        "<span><b>" + games.length + "</b> ערבים</span>" +
-        "<span><b>" + wins + "</b> חיוביים</span>" +
-        "<span>הכי טוב <b>" + fmtSigned(best) + "</b></span>" +
-        "<span>הכי גרוע <b>" + fmtSigned(worst) + "</b></span>";
-      balSec.appendChild(stats);
-      box.appendChild(balSec);
+    // identity
+    const idSec = el("section", "psection pid");
+    const idName = el("div", "pname-big", me);
+    const swap = el("button", "btn-skip", "החלף שחקן");
+    swap.type = "button";
+    swap.addEventListener("click", () => showLogin());
+    idSec.appendChild(idName);
+    idSec.appendChild(swap);
+    box.appendChild(idSec);
 
-      const histSec = el("section", "psection");
-      histSec.style.animationDelay = ".16s";
-      histSec.appendChild(el("h2", "ptitle", "ערבים אחרונים"));
-      if (games.length === 0) {
-        histSec.appendChild(el("p", "empty-note", "עוד אין ערבים סגורים עם " + me + "."));
-      } else {
-        games.slice(0, 12).forEach((g, i) => {
-          const row = el("div", "hgame");
-          row.style.animationDelay = (i * 40) + "ms";
-          const d = new Date(g.at);
-          row.appendChild(el("span", "hdate", d.toLocaleDateString("he-IL", { day: "numeric", month: "short" })));
-          row.appendChild(el("span", "hplayers", g.players.length + " שחקנים"));
-          const net = el("span", "hnet " + (g.mine.net > 0.005 ? "pos" : g.mine.net < -0.005 ? "neg" : "zero"), fmtSigned(g.mine.net));
-          row.appendChild(net);
-          histSec.appendChild(row);
-        });
-      }
+    // total balance
+    const balSec = el("section", "psection");
+    balSec.style.animationDelay = ".06s";
+    balSec.appendChild(el("h2", "ptitle", "מאזן כולל"));
+    const big = el("div", "bignum " + (total > 0.005 ? "pos" : total < -0.005 ? "neg" : "zero"), fmtSigned(total));
+    balSec.appendChild(big);
+    const grid = el("div", "pgrid");
+    [
+      ["ערבים ששוחקו", String(games.length)],
+      ["ערבים ברווח", String(wins)],
+      ["הערב הטוב ביותר", fmtSigned(best)],
+      ["הערב הגרוע ביותר", fmtSigned(worst)],
+    ].forEach(([lab, val]) => {
+      const cell = el("div", "pcell");
+      cell.appendChild(el("span", "plab", lab));
+      cell.appendChild(el("span", "pval", val));
+      grid.appendChild(cell);
+    });
+    balSec.appendChild(grid);
+    box.appendChild(balSec);
+
+    // recent nights
+    const histSec = el("section", "psection");
+    histSec.style.animationDelay = ".12s";
+    histSec.appendChild(el("h2", "ptitle", "ערבים אחרונים"));
+    if (games.length === 0) {
+      histSec.appendChild(el("p", "empty-note", "עוד אין ערבים ברקורד. אחרי שסוגרים שולחן בטאב “חישוב”, הערב יופיע כאן."));
+    } else {
+      games.slice(0, 12).forEach((g, i) => {
+        const row = el("div", "hgame");
+        row.style.animationDelay = (i * 40) + "ms";
+        const d = new Date(g.at);
+        row.appendChild(el("span", "hdate", d.toLocaleDateString("he-IL", { day: "numeric", month: "short" })));
+        row.appendChild(el("span", "hplayers", g.players.length + " שחקנים"));
+        const net = el("span", "hnet " + (g.mine.net > 0.005 ? "pos" : g.mine.net < -0.005 ? "neg" : "zero"), fmtSigned(g.mine.net));
+        row.appendChild(net);
+        histSec.appendChild(row);
+      });
+
+      // clear record (two-step confirm)
+      const danger = el("section", "psection");
+      danger.style.animationDelay = ".18s";
+      const clearBtn = el("button", "btn-clear-record", "איפוס רקורד");
+      clearBtn.type = "button";
+      clearBtn.addEventListener("click", () => {
+        if (!recArmed) {
+          recArmed = setTimeout(() => {
+            recArmed = null;
+            clearBtn.textContent = "איפוס רקורד";
+            clearBtn.classList.remove("armed");
+          }, 4000);
+          clearBtn.textContent = "בטוח? זה מוחק את ההיסטוריה של כולם";
+          clearBtn.classList.add("armed");
+          return;
+        }
+        clearTimeout(recArmed);
+        recArmed = null;
+        state.history = [];
+        markReal(); save(); renderProfile();
+      });
+      danger.appendChild(clearBtn);
       box.appendChild(histSec);
+      box.appendChild(danger);
+      return;
     }
+    box.appendChild(histSec);
   }
+  let recArmed = null;
 
   function addPlayer() {
     const inp = document.getElementById("newName");
