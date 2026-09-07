@@ -179,16 +179,21 @@
   .pmenu.open .pmenu-row > :nth-child(5) { animation-delay: .24s; }
   @keyframes chipIn { from { opacity: 0; transform: translateY(6px) scale(.9); } }
 
-  /* "other" chip morphs into a full-width input capsule */
+  /* "other" chip morphs into a full-width input capsule overlaying the row */
+  .pmenu-row { position: relative; }
   .chip-other { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
   .pmenu-row.other-mode > .chip:not(.chip-other),
   .pmenu-row.other-mode > .undo {
-    max-width: 0; min-width: 0; padding-inline: 0; opacity: 0;
-    border-color: transparent; pointer-events: none;
+    opacity: 0; pointer-events: none;
   }
   .pmenu-row.other-mode .chip-other {
-    max-width: 100%; flex: 1; border-color: var(--accent); overflow: visible;
+    position: absolute; inset-inline: 0; top: 0; z-index: 2;
+    max-width: none; overflow: visible;
+    background: var(--bg); border-color: var(--accent);
+    transform-origin: left center;
+    animation: capsuleGrow .3s ease;
   }
+  @keyframes capsuleGrow { from { transform: scaleX(.28); } }
   .other-label { flex: 0 0 auto; }
   .other-mode .chip-other .other-label { color: var(--accent); }
   input.other-input {
@@ -402,7 +407,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 18</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 19</p>
   </div>
 </div>
 
