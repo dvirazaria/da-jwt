@@ -204,16 +204,17 @@
     max-width: none; overflow: visible;
     background: var(--bg); border-color: var(--accent);
     transform-origin: left center;
+    transition: none; /* the grow animation alone drives the expansion */
     animation: capsuleGrow .3s ease;
   }
-  @keyframes capsuleGrow { from { transform: scaleX(.28); } }
+  @keyframes capsuleGrow { from { transform: scaleX(.28); opacity: .6; } }
   .other-label { flex: 0 0 auto; }
   .other-mode .chip-other .other-label { color: var(--accent); }
   input.other-input {
     flex: 0 1 0%; width: 0; min-width: 0; min-height: 0; opacity: 0;
     border: none; background: none; padding: 0; margin: 0;
     font: inherit; color: var(--text); font-variant-numeric: tabular-nums;
-    transition: opacity .25s ease .12s;
+    transition: opacity .2s ease;
   }
   .other-mode input.other-input { flex: 1 1 auto; width: auto; opacity: 1; }
   input.other-input:focus-visible { outline: none; }
@@ -423,7 +424,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 19</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 20</p>
   </div>
 </div>
 
@@ -755,6 +756,7 @@
     document.getElementById("modeProfile").classList.toggle("on", mode === "profile");
     document.getElementById("addrow").hidden = mode !== "game";
     document.getElementById("settingsBtn").hidden = mode !== "profile";
+    document.getElementById("resetBtn").hidden = mode === "profile";
 
     const rows = document.getElementById("rows");
     rows.innerHTML = "";
