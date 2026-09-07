@@ -289,15 +289,16 @@
   .btn-close-table {
     margin-top: 26px; border: 1px solid var(--accent); border-radius: 999px;
     color: var(--accent); font-weight: 700; font-size: 15px;
-    padding: 12px 26px; min-height: 48px;
+    padding: 12px 26px; min-height: 48px; touch-action: manipulation;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   }
   .btn-close-table:hover { background: var(--accent); color: var(--bg); }
   .btn-close-table.warn-state { border-color: var(--bad); color: var(--bad); }
   .btn-close-table.warn-state:hover { background: var(--bad); color: var(--bg); box-shadow: none; }
-  .btn-close-table:disabled { cursor: not-allowed; opacity: .45; border-color: var(--line); color: var(--faint); }
-  .btn-close-table:disabled:hover { background: none; color: var(--faint); }
-  .btn-force-close { margin-top: 10px; color: var(--dim); font-size: 13px; font-weight: 500; padding: 7px 2px; }
-  .btn-force-close:hover { color: var(--text); }
+  .btn-close-table.blocked-state { cursor: default; opacity: .45; border-color: var(--line); color: var(--faint); }
+  .btn-close-table.blocked-state:hover { background: none; color: var(--faint); }
+  .btn-close-table.force-state { border-color: var(--dim); color: var(--text); }
+  .btn-close-table.force-state:hover { background: var(--text); color: var(--bg); }
   .force-close-confirm { margin-top: 12px; color: var(--dim); font-size: 13px; }
   .force-close-confirm p { margin: 0 0 8px; }
   .force-close-actions { display: flex; align-items: center; gap: 14px; }
@@ -451,7 +452,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 24</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 25</p>
   </div>
 </div>
 
@@ -504,7 +505,6 @@
     <h2>מי משלם למי</h2>
     <div id="transfers"></div>
     <button type="button" class="btn-close-table" id="closeTableBtn" hidden>סגירת שולחן ורישום לרקורד</button>
-    <button type="button" class="btn-force-close" id="forceCloseBtn" hidden>סגור בכל זאת</button>
     <div class="force-close-confirm" id="forceCloseConfirm" hidden>
       <p id="forceCloseMessage"></p>
       <div class="force-close-actions">
@@ -528,6 +528,7 @@
   const THEME_KEY = "poker-settle-theme";
   const CONTACT_KEY = "poker-settle-contact";
   const HISTORY_MAX = 60;
+  const HOLD_TO_FORCE_CLOSE_MS = 3000;
 
   const EXAMPLE = {
     example: true,
@@ -783,6 +784,11 @@
     if (diff > 0) return "חסר " + fmt(diff);
     if (diff < 0) return "עודף " + fmt(Math.abs(diff));
     return "0";
+  }
+
+  function closeButtonLabel(isBalanced, forceUnlocked, closeArmed) {
+    if (!isBalanced) return forceUnlocked ? "סגור בכל זאת" : "הסכום לא מאוזן, לא ניתן לסגור";
+    return closeArmed ? "לסגור את השולחן? לחיצה נוספת מאשרת" : "סגירת שולחן ורישום לרקורד";
   }
 
   // Greedy settlement: fewest transfers between net winners and losers.
@@ -1166,16 +1172,22 @@
         });
       }
       const closeBtn = document.getElementById("closeTableBtn");
-      const forceBtn = document.getElementById("forceCloseBtn");
       const forceConfirm = document.getElementById("forceCloseConfirm");
       const hasTable = state.players.length && !state.example;
       const balanced = t.diff === 0;
+      if (!hasTable || balanced || (forceCloseUnlocked && forceCloseUnlockDifference !== t.diff)) {
+        forceCloseUnlocked = false;
+        forceCloseUnlockDifference = null;
+        forceCloseArmed = false;
+      }
       closeBtn.hidden = !hasTable;
-      closeBtn.disabled = !balanced;
-      closeBtn.setAttribute("aria-disabled", String(!balanced));
+      closeBtn.disabled = false;
+      closeBtn.setAttribute("aria-disabled", String(!balanced && !forceCloseUnlocked));
+      closeBtn.classList.toggle("blocked-state", !balanced && !forceCloseUnlocked);
+      closeBtn.classList.toggle("force-state", !balanced && forceCloseUnlocked);
       closeBtn.classList.toggle("warn-state", closeArmed);
-      forceBtn.hidden = !hasTable || balanced || forceCloseArmed;
       forceConfirm.hidden = !hasTable || balanced || !forceCloseArmed;
+      closeBtn.textContent = closeButtonLabel(balanced, forceCloseUnlocked, closeArmed);
       if (forceCloseArmed) document.getElementById("forceCloseMessage").textContent =
         "השולחן לא מאוזן — " + balanceDescription(t.diff) + ". לסגור את המשחק בכל זאת?";
     }
@@ -1233,6 +1245,42 @@
   let closeArmed = false;
   let closeArmTimer = null;
   let forceCloseArmed = false;
+  let forceCloseUnlocked = false;
+  let forceCloseUnlockDifference = null;
+  let closeHoldTimer = null;
+  let longPressJustUnlocked = false;
+
+  function clearCloseHold() {
+    if (closeHoldTimer) clearTimeout(closeHoldTimer);
+    closeHoldTimer = null;
+  }
+
+  function beginCloseHold(e) {
+    const t = totals();
+    if (mode !== "settle" || !state.players.length || state.example || t.diff === 0 || forceCloseUnlocked) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    clearCloseHold();
+    const btn = e.currentTarget;
+    if (btn.setPointerCapture && e.pointerId !== undefined) btn.setPointerCapture(e.pointerId);
+    closeHoldTimer = setTimeout(() => {
+      closeHoldTimer = null;
+      const current = totals();
+      if (mode !== "settle" || !state.players.length || state.example || current.diff === 0) return;
+      forceCloseUnlocked = true;
+      forceCloseUnlockDifference = current.diff;
+      forceCloseArmed = false;
+      longPressJustUnlocked = true;
+      renderDerived();
+    }, HOLD_TO_FORCE_CLOSE_MS);
+  }
+
+  function endCloseHold(e) {
+    clearCloseHold();
+    const btn = e.currentTarget;
+    if (btn.releasePointerCapture && e.pointerId !== undefined && btn.hasPointerCapture && btn.hasPointerCapture(e.pointerId)) {
+      btn.releasePointerCapture(e.pointerId);
+    }
+  }
 
   function finishCloseTable() {
     const t = totals();
@@ -1241,6 +1289,9 @@
     clearTimeout(closeArmTimer);
     closeArmed = false;
     forceCloseArmed = false;
+    forceCloseUnlocked = false;
+    forceCloseUnlockDifference = null;
+    longPressJustUnlocked = false;
     btn.classList.remove("warn-state");
     btn.textContent = "סגירת שולחן ורישום לרקורד";
     const entry = buildHistoryEntry(state, { difference: t.diff, isBalanced: balanced }, new Date().toISOString());
@@ -1260,7 +1311,16 @@
   document.getElementById("closeTableBtn").addEventListener("click", (e) => {
     const btn = e.currentTarget;
     const t = totals();
-    if (t.diff !== 0) return;
+    if (longPressJustUnlocked) {
+      longPressJustUnlocked = false;
+      return;
+    }
+    if (t.diff !== 0) {
+      if (!forceCloseUnlocked) return;
+      forceCloseArmed = true;
+      renderDerived();
+      return;
+    }
     if (!closeArmed) {
       closeArmed = true;
       btn.classList.add("warn-state");
@@ -1275,10 +1335,11 @@
     finishCloseTable();
   });
 
-  document.getElementById("forceCloseBtn").addEventListener("click", () => {
-    forceCloseArmed = true;
-    renderDerived();
-  });
+  const closeTableBtn = document.getElementById("closeTableBtn");
+  closeTableBtn.addEventListener("pointerdown", beginCloseHold);
+  closeTableBtn.addEventListener("pointerup", endCloseHold);
+  closeTableBtn.addEventListener("pointercancel", endCloseHold);
+  closeTableBtn.addEventListener("lostpointercapture", endCloseHold);
   document.getElementById("forceCloseCancel").addEventListener("click", () => {
     forceCloseArmed = false;
     renderDerived();
@@ -1438,7 +1499,13 @@
     if (mode === m) return;
     mode = m;
     if (m !== "game") { openMenu = null; customOpen = null; }
-    if (m !== "settle") forceCloseArmed = false;
+    if (m !== "settle") {
+      clearCloseHold();
+      forceCloseArmed = false;
+      forceCloseUnlocked = false;
+      forceCloseUnlockDifference = null;
+      longPressJustUnlocked = false;
+    }
     animNext = "all";
     render();
   }

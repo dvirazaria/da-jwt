@@ -80,6 +80,16 @@ test('table balance is an exact integer: buy-ins minus cashouts', () => {
   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(tableBalance([{buyins:[4500],cashout:4400}]))', context)), {buy:4500,out:4400,difference:100,isBalanced:false});
   assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(tableBalance([{buyins:[4500],cashout:4500}]))', context)), {buy:4500,out:4500,difference:0,isBalanced:true});
 });
+test('unbalanced close stays blocked until the long-press state is unlocked', () => {
+  const start = html.indexOf('  function closeButtonLabel');
+  const end = html.indexOf('  // Greedy settlement', start);
+  assert.ok(start >= 0, 'closeButtonLabel helper exists');
+  const context = vm.createContext({});
+  vm.runInContext(html.slice(start, end), context);
+  assert.equal(vm.runInContext('closeButtonLabel(false, false, false)', context), 'הסכום לא מאוזן, לא ניתן לסגור');
+  assert.equal(vm.runInContext('closeButtonLabel(false, true, false)', context), 'סגור בכל זאת');
+  assert.equal(vm.runInContext('closeButtonLabel(true, false, false)', context), 'סגירת שולחן ורישום לרקורד');
+});
 test('closed history records whether the table was balanced and the exact difference', () => {
   const start = html.indexOf('  function buildHistoryEntry');
   const end = html.indexOf('  // Greedy settlement', start);
