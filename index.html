@@ -23,6 +23,7 @@
     --accent: #35E0DC;
     --accent-press: #8FF0EC;
     --bad: #FF6D6D;
+    --close-hold-fill: #EAF4F4;
     color-scheme: dark;
   }
   :root[data-theme="light"] {
@@ -34,6 +35,7 @@
     --accent: #089E98;
     --accent-press: #0CC2BB;
     --bad: #D4403E;
+    --close-hold-fill: #05070A;
     color-scheme: light;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -299,7 +301,7 @@
     content: ""; position: absolute; z-index: 0;
     inset: 50% auto auto 50%; width: 0; height: calc(100% - 6px);
     border-radius: 999px; transform: translate(-50%, -50%);
-    background: #05070A; pointer-events: none;
+    background: var(--close-hold-fill); pointer-events: none;
     transition: width 1s linear;
   }
   .btn-close-table:hover { background: var(--accent); color: var(--bg); }
@@ -465,7 +467,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 28</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 29</p>
   </div>
 </div>
 
