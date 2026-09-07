@@ -393,6 +393,38 @@
   .games-create-cancel { color: var(--dim); font-size: 13px; padding: 6px 2px; }
   .games-create-cancel:hover { color: var(--text); }
 
+  /* group-page "start game" participant panel (Task 8) — checkbox rows + guest add, reusing
+     .games-create-panel above for the collapse/expand animation */
+  .group-start-panel { margin-top: 14px; }
+  .group-start-member {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px;
+    padding: 8px 4px; border-bottom: 1px solid var(--line);
+    color: var(--text); font-size: 15px; font-weight: 600; text-align: start;
+  }
+  .group-start-member:last-of-type { border-bottom: none; }
+  .group-start-check {
+    flex: 0 0 auto; width: 22px; height: 22px; border-radius: 6px;
+    border: 1px solid var(--line); display: flex; align-items: center; justify-content: center;
+    transition: border-color .18s, background-color .18s;
+  }
+  .group-start-member[aria-checked="true"] .group-start-check { background: var(--accent); border-color: var(--accent); }
+  .group-start-check svg {
+    width: 13px; height: 13px; opacity: 0; stroke: var(--bg); stroke-width: 2.4;
+    fill: none; stroke-linecap: round; stroke-linejoin: round; transition: opacity .15s;
+  }
+  .group-start-member[aria-checked="true"] .group-start-check svg { opacity: 1; }
+  .group-start-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .group-start-guests { margin-top: 4px; }
+  .group-start-guest-row {
+    display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 4px;
+    border-bottom: 1px solid var(--line); font-size: 15px; font-weight: 600; color: var(--text);
+  }
+  .group-start-guest-remove { margin-inline-start: auto; color: var(--dim); font-size: 12px; font-weight: 400; }
+  .group-start-guest-remove:hover { color: var(--bad); }
+  .group-start-add { margin-top: 10px; text-align: center; }
+  .group-start-add-label { margin: 0 0 8px; color: var(--dim); font-size: 13px; font-weight: 600; }
+  .group-start-add-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+
   /* group page: header, primary action, leaderboard, last game, members, history */
   .games-group-header { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 40px; text-align: center; }
   .games-group-header-avatar {
@@ -407,12 +439,11 @@
   .btn-primary:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--faint); }
   .btn-primary:disabled:hover { background: none; color: var(--faint); }
   .games-primary-reason { margin: 10px 0 0; color: var(--dim); font-size: 12px; font-weight: 300; }
-  .games-leader-row, .games-member-row, .games-history-row {
+  .games-leader-row, .games-member-row {
     margin: 0; padding: 8px 0; border-bottom: 1px solid var(--line);
     font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere;
   }
-  .games-leader-row:last-of-type, .games-member-row:last-of-type, .games-history-row:last-of-type { border-bottom: none; }
-  .games-history-row { font-size: 13px; font-weight: 400; color: var(--dim); }
+  .games-leader-row:last-of-type, .games-member-row:last-of-type { border-bottom: none; }
   .games-member-tag { margin-inline-start: 6px; color: var(--dim); font-size: 12px; font-weight: 400; }
 
   /* group members: admin row actions, add-member panel, former members */
@@ -430,6 +461,15 @@
   .games-former-members { margin-top: 14px; text-align: center; }
   .games-former-toggle { color: var(--dim); font-size: 12px; font-weight: 500; padding: 6px 2px; }
   .games-former-toggle:hover { color: var(--accent); }
+
+  /* group history: tappable rows expanding into a per-game ranking (Task 11) */
+  .games-history-item { padding: 8px 0; border-bottom: 1px solid var(--line); text-align: center; }
+  .games-history-item:last-of-type { border-bottom: none; }
+  .games-history-head { cursor: pointer; }
+  .games-history-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
+  .games-history-row { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+  .games-history-tag { margin-inline-start: 6px; color: var(--bad); font-size: 12px; font-weight: 500; }
+  .games-history-rank { margin: 0; padding: 4px 0; font-size: 13px; font-weight: 500; color: var(--text); }
 
   .btn-close-table {
     position: relative; overflow: hidden; isolation: isolate;
@@ -626,6 +666,19 @@
   .games-invite-revoke { color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; }
   .games-invite-revoke:hover { color: var(--bad); }
 
+  /* group page: settings corner button, member promote action, disabled group avatar picker */
+  .games-group-settings-btn {
+    position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); inset-inline-end: 0;
+    display: inline-flex; align-items: center; min-height: 44px;
+    color: var(--dim); font-size: 13px; font-weight: 500; padding: 10px 8px;
+  }
+  .games-group-settings-btn:hover { color: var(--accent); }
+  .games-member-promote { flex: 0 0 auto; color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; }
+  .games-member-promote:hover { color: var(--accent); }
+  .games-create-avatar:disabled { cursor: default; opacity: .55; }
+  .set-flat:disabled { opacity: .5; cursor: default; }
+  .set-flat:disabled:hover { color: var(--faint); }
+
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
@@ -664,7 +717,23 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">גרסה 39</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 40</p>
+  </div>
+</div>
+
+<div class="login" id="groupSettings" hidden>
+  <button type="button" class="back-arrow" id="groupSetBackBtn" aria-label="חזרה">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+  </button>
+  <div class="login-in set-in">
+    <button type="button" class="games-create-avatar" id="groupSetAvatarBtn" aria-label="שינוי תמונת הקבוצה">?</button>
+    <input type="file" id="groupSetAvatarFile" accept="image/*" hidden aria-hidden="true">
+    <input type="text" id="groupSetName" maxlength="40" placeholder="שם הקבוצה" autocomplete="off" aria-label="שם הקבוצה">
+    <button type="button" class="set-flat" id="groupSetArchiveBtn">העבר לארכיון</button>
+    <button type="button" class="set-flat danger" id="groupSetDeleteBtn">מחק קבוצה</button>
+    <p class="games-primary-reason" id="groupSetDeleteReason" hidden></p>
+    <button type="button" class="set-flat" id="groupSetLeaveBtn">עזוב קבוצה</button>
+    <p class="games-primary-reason" id="groupSetLeaveReason" hidden></p>
   </div>
 </div>
 
@@ -766,6 +835,7 @@
   const expandedEntries = new Set();
   const expandedGameCards = new Set();
   const expandedGroupCards = new Set();
+  const expandedGroupGames = new Set();
   let state = load();
   let appView = "games";         // "games" | "game" | "settle" | "profile" | "group"
   let currentGroupId = null;  // UI-only: which group's page is open when appView === "group"
@@ -785,6 +855,10 @@
   let removeMemberArmedId = null;      // memberId whose "הסר" is armed (two-step confirm)
   let removeMemberArmedTimeout = null; // auto-disarm timer for the above
   let formerMembersOpen = false;       // whether the "חברים לשעבר" collapsed list is expanded
+  let startGameOpen = false;          // whether the group-page "start game" participant panel is expanded
+  let startGameJustOpened = false;    // panel should animate open on the next render
+  let startGameSelection = new Set(); // active-member ids selected as participants (creator preselected)
+  let startGameGuests = [];           // [{ name, guestId }] ad-hoc guests added in the panel — not group members
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
   let animName = null;        // the player to animate when animNext === "one"
   let me = loadMe();
@@ -1420,10 +1494,20 @@
   }
   // Builds a GroupGameSummary from a closed-game HistoryEntry for the group's last-game and
   // history rows. Deliberately has no net/cashout field — group screens never show another
-  // person's exact P&L (Global Constraint 10).
+  // person's exact P&L (Global Constraint 10). `ranking` is names only (net desc, ties by name).
   function toGroupGameSummary(historyEntry) {
     const entry = historyEntry || {};
     const players = Array.isArray(entry.players) ? entry.players : [];
+    const ranking = players.slice().sort((a, b) => {
+      const netA = Number(a.net) || 0, netB = Number(b.net) || 0;
+      if (netB !== netA) return netB - netA;
+      return String((a && a.name) || "").localeCompare(String((b && b.name) || ""), "he");
+    }).map(p => p.name);
+    const startedMs = entry.startedAt ? new Date(entry.startedAt).getTime() : NaN;
+    const atMs = entry.at ? new Date(entry.at).getTime() : NaN;
+    const durationMinutes = Number.isFinite(startedMs) && Number.isFinite(atMs)
+      ? Math.max(0, Math.round((atMs - startedMs) / 60000))
+      : null;
     return {
       gameId: entry.gameId,
       at: entry.at,
@@ -1431,10 +1515,22 @@
       playerCount: players.length,
       playerNames: players.map(p => p.name),
       winnerNames: gameWinners(entry).map(p => p.name),
+      ranking,
+      durationMinutes,
       potSize: players.reduce((total, p) => total + (Number(p.buyin) || 0), 0),
       totalEntries: players.reduce((total, p) => total + (Array.isArray(p.entryLog) ? p.entryLog.length : 0), 0),
       isBalanced: !!entry.isBalanced,
     };
+  }
+  // Short Hebrew duration for group history rows: "Xשע׳ Yדק׳" / "Yדק׳". Empty string when null
+  // (no startedAt on legacy/ungrouped games).
+  function formatDuration(minutes) {
+    if (minutes === null || minutes === undefined || !Number.isFinite(minutes)) return "";
+    const total = Math.max(0, Math.round(minutes));
+    const hours = Math.floor(total / 60);
+    const mins = total % 60;
+    if (hours <= 0) return mins + "דק׳";
+    return mins > 0 ? hours + "שע׳ " + mins + "דק׳" : hours + "שע׳";
   }
   // Deviation (documented): a participant is eligible when their identity matches any
   // GroupMember of the group, active or former. Ad-hoc game guests who never joined are excluded.
@@ -1512,6 +1608,14 @@
   function getGroupSummaries(collections, meName) {
     const c = collections || {};
     return visibleGroups(Array.isArray(c.groups) ? c.groups : [])
+      .map(g => getGroupSummary(c, g.id, meName))
+      .filter(Boolean);
+  }
+  // Same shape as getGroupSummaries, but for archived-not-deleted groups (archivedGroups) — the
+  // dashboard's collapsed "ארכיון" list and the read-only archived group page read from this.
+  function getArchivedGroupSummaries(collections, meName) {
+    const c = collections || {};
+    return archivedGroups(Array.isArray(c.groups) ? c.groups : [])
       .map(g => getGroupSummary(c, g.id, meName))
       .filter(Boolean);
   }
@@ -1625,6 +1729,46 @@
     member.role = nextRole;
     return true;
   }
+  // Renames a group in place. Refused (false, no mutation) when the group is missing or the
+  // trimmed name is empty or over 40 chars (same cap as the create-group name input).
+  function renameGroup(groups, id, name) {
+    const group = (Array.isArray(groups) ? groups : []).find(g => g && g.id === id);
+    if (!group) return false;
+    const trimmed = String(name || "").trim();
+    if (!trimmed || trimmed.length > 40) return false;
+    group.name = trimmed;
+    return true;
+  }
+  // Sets or clears (dataUrl null) a group's avatar in place. Refused only when the group is missing.
+  function setGroupAvatar(groups, id, dataUrl) {
+    const group = (Array.isArray(groups) ? groups : []).find(g => g && g.id === id);
+    if (!group) return false;
+    group.avatarDataUrl = dataUrl || null;
+    return true;
+  }
+  // Archives a group in place (soft: archivedAt). Refused when missing or already archived/deleted.
+  function archiveGroup(groups, id, at) {
+    const group = (Array.isArray(groups) ? groups : []).find(g => g && g.id === id);
+    if (!group || group.archivedAt || group.deletedAt) return false;
+    group.archivedAt = at;
+    return true;
+  }
+  // Restores an archived group in place. Refused when missing, not archived, or deleted.
+  function unarchiveGroup(groups, id) {
+    const group = (Array.isArray(groups) ? groups : []).find(g => g && g.id === id);
+    if (!group || !group.archivedAt || group.deletedAt) return false;
+    group.archivedAt = null;
+    return true;
+  }
+  // Soft-deletes a group in place (deletedAt). History entries and debts are untouched by
+  // design — a deleted group's closed games stay in every player's personal history/profile
+  // (Global Constraint: personal record safe). Refused when missing or already deleted.
+  function deleteGroup(groups, id, at) {
+    const group = (Array.isArray(groups) ? groups : []).find(g => g && g.id === id);
+    if (!group || group.deletedAt) return false;
+    group.deletedAt = at;
+    return true;
+  }
   // True when memberId is an active admin and no other active admin shares their group — i.e.
   // removing/demoting them, or letting them leave, would leave the group without one.
   function isLastActiveAdmin(members, memberId) {
@@ -1632,6 +1776,14 @@
     const member = list.find(m => m && m.id === memberId);
     if (!member || member.status !== "active" || member.role !== "admin") return false;
     return !list.some(m => m && m.id !== memberId && m.groupId === member.groupId && m.status === "active" && m.role === "admin");
+  }
+  // Builds a Player record for the current game. guestId/memberId stay null for an ungrouped
+  // game; addPlayer and startGroupGame resolve them for a group game (Task 8).
+  function createPlayer({ name, guestId, memberId }) {
+    return {
+      id: newId(), name, buyins: [], entryLog: [], cashout: "", status: "active", exitedAt: null,
+      guestId: guestId || null, memberId: memberId || null, userId: null,
+    };
   }
 
   // ---------- invites (pure) ----------
@@ -1797,6 +1949,7 @@
       forceCloseUnlockDifference = null;
       longPressJustUnlocked = false;
     }
+    resetStartGamePanel();
     animNext = "all";
     render();
   }
@@ -1807,6 +1960,31 @@
     openMenu = null; customOpen = null; pendingAmount = null; exitOpen = null; exitJustOpened = null;
     save();
     setAppView("game");
+  }
+
+  // Starts a game linked to a group: guarded by canStartGroupGame (the single-open-game rule)
+  // and needing at least one participant. Each participant becomes a Player via the shared
+  // createPlayer helper plus an immediate first buy-in (same product rule as addPlayer).
+  function startGroupGame(groupId, participants) {
+    const list = Array.isArray(participants) ? participants : [];
+    if (!canStartGroupGame(collectionsOf(state), groupId).ok || list.length < 1) return false;
+    state = newCurrentGame(state, {
+      phase: "active",
+      groupId,
+      startedAt: new Date().toISOString(),
+      leaderRef: { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me },
+    });
+    list.forEach(participant => {
+      const player = createPlayer(participant);
+      addEntry(player, MIN_BUYIN);
+      state.players.push(player);
+    });
+    expandedEntries.clear();
+    openMenu = customOpen = pendingAmount = null;
+    animNext = "all";
+    save();
+    setAppView("game");
+    return true;
   }
 
   function continueCurrentGame() {
@@ -1908,6 +2086,17 @@
     const member = state.groupMembers.find(m => m && m.id === memberId && m.groupId === groupId);
     if (!member) return false;
     if (!removeGroupMember(state.groupMembers, memberId, new Date().toISOString())) return false;
+    save();
+    renderGroupPage();
+    return true;
+  }
+
+  // Promotes a member to admin (cheap admin transfer/second-admin, Task 14). Scoped to groupId
+  // like removeMember, above.
+  function promoteMember(groupId, memberId) {
+    const member = state.groupMembers.find(m => m && m.id === memberId && m.groupId === groupId);
+    if (!member) return false;
+    if (!setMemberRole(state.groupMembers, memberId, "admin")) return false;
     save();
     renderGroupPage();
     return true;
@@ -2018,6 +2207,14 @@
 
   function formatMemberCount(count) {
     return count === 1 ? "חבר אחד" : count + " חברים";
+  }
+
+  function formatGamesPlayedCount(count) {
+    return count === 1 ? "משחק אחד" : count + " משחקים";
+  }
+
+  function formatWinsCount(count) {
+    return count === 1 ? "ניצחון אחד" : count + " ניצחונות";
   }
 
   function renderQuickActions(parent) {
@@ -2201,7 +2398,9 @@
       head.appendChild(el("span", "games-group-avatar", String(group.name || "?").slice(0, 1)));
     }
     const copy = el("div", "");
-    copy.appendChild(el("span", "games-card-title", String(group.name || "")));
+    const titleSpan = el("span", "games-card-title", String(group.name || ""));
+    if (actions.archived) titleSpan.appendChild(el("span", "games-member-tag", "בארכיון"));
+    copy.appendChild(titleSpan);
     copy.appendChild(el("span", "games-card-meta", formatMemberCount(Number(group.memberCount || 0)) + (group.hasActiveGame ? " · משחק פעיל" : "")));
     head.appendChild(copy);
     card.appendChild(head);
@@ -2251,6 +2450,35 @@
     parent.appendChild(section);
   }
 
+  // Collapsed "ארכיון (N)" line under "הקבוצות שלי", shown only when archived-not-deleted groups
+  // exist on this device (same collapse pattern as renderFormerMembers). Reuses renderGroupCard
+  // with the "archived" tag; opening a card leads to the read-only archived group page.
+  function renderArchivedGroupsSection(parent, archived) {
+    const list = Array.isArray(archived) ? archived : [];
+    if (!list.length) return;
+    const wrap = el("div", "games-former-members");
+    const toggle = el("button", "games-former-toggle", "ארכיון (" + list.length + ")");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", String(archivedGroupsOpen));
+    toggle.addEventListener("click", () => { archivedGroupsOpen = !archivedGroupsOpen; renderGamesDashboard(); });
+    wrap.appendChild(toggle);
+    if (archivedGroupsOpen) {
+      list.forEach(group => {
+        const groupId = String(group.groupId || group.id || "");
+        wrap.appendChild(renderGroupCard(group, {
+          expanded: expandedGroupCards.has(groupId),
+          archived: true,
+          onToggle: () => {
+            expandedGroupCards.has(groupId) ? expandedGroupCards.delete(groupId) : expandedGroupCards.add(groupId);
+            renderGamesDashboard();
+          },
+          onOpen: () => openGroup(groupId),
+        }));
+      });
+    }
+    parent.appendChild(wrap);
+  }
+
   function enterActiveGame(gameId) {
     if (String(state.gameId || "") !== String(gameId || "")) return;
     continueCurrentGame();
@@ -2265,6 +2493,7 @@
     renderQuickActions(inner);
     renderActiveGamesSection(inner, getActiveGameSummaries(state));
     renderGroupsSection(inner, getGroupSummaries(collectionsOf(state), me));
+    renderArchivedGroupsSection(inner, getArchivedGroupSummaries(collectionsOf(state), me));
     box.appendChild(inner);
   }
 
@@ -2277,6 +2506,15 @@
     back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>';
     back.addEventListener("click", () => setAppView("games"));
     header.appendChild(back);
+    // Reachable by any active member — not admin-only — since "עזוב קבוצה" must stay reachable
+    // for everyone; admin-only controls (rename, avatar, archive, delete) live inside the overlay.
+    if (summary.isMember) {
+      const settingsBtn = el("button", "games-group-settings-btn", "הגדרות");
+      settingsBtn.type = "button";
+      settingsBtn.setAttribute("aria-label", "הגדרות קבוצה");
+      settingsBtn.addEventListener("click", openGroupSettings);
+      header.appendChild(settingsBtn);
+    }
     if (summary.avatarDataUrl) {
       const avatar = el("img", "games-group-header-avatar");
       avatar.src = summary.avatarDataUrl;
@@ -2299,9 +2537,14 @@
     const btn = el("button", "btn-primary");
     btn.type = "button";
     let reason = null;
+    const canStart = !summary.hasActiveGame && gate && gate.ok;
     if (summary.hasActiveGame) {
       btn.textContent = summary.activeGamePhase === "settlement" ? "המשך סגירה" : "כנס לשולחן";
       btn.addEventListener("click", continueCurrentGame);
+    } else if (canStart) {
+      btn.textContent = "התחל משחק";
+      btn.setAttribute("aria-expanded", String(startGameOpen));
+      btn.addEventListener("click", toggleStartGamePanel);
     } else {
       btn.textContent = "התחל משחק";
       btn.disabled = true;
@@ -2317,33 +2560,192 @@
     }
     wrap.appendChild(btn);
     if (reason) wrap.appendChild(el("p", "games-primary-reason", reason));
+    if (canStart) wrap.appendChild(renderStartGamePanel());
     return wrap;
   }
 
-  // Top 3 LeaderboardEntry rows, names only — no amounts (Global Constraint 10).
+  // Inline participant panel opened by the "התחל משחק" primary button (Task 8), gated by
+  // canStartGroupGame(...).ok. Same grid-collapse pattern/CSS as .games-create-panel. Toggling
+  // a member checkbox updates just that row + the confirm button in place (no full re-render),
+  // so a guest name mid-typing in the add-guest input below is never wiped out.
+  function renderStartGamePanel() {
+    const wrap = el("div", "group-start-panel");
+    const panel = el("div", "games-create-panel");
+    const panelIn = el("div", "games-create-panel-in");
+    const content = el("div", "games-create-panel-content");
+
+    const members = activeMembers(state.groupMembers, currentGroupId);
+    members.forEach(member => content.appendChild(renderStartGameMemberRow(member)));
+
+    if (startGameGuests.length) content.appendChild(renderStartGameGuestsList());
+    content.appendChild(renderStartGameAddGuest());
+
+    const confirmBtn = el("button", "btn-primary group-start-confirm", "פתח שולחן");
+    confirmBtn.type = "button";
+    const total = startGameSelection.size + startGameGuests.length;
+    confirmBtn.disabled = total < 1;
+    confirmBtn.setAttribute("aria-disabled", String(total < 1));
+    confirmBtn.addEventListener("click", () => {
+      if (startGameSelection.size + startGameGuests.length < 1) return;
+      const participants = members
+        .filter(m => startGameSelection.has(m.id))
+        .map(m => ({ name: m.displayName, guestId: m.guestId || null, memberId: m.id }))
+        .concat(startGameGuests.map(g => ({ name: g.name, guestId: g.guestId, memberId: null })));
+      startGroupGame(currentGroupId, participants);
+    });
+    content.appendChild(confirmBtn);
+
+    const cancelBtn = el("button", "games-create-cancel", "ביטול");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", closeStartGamePanel);
+    content.appendChild(cancelBtn);
+
+    panelIn.appendChild(content);
+    panel.appendChild(panelIn);
+    if (startGameOpen && startGameJustOpened) {
+      startGameJustOpened = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add("open")));
+    } else if (startGameOpen) {
+      panel.classList.add("open");
+    }
+    wrap.appendChild(panel);
+    return wrap;
+  }
+
+  // A single checkbox row for an active member (custom control: button[role=checkbox], ≥44px).
+  function renderStartGameMemberRow(member) {
+    const checked = startGameSelection.has(member.id);
+    const row = el("button", "group-start-member");
+    row.type = "button";
+    row.setAttribute("role", "checkbox");
+    row.setAttribute("aria-checked", String(checked));
+    const check = el("span", "group-start-check");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 12 12");
+    svg.setAttribute("aria-hidden", "true");
+    svg.innerHTML = '<path d="M2.5 6.2 5 8.7 9.5 3.2"/>';
+    check.appendChild(svg);
+    row.appendChild(check);
+    row.appendChild(el("span", "group-start-name", member.displayName));
+    row.addEventListener("click", () => {
+      const next = !startGameSelection.has(member.id);
+      if (next) startGameSelection.add(member.id); else startGameSelection.delete(member.id);
+      row.setAttribute("aria-checked", String(next));
+      updateStartGameConfirmState();
+    });
+    return row;
+  }
+
+  // Keeps the "פתח שולחן" button's disabled state in sync after an in-place row toggle.
+  function updateStartGameConfirmState() {
+    const btn = document.querySelector(".group-start-confirm");
+    if (!btn) return;
+    const total = startGameSelection.size + startGameGuests.length;
+    btn.disabled = total < 1;
+    btn.setAttribute("aria-disabled", String(total < 1));
+  }
+
+  // Ad-hoc guests added in the panel; NOT group members (no addGroupMember call — see Task 8).
+  // Removing one re-renders the group page, a low-frequency action unlike the checkbox toggle.
+  function renderStartGameGuestsList() {
+    const wrap = el("div", "group-start-guests");
+    startGameGuests.forEach((guest, idx) => {
+      const row = el("div", "group-start-guest-row");
+      row.appendChild(el("span", "group-start-name", guest.name));
+      const removeBtn = el("button", "group-start-guest-remove", "הסר");
+      removeBtn.type = "button";
+      removeBtn.addEventListener("click", () => {
+        startGameGuests.splice(idx, 1);
+        renderGroupPage();
+      });
+      row.appendChild(removeBtn);
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
+
+  // Inline "+ הוסף אורח" name input, same resolveGuestId reuse as addMemberByName. A duplicate
+  // of an already-selected member or already-added guest name shakes the input instead of
+  // silently failing (guests never become group members, so there is no addGroupMember guard).
+  function renderStartGameAddGuest() {
+    const wrap = el("div", "group-start-add");
+    wrap.appendChild(el("p", "group-start-add-label", "+ הוסף אורח"));
+    const row = el("div", "group-start-add-row");
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.maxLength = 40;
+    nameInput.placeholder = "שם";
+    nameInput.autocomplete = "off";
+    nameInput.setAttribute("aria-label", "שם האורח");
+
+    const submit = () => {
+      const name = nameInput.value.trim();
+      if (!name) { shakeEl(nameInput); return; }
+      const members = activeMembers(state.groupMembers, currentGroupId);
+      const selectedNames = members.filter(m => startGameSelection.has(m.id)).map(m => m.displayName);
+      const guestNames = startGameGuests.map(g => g.name);
+      if (selectedNames.includes(name) || guestNames.includes(name)) { shakeEl(nameInput); return; }
+      startGameGuests.push({ name, guestId: resolveGuestId(collectionsOf(state), name) });
+      renderGroupPage();
+    };
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+    });
+
+    const submitBtn = el("button", "games-create-submit", "הוסף");
+    submitBtn.type = "button";
+    submitBtn.addEventListener("click", submit);
+
+    row.append(nameInput, submitBtn);
+    wrap.appendChild(row);
+    return wrap;
+  }
+
+  function toggleStartGamePanel() {
+    if (startGameOpen) { closeStartGamePanel(); return; }
+    const members = activeMembers(state.groupMembers, currentGroupId);
+    const mine = members.find(m => m && m.displayName === me);
+    startGameOpen = true;
+    startGameJustOpened = true;
+    startGameSelection = new Set(mine ? [mine.id] : []);
+    startGameGuests = [];
+    renderGroupPage();
+  }
+
+  // Plays the panel's collapse transition (matching closeAddMemberPanel's approach) before
+  // resetting its draft state and rebuilding the group page without it.
+  function closeStartGamePanel() {
+    const panel = document.querySelector(".group-start-panel .games-create-panel.open");
+    const finish = () => { resetStartGamePanel(); renderGroupPage(); };
+    if (!panel) { finish(); return; }
+    panel.classList.remove("open");
+    setTimeout(finish, 280);
+  }
+
+  function resetStartGamePanel() {
+    startGameOpen = false;
+    startGameJustOpened = false;
+    startGameSelection = new Set();
+    startGameGuests = [];
+  }
+
+  // Full LeaderboardEntry list, names only — no amounts (Global Constraint 10). Tie ranks share
+  // the same number. Former members get a quiet "לשעבר" tag next to their name.
   function renderGroupLeaders(entries) {
     const section = el("section", "games-section");
     section.appendChild(el("h3", "games-section-title", "דירוג"));
-    const top = (Array.isArray(entries) ? entries : []).slice(0, 3);
-    if (!top.length) {
+    const list = Array.isArray(entries) ? entries : [];
+    if (!list.length) {
       section.appendChild(el("p", "games-empty", "הדירוג יופיע אחרי המשחק הראשון"));
     } else {
-      top.forEach(entry => section.appendChild(el("p", "games-leader-row", entry.rank + ". " + entry.displayName)));
-    }
-    return section;
-  }
-
-  // Newest GroupGameSummary. Returns null (nothing to append) when there isn't one yet, so the
-  // "no games" empty state lives only once, in renderGroupHistory, instead of twice.
-  function renderGroupLastGame(gameSummary) {
-    if (!gameSummary) return null;
-    const section = el("section", "games-section");
-    section.appendChild(el("h3", "games-section-title", "המשחק האחרון"));
-    section.appendChild(el("p", "games-card-meta", [formatShortGameDate(gameSummary.at), formatPlayerCount(gameSummary.playerCount)].filter(Boolean).join(" · ")));
-    const winners = (Array.isArray(gameSummary.winnerNames) ? gameSummary.winnerNames : []).filter(Boolean);
-    if (winners.length) {
-      const label = (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ");
-      section.appendChild(el("p", "games-card-title", label));
+      list.forEach(entry => {
+        const row = el("p", "games-leader-row");
+        const name = el("span", "", entry.rank + ". " + entry.displayName);
+        if (entry.isFormerMember) name.appendChild(el("span", "games-member-tag", "לשעבר"));
+        row.appendChild(name);
+        row.appendChild(el("span", "games-card-meta", formatGamesPlayedCount(entry.gamesPlayed) + " · " + formatWinsCount(entry.wins)));
+        section.appendChild(row);
+      });
     }
     return section;
   }
@@ -2371,10 +2773,21 @@
     const name = el("span", "games-member-name", member.displayName);
     if (member.role === "admin") name.appendChild(el("span", "games-member-tag", "מנהל"));
     row.appendChild(name);
+    // Cheap admin transfer/second-admin: any non-admin row gets "הפוך למנהל" so a group is never
+    // left with a single point of failure (Task 14 decision).
+    if (isAdmin && member.role !== "admin") {
+      row.appendChild(renderMakeAdminButton(member));
+    }
     if (isAdmin && member.displayName !== me && !isLastActiveAdmin(activeList, member.id)) {
       row.appendChild(renderRemoveMemberButton(member));
     }
     return row;
+  }
+  function renderMakeAdminButton(member) {
+    const btn = el("button", "games-member-promote", "הפוך למנהל");
+    btn.type = "button";
+    btn.addEventListener("click", () => promoteMember(member.groupId, member.id));
+    return btn;
   }
 
   // Two-step armed control, same idea as resetBtn/setClearBtn: label flips to "בטוח?" for 4s,
@@ -2497,29 +2910,67 @@
     return wrap;
   }
 
-  // Last 5 GroupGameSummary rows (Task 11 extends this into a fuller history screen). Owns the
-  // shared "no games yet" empty state for both this section and the last-game section above it.
+  // One flat, tappable GroupGameSummary row: date · N שחקנים · winner(s), a quiet meta line
+  // (pot, duration when known, "לא מאוזן" tag when unbalanced), and — expanded via the shared
+  // grid-collapse details pattern — the full ranking by place, names only (no money).
+  function renderGroupHistoryRow(game, expanded, onToggle) {
+    const item = el("div", "games-history-item");
+    const head = el("div", "games-history-head");
+    head.setAttribute("role", "button");
+    head.setAttribute("tabindex", "0");
+    head.setAttribute("aria-expanded", expanded ? "true" : "false");
+    const winners = (Array.isArray(game.winnerNames) ? game.winnerNames : []).filter(Boolean);
+    const winnerLabel = winners.length ? (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ") : "";
+    const mainLine = [formatShortGameDate(game.at), formatPlayerCount(game.playerCount), winnerLabel].filter(Boolean).join(" · ");
+    head.setAttribute("aria-label", mainLine);
+    head.addEventListener("click", onToggle);
+    head.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); }
+    });
+    head.appendChild(el("p", "games-history-row", mainLine));
+    const metaParts = ["בקופה " + fmt(game.potSize)];
+    const durationLabel = formatDuration(game.durationMinutes);
+    if (durationLabel) metaParts.push(durationLabel);
+    const meta = el("p", "games-card-meta", metaParts.join(" · "));
+    if (!game.isBalanced) meta.appendChild(el("span", "games-history-tag", "לא מאוזן"));
+    head.appendChild(meta);
+    item.appendChild(head);
+
+    const details = el("div", "games-card-details" + (expanded ? " open" : ""));
+    const detailsIn = el("div", "games-card-details-in");
+    const content = el("div", "games-card-details-content");
+    const ranking = Array.isArray(game.ranking) ? game.ranking : [];
+    ranking.forEach((name, idx) => content.appendChild(el("p", "games-history-rank", (idx + 1) + ". " + name)));
+    detailsIn.appendChild(content);
+    details.appendChild(detailsIn);
+    item.appendChild(details);
+    return item;
+  }
+
+  // All GroupGameSummary rows, newest first (history is stored newest-first already). Owns the
+  // shared "no games yet" empty state now that the redundant "last game" section is gone — the
+  // first row here already shows date/players/winner, same as that section did.
   function renderGroupHistory(gameSummaries) {
     const section = el("section", "games-section");
     section.appendChild(el("h3", "games-section-title", "היסטוריית משחקים"));
-    const list = (Array.isArray(gameSummaries) ? gameSummaries : []).slice(0, 5);
+    const list = Array.isArray(gameSummaries) ? gameSummaries : [];
     if (!list.length) {
       section.appendChild(el("p", "games-empty", "עוד אין משחקים"));
       return section;
     }
     list.forEach(game => {
-      const winners = (Array.isArray(game.winnerNames) ? game.winnerNames : []).filter(Boolean);
-      const winnerLabel = winners.length ? (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ") : "";
-      const line = [formatShortGameDate(game.at), formatPlayerCount(game.playerCount), winnerLabel].filter(Boolean).join(" · ");
-      section.appendChild(el("p", "games-history-row", line));
+      section.appendChild(renderGroupHistoryRow(game, expandedGroupGames.has(game.gameId), () => {
+        expandedGroupGames.has(game.gameId) ? expandedGroupGames.delete(game.gameId) : expandedGroupGames.add(game.gameId);
+        renderGroupPage();
+      }));
     });
     return section;
   }
 
-  // The group's invite: any active member sees it (returns null otherwise, same convention as
-  // renderGroupLastGame). No invite yet → "צור הזמנה". With one → the code, copy/share, a QR
-  // placeholder (rendering is deferred to a backend that can host a redemption endpoint), and,
-  // for admins only, a text action to revoke it (which brings back "צור הזמנה").
+  // The group's invite: any active member sees it (returns null otherwise). No invite yet →
+  // "צור הזמנה". With one → the code, copy/share, a QR placeholder (rendering is deferred to a
+  // backend that can host a redemption endpoint), and, for admins only, a text action to revoke
+  // it (which brings back "צור הזמנה").
   function renderGroupInvite(summary, invite, isAdmin) {
     if (!summary || !summary.isMember) return null;
     const section = el("section", "games-section games-invite-section");
@@ -2596,15 +3047,24 @@
     const box = document.getElementById("gamesHome");
     box.innerHTML = "";
     const collections = collectionsOf(state);
+    const rawGroup = (Array.isArray(collections.groups) ? collections.groups : []).find(g => g && g.id === currentGroupId);
+    if (rawGroup && rawGroup.deletedAt) { setAppView("games"); return; } // a deleted group is gone — don't strand the user
     const summary = getGroupSummary(collections, currentGroupId, me);
     if (!summary) { setAppView("games"); return; } // the group is gone on this device — don't strand the user
+    const isArchived = !!(rawGroup && rawGroup.archivedAt);
     const inner = el("div", "games-home-in");
     inner.appendChild(renderGroupHeader(summary));
-    inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
+    // Archived groups render read-only: no primary action, just a quiet note. Restoring
+    // ("שחזר מהארכיון") lives in the settings overlay for admins.
+    if (isArchived) {
+      const note = el("div", "games-primary-action");
+      note.appendChild(el("p", "games-primary-reason", "הקבוצה בארכיון"));
+      inner.appendChild(note);
+    } else {
+      inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
+    }
     inner.appendChild(renderGroupLeaders(buildLeaderboard(collections.history, collections.groupMembers, currentGroupId)));
     const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
-    const lastGame = renderGroupLastGame(gameSummaries[0] || null);
-    if (lastGame) inner.appendChild(lastGame);
     inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
     const inviteSection = renderGroupInvite(summary, activeInvite(state.invites, currentGroupId), summary.isAdmin);
@@ -2959,6 +3419,14 @@
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
         state.players.length + " שחקנים" + exitedLabel +
         (state.example ? '<span class="sep">·</span><span class="example-tag">נתוני דוגמה — כל עריכה מאפסת אותם</span>' : "");
+      // The group name comes from user data — built with DOM nodes (el/textContent), never
+      // interpolated into the innerHTML string above, so it can't inject markup.
+      const statGroup = state.groups.find(g => g && g.id === state.groupId);
+      if (statGroup) {
+        stat.appendChild(el("span", "sep", "·"));
+        stat.appendChild(document.createTextNode("קבוצה: "));
+        stat.appendChild(el("b", null, statGroup.name));
+      }
     } else if (appView === "settle") {
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
@@ -3512,7 +3980,13 @@
       shakeEl(inp); // duplicate names would merge menus, records and transfers
       return;
     }
-    const player = { id: newId(), name, buyins: [], entryLog: [], cashout: "", status: "active", exitedAt: null };
+    let guestId = null, memberId = null;
+    if (state.groupId) {
+      guestId = resolveGuestId(collectionsOf(state), name);
+      const member = activeMembers(state.groupMembers, state.groupId).find(m => m.displayName === name);
+      memberId = member ? member.id : null;
+    }
+    const player = createPlayer({ name, guestId, memberId });
     addEntry(player, MIN_BUYIN);
     state.players.push(player);
     inp.value = "";
@@ -3556,6 +4030,149 @@
     expandedEntries.clear();
     openMenu = null; customOpen = null;
     save();
+    setAppView("games");
+  });
+
+  // ---------- group settings overlay: UI-only state ----------
+  let groupLeaveArmed = false;         // "עזוב קבוצה" two-step confirm state
+  let groupLeaveArmedTimeout = null;
+  let groupDeleteArmed = false;        // "מחק קבוצה" two-step confirm state
+  let groupDeleteArmedTimeout = null;
+  let archivedGroupsOpen = false;      // dashboard "ארכיון (N)" collapsed toggle
+
+  // ---------- group settings overlay ----------
+  // Reachable by any active member (so "עזוב קבוצה" always has a way in); admin-only controls
+  // (avatar, name, archive/unarchive, delete) are shown/hidden per-open by refreshGroupSettings().
+  function resetGroupLeaveArm() {
+    clearTimeout(groupLeaveArmedTimeout);
+    groupLeaveArmed = false;
+    groupLeaveArmedTimeout = null;
+    const btn = document.getElementById("groupSetLeaveBtn");
+    if (btn) { btn.textContent = "עזוב קבוצה"; btn.classList.remove("armed"); }
+  }
+  function resetGroupDeleteArm() {
+    clearTimeout(groupDeleteArmedTimeout);
+    groupDeleteArmed = false;
+    groupDeleteArmedTimeout = null;
+    const btn = document.getElementById("groupSetDeleteBtn");
+    if (btn) { btn.textContent = "מחק קבוצה"; btn.classList.remove("armed"); }
+  }
+  function closeGroupSettings() {
+    document.getElementById("groupSettings").hidden = true;
+  }
+  function refreshGroupSettings() {
+    const group = (state.groups || []).find(g => g && g.id === currentGroupId);
+    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
+    if (!group || !summary) { closeGroupSettings(); return; }
+    resetGroupLeaveArm();
+    resetGroupDeleteArm();
+
+    const avatarBtn = document.getElementById("groupSetAvatarBtn");
+    avatarBtn.innerHTML = "";
+    if (group.avatarDataUrl) {
+      const img = document.createElement("img");
+      img.src = group.avatarDataUrl;
+      img.alt = "";
+      avatarBtn.appendChild(img);
+    } else {
+      avatarBtn.textContent = String(group.name || "?").slice(0, 1);
+    }
+    avatarBtn.disabled = !summary.isAdmin;
+
+    const nameInput = document.getElementById("groupSetName");
+    nameInput.value = group.name || "";
+    nameInput.disabled = !summary.isAdmin;
+
+    const archiveBtn = document.getElementById("groupSetArchiveBtn");
+    archiveBtn.hidden = !summary.isAdmin;
+    archiveBtn.textContent = group.archivedAt ? "שחזר מהארכיון" : "העבר לארכיון";
+
+    const deleteBtn = document.getElementById("groupSetDeleteBtn");
+    deleteBtn.hidden = !summary.isAdmin;
+    deleteBtn.disabled = summary.hasActiveGame;
+    const deleteReason = document.getElementById("groupSetDeleteReason");
+    deleteReason.hidden = !summary.hasActiveGame;
+    deleteReason.textContent = summary.hasActiveGame ? "סגור קודם את המשחק הפעיל" : "";
+
+    const membership = findMyMembership(state.groupMembers, currentGroupId, me);
+    const isLastAdmin = !!membership && isLastActiveAdmin(state.groupMembers, membership.id);
+    const leaveBtn = document.getElementById("groupSetLeaveBtn");
+    leaveBtn.hidden = !membership;
+    leaveBtn.disabled = isLastAdmin;
+    const leaveReason = document.getElementById("groupSetLeaveReason");
+    leaveReason.hidden = !isLastAdmin;
+    leaveReason.textContent = isLastAdmin ? "מנה מנהל אחר קודם" : "";
+  }
+  function openGroupSettings() {
+    refreshGroupSettings();
+    document.getElementById("groupSettings").hidden = false;
+  }
+  document.getElementById("groupSetBackBtn").addEventListener("click", closeGroupSettings);
+  document.getElementById("groupSetName").addEventListener("change", (e) => {
+    if (!renameGroup(state.groups, currentGroupId, e.target.value)) { shakeEl(e.target); refreshGroupSettings(); return; }
+    save();
+    renderGroupPage();
+    refreshGroupSettings();
+  });
+  document.getElementById("groupSetAvatarBtn").addEventListener("click", () => {
+    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
+    if (!summary || !summary.isAdmin) return;
+    document.getElementById("groupSetAvatarFile").click();
+  });
+  document.getElementById("groupSetAvatarFile").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const dataUrl = await resizeAvatarImage(file);
+      setGroupAvatar(state.groups, currentGroupId, dataUrl);
+      save();
+      renderGroupPage();
+      refreshGroupSettings();
+    } catch (err) {}
+  });
+  document.getElementById("groupSetArchiveBtn").addEventListener("click", () => {
+    const group = (state.groups || []).find(g => g && g.id === currentGroupId);
+    if (!group) return;
+    const wasArchived = !!group.archivedAt;
+    const ok = wasArchived ? unarchiveGroup(state.groups, currentGroupId) : archiveGroup(state.groups, currentGroupId, new Date().toISOString());
+    if (!ok) return;
+    save();
+    closeGroupSettings();
+    if (wasArchived) renderGroupPage(); else setAppView("games");
+  });
+  document.getElementById("groupSetDeleteBtn").addEventListener("click", (e) => {
+    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
+    if (!summary || summary.hasActiveGame) return; // refused — inline reason already shown
+    const btn = e.currentTarget;
+    if (!groupDeleteArmed) {
+      groupDeleteArmed = true;
+      btn.textContent = "בטוח? ההיסטוריה הקבוצתית תוסתר";
+      btn.classList.add("armed");
+      groupDeleteArmedTimeout = setTimeout(resetGroupDeleteArm, 4000);
+      return;
+    }
+    resetGroupDeleteArm();
+    if (!deleteGroup(state.groups, currentGroupId, new Date().toISOString())) return;
+    save();
+    closeGroupSettings();
+    setAppView("games");
+  });
+  document.getElementById("groupSetLeaveBtn").addEventListener("click", (e) => {
+    const membership = findMyMembership(state.groupMembers, currentGroupId, me);
+    if (!membership || isLastActiveAdmin(state.groupMembers, membership.id)) return; // refused — inline reason already shown
+    const btn = e.currentTarget;
+    if (!groupLeaveArmed) {
+      groupLeaveArmed = true;
+      btn.textContent = "בטוח?";
+      btn.classList.add("armed");
+      groupLeaveArmedTimeout = setTimeout(resetGroupLeaveArm, 4000);
+      return;
+    }
+    resetGroupLeaveArm();
+    if (!leaveGroup(state.groupMembers, currentGroupId, me, new Date().toISOString())) return;
+    save();
+    closeGroupSettings();
     setAppView("games");
   });
 
