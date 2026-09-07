@@ -103,8 +103,8 @@
   :root { --bar-bg: rgba(13,17,22,.78); }
   :root[data-theme="light"] { --bar-bg: rgba(255,255,255,.85); }
   .tabbar {
-    position: fixed; bottom: max(4px, calc(env(safe-area-inset-bottom, 0px) - 17px));
-    inset-inline: 12px; margin-inline: auto; max-width: 480px; z-index: 20;
+    position: fixed; bottom: max(0px, calc(env(safe-area-inset-bottom, 0px) - 41px));
+    inset-inline: 17px; margin-inline: auto; max-width: 470px; z-index: 20;
     display: flex; align-items: center; justify-content: space-between; gap: 4px;
     background: var(--bar-bg);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
