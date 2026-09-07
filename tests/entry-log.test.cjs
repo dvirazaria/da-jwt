@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const html = fs.readFileSync('kupa-sgura.html', 'utf8');
-const normalizeSource = html.slice(html.indexOf('  function normalize(s)'), html.indexOf('  function load()'));
+const normalizeSource = html.slice(html.indexOf('  function normalizeDebt'), html.indexOf('  function load()'));
 function normalize(s) { return vm.runInNewContext(normalizeSource + '\nnormalize(input)', {input:s, crypto:require('node:crypto').webcrypto}); }
 test('legacy amounts survive migration without invented times, with stable identities', () => {
   const old = {players:[{name:'א',buyins:[50,100],cashout:150}],history:[]};
@@ -28,7 +28,7 @@ test('each added amount has a distinct identity, timestamp, player and game; sav
   const remoteSource=html.slice(html.indexOf('  function remoteBody()'),html.indexOf('  function scheduleRemoteSave()'));
   const context=vm.createContext({crypto:require('node:crypto').webcrypto});
   vm.runInContext(normalizeSource + saveSource + remoteSource + `
-    let state = {gameId:'game-one', players:[], history:[], example:false};
+    let state = {gameId:'game-one', players:[], history:[], debts:[{id:'d1',status:'open'}], settlementStatuses:{payment:true}, groupId:'group-one', example:false};
     let pendingRemote = null;
     const CLIENT_ID='test', KEY='game';
     let stored, scheduled=0;
@@ -47,6 +47,9 @@ test('each added amount has a distinct identity, timestamp, player and game; sav
   const remote=JSON.parse(vm.runInContext('JSON.stringify(remoteBody())',context));
   assert.equal(remote.gameId,data.gameId);
   assert.deepEqual(remote.players,data.players);
+  assert.deepEqual(remote.debts,data.debts);
+  assert.deepEqual(remote.settlementStatuses,data.settlementStatuses);
+  assert.equal(remote.groupId,data.groupId);
   assert.equal(vm.runInContext('scheduled',context),1);
 });
 test('frozen remote snapshots retain logs and allow subsequent additions', () => {
@@ -92,6 +95,62 @@ test('unbalanced close stays blocked until the long-press state is unlocked', ()
 });
 test('long press unlock duration is 1 second', () => {
   assert.equal(html.match(/const HOLD_TO_FORCE_CLOSE_MS = (\d+);/)[1], '1000');
+});
+test('unpaid settlements become open debts while paid settlements do not', () => {
+  const start = html.indexOf('  function settlementKey');
+  const end = html.indexOf('  // Greedy settlement', start);
+  assert.ok(start >= 0, 'debt helpers exist');
+  const context = vm.createContext({});
+  vm.runInContext('const wholeMoney = value => Math.round(Number(value) || 0);', context);
+  vm.runInContext(html.slice(start, end), context);
+  const snapshot = {gameId:'game-one', players:[
+    {id:'debtor-id', name:'דביר'}, {id:'creditor-id', name:'עומר'},
+  ]};
+  const moves = [{from:'דביר',to:'עומר',amount:550},{from:'עומר',to:'דביר',amount:80}];
+  const paid = {};
+  paid[vm.runInContext(`settlementKey('game-one', ${JSON.stringify(moves[0])}, 0)`, context)] = true;
+  const debts = JSON.parse(vm.runInContext(`JSON.stringify(buildDebtRecords(${JSON.stringify(snapshot)}, ${JSON.stringify(moves)}, ${JSON.stringify(paid)}, '2026-09-07T18:00:00.000Z'))`, context));
+  assert.equal(debts.length, 1);
+  assert.deepEqual(debts[0], {
+    id: debts[0].id,
+    gameId:'game-one', groupId:null, debtorUserId:'creditor-id', creditorUserId:'debtor-id',
+    debtorName:'עומר', creditorName:'דביר', amount:80, status:'open',
+    createdAt:'2026-09-07T18:00:00.000Z', gameDate:'2026-09-07T18:00:00.000Z', paidAt:null,
+  });
+  assert.equal(vm.runInContext(`buildDebtRecords(${JSON.stringify(snapshot)}, ${JSON.stringify(moves)}, ${JSON.stringify({})}, '2026-09-07T18:00:00.000Z').length`, context), 2);
+  const allPaid = {};
+  moves.forEach((move, index) => {
+    allPaid[vm.runInContext(`settlementKey('game-one', ${JSON.stringify(move)}, ${index})`, context)] = true;
+  });
+  assert.equal(vm.runInContext(`buildDebtRecords(${JSON.stringify(snapshot)}, ${JSON.stringify(moves)}, ${JSON.stringify(allPaid)}, '2026-09-07T18:00:00.000Z').length`, context), 0);
+});
+test('only the creditor can mark an open debt paid', () => {
+  const start = html.indexOf('  function updateDebtAsPaid');
+  const end = html.indexOf('  // Greedy settlement', start);
+  assert.ok(start >= 0, 'debt payment helper exists');
+  const context = vm.createContext({});
+  vm.runInContext(html.slice(start, end) + `
+    const debt = {id:'d1', creditorName:'דביר', status:'open', paidAt:null};
+    const wrongActor = updateDebtAsPaid([debt], 'd1', 'עומר', '2026-09-07T19:00:00.000Z');
+    const correctActor = updateDebtAsPaid([debt], 'd1', 'דביר', '2026-09-07T19:00:00.000Z');
+  `, context);
+  assert.equal(vm.runInContext('wrongActor', context), false);
+  assert.equal(vm.runInContext('correctActor', context), true);
+  const debt = vm.runInContext('debt', context);
+  assert.equal(debt.status, 'paid');
+  assert.equal(debt.paidAt, '2026-09-07T19:00:00.000Z');
+});
+test('open and paid debts survive reload normalization', () => {
+  const saved = {
+    gameId:'next-game', players:[], history:[], debts:[
+      {id:'d-open', gameId:'g1', debtorUserId:'a', creditorUserId:'b', debtorName:'א', creditorName:'ב', amount:550, status:'open', createdAt:'2026-09-07T18:00:00Z', gameDate:'2026-09-07T18:00:00Z'},
+      {id:'d-paid', gameId:'g2', debtorUserId:'c', creditorUserId:'d', debtorName:'ג', creditorName:'ד', amount:80, status:'paid', createdAt:'2026-09-06T18:00:00Z', gameDate:'2026-09-06T18:00:00Z', paidAt:'2026-09-07T19:00:00Z'},
+    ],
+  };
+  const result = normalize(saved);
+  assert.equal(result.debts.length, 2);
+  assert.equal(result.debts[0].status, 'open');
+  assert.equal(result.debts[1].paidAt, '2026-09-07T19:00:00Z');
 });
 test('closed history records whether the table was balanced and the exact difference', () => {
   const start = html.indexOf('  function buildHistoryEntry');

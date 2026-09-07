@@ -7,7 +7,7 @@ A Hebrew, RTL, mobile-first PWA for settling home poker cash games:
 players + buy-ins on a "שולחן" tab, chip counts and a minimal-transfers
 who-pays-whom on a "חישוב" tab, per-player record on a "פרופיל" tab.
 Deployed on Vercel (static, auto-deploys from `main`), installable to the
-home screen. Version 29.
+home screen. Version 30.
 
 ## Files
 - `kupa-sgura.html` — THE app. Single file: CSS + HTML + one IIFE of vanilla JS.
@@ -38,6 +38,11 @@ All animations respect `prefers-reduced-motion`.
   then an inline confirmation, and archive `isBalanced: false` plus `balanceDifference`
   in the history record. Positive difference means money is missing; negative means there
   is an excess.
+  Settlement rows have a reversible paid toggle while a game is open. Closing creates
+  open debt records only for unpaid transfers; later payment changes the debt to `paid`
+  with `paidAt` and never changes the poker result. The current app has name-based local
+  identity, so profile filtering and creditor checks use the current player name until
+  the planned authenticated backend supplies stable user IDs and RLS.
 - Regression checks: `node --test tests/entry-log.test.cjs`.
 - localStorage key `poker-settle-v1` (legacy prefix kept for continuity;
   also `poker-settle-me`, `-theme`, `-contact`).
