@@ -78,7 +78,7 @@
   button:active { transform: scale(.92); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 
-  input[type="text"], input[type="number"] {
+  input[type="text"], input[type="number"], input[type="tel"], input[type="email"] {
     -webkit-appearance: none; appearance: none;
     background: none; border: none; border-bottom: 1px solid var(--line);
     border-radius: 0; color: var(--text);
@@ -315,23 +315,40 @@
   .btn-primary:hover { background: var(--accent); color: var(--bg); }
   .btn-skip { color: var(--faint); font-size: 13px; align-self: flex-start; }
 
-  /* settings */
-  .set-btn {
-    width: 100%; border: 1px solid var(--line); border-radius: 14px;
-    padding: 16px; min-height: 54px; font-size: 16px; font-weight: 500;
-    color: var(--text); text-align: center;
+  /* settings — flat, centered */
+  .back-arrow {
+    position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); inset-inline-start: 18px;
+    color: var(--dim); padding: 8px;
   }
-  .set-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .set-btn.accent { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; }
-  .set-btn.accent:hover { color: var(--bg); }
-  .set-btn.danger { color: var(--bad); }
-  .set-btn.danger:hover, .set-btn.danger.armed { border-color: var(--bad); color: var(--bad); }
-  .set-group { display: flex; flex-direction: column; gap: 10px; text-align: start; }
-  .set-amounts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-  .set-amounts input {
-    border: 1px solid var(--line); border-radius: 14px; text-align: center;
-    font-size: 16px; min-height: 54px; padding: 10px;
+  .back-arrow svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .back-arrow:hover { color: var(--accent); }
+  .set-in { align-items: center; text-align: center; gap: 20px; }
+  .avatar {
+    width: 84px; height: 84px; border-radius: 50%;
+    background: var(--accent); color: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 38px; font-weight: 800;
   }
+  .set-name { font-size: 22px; font-weight: 800; margin-top: -6px; }
+  .set-in input { max-width: 260px; text-align: center; font-size: 16px; }
+  .theme-row { display: flex; align-items: center; gap: 14px; color: var(--dim); margin-top: 4px; }
+  .theme-row svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .switch {
+    width: 54px; height: 31px; border-radius: 999px;
+    border: 1px solid var(--line); position: relative; flex: 0 0 54px;
+    transition: border-color .25s;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; inset-inline-start: 3px;
+    width: 23px; height: 23px; border-radius: 50%; background: var(--dim);
+    transition: transform .25s ease, background-color .25s;
+  }
+  .switch.on { border-color: var(--accent); }
+  .switch.on::after { transform: translateX(-23px); background: var(--accent); }
+  .set-flat { font-size: 17px; font-weight: 500; color: var(--accent); padding: 10px; min-height: 46px; }
+  .set-flat:hover { color: var(--accent-press); }
+  .set-flat.danger { color: var(--bad); }
+  .set-flat.danger:hover, .set-flat.danger.armed { color: var(--bad); }
 
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
@@ -356,21 +373,22 @@
 </div>
 
 <div class="login" id="settings" hidden>
-  <div class="login-in">
-    <h2>הגדרות</h2>
-    <button type="button" class="set-btn" id="setThemeBtn">מעבר למצב בהיר</button>
-    <button type="button" class="set-btn" id="setSwapBtn">החלפת שחקן</button>
-    <div class="set-group">
-      <span class="ptitle">סכומי כניסה מהירים (מינימום ₪50)</span>
-      <div class="set-amounts">
-        <input type="number" inputmode="numeric" min="50" step="10" data-amt="0" aria-label="סכום מהיר ראשון">
-        <input type="number" inputmode="numeric" min="50" step="10" data-amt="1" aria-label="סכום מהיר שני">
-        <input type="number" inputmode="numeric" min="50" step="10" data-amt="2" aria-label="סכום מהיר שלישי">
-      </div>
+  <button type="button" class="back-arrow" id="setBackBtn" aria-label="חזרה">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+  </button>
+  <div class="login-in set-in">
+    <div class="avatar" id="setAvatar">?</div>
+    <div class="set-name" id="setName"></div>
+    <input type="tel" id="setPhone" inputmode="tel" placeholder="טלפון" autocomplete="tel" aria-label="טלפון">
+    <input type="email" id="setEmail" inputmode="email" placeholder="מייל" autocomplete="email" aria-label="מייל">
+    <div class="theme-row">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19"></path></svg>
+      <button type="button" class="switch" id="setThemeSwitch" role="switch" aria-label="החלף בין מצב כהה למצב בהיר"></button>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13.5A8 8 0 0 1 10.5 4a8 8 0 1 0 9.5 9.5Z"></path></svg>
     </div>
-    <button type="button" class="set-btn danger" id="setClearBtn">איפוס רקורד</button>
-    <button type="button" class="set-btn accent" id="setBackBtn">חזור</button>
-    <p class="empty-note" style="margin-top:10px">סוגרים קופה · גרסה 15</p>
+    <button type="button" class="set-flat" id="setSwapBtn">החלפת שחקן</button>
+    <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 16</p>
   </div>
 </div>
 
@@ -1134,13 +1152,31 @@
   if (!me) showLogin();
 
   // ---------- settings overlay ----------
-  function refreshSettings() {
-    const isLight = document.documentElement.dataset.theme === "light";
-    document.getElementById("setThemeBtn").textContent = isLight ? "מעבר למצב כהה" : "מעבר למצב בהיר";
-    document.querySelectorAll(".set-amounts input").forEach((inp) => {
-      inp.value = BUYIN_OPTIONS[Number(inp.dataset.amt)];
-    });
+  const CONTACT_KEY = "poker-settle-contact";
+  function loadContact() {
+    try { return JSON.parse(localStorage.getItem(CONTACT_KEY)) || {}; } catch (e) { return {}; }
   }
+  function refreshSettings() {
+    document.getElementById("setAvatar").textContent = me ? me.trim()[0] : "?";
+    document.getElementById("setName").textContent = me || "אורח";
+    const c = loadContact();
+    document.getElementById("setPhone").value = c.phone || "";
+    document.getElementById("setEmail").value = c.email || "";
+    const isLight = document.documentElement.dataset.theme === "light";
+    const sw = document.getElementById("setThemeSwitch");
+    sw.classList.toggle("on", isLight);
+    sw.setAttribute("aria-checked", isLight ? "true" : "false");
+  }
+  function saveContact() {
+    try {
+      localStorage.setItem(CONTACT_KEY, JSON.stringify({
+        phone: document.getElementById("setPhone").value.trim(),
+        email: document.getElementById("setEmail").value.trim(),
+      }));
+    } catch (e) {}
+  }
+  document.getElementById("setPhone").addEventListener("change", saveContact);
+  document.getElementById("setEmail").addEventListener("change", saveContact);
   document.getElementById("settingsBtn").addEventListener("click", () => {
     refreshSettings();
     document.getElementById("settings").hidden = false;
@@ -1148,29 +1184,13 @@
   document.getElementById("setBackBtn").addEventListener("click", () => {
     document.getElementById("settings").hidden = true;
   });
-  document.getElementById("setThemeBtn").addEventListener("click", () => {
+  document.getElementById("setThemeSwitch").addEventListener("click", () => {
     const nowLight = document.documentElement.dataset.theme !== "light";
     if (nowLight) document.documentElement.dataset.theme = "light";
     else delete document.documentElement.dataset.theme;
     try { localStorage.setItem(THEME_KEY, nowLight ? "light" : "dark"); } catch (e) {}
     renderThemeIcon();
     refreshSettings();
-  });
-  document.querySelectorAll(".set-amounts input").forEach((inp) => {
-    inp.addEventListener("change", () => {
-      const i = Number(inp.dataset.amt);
-      const val = Math.round(Number(inp.value));
-      if (!Number.isFinite(val) || val < MIN_BUYIN) {
-        inp.classList.remove("shake");
-        void inp.offsetWidth;
-        inp.classList.add("shake");
-        inp.value = BUYIN_OPTIONS[i];
-        return;
-      }
-      BUYIN_OPTIONS[i] = val;
-      try { localStorage.setItem(BUYINS_KEY, JSON.stringify(BUYIN_OPTIONS)); } catch (e) {}
-      render();
-    });
   });
   document.getElementById("setSwapBtn").addEventListener("click", () => {
     document.getElementById("settings").hidden = true;
