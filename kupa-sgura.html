@@ -160,16 +160,46 @@
   .pmenu-row { display: flex; align-items: center; gap: 10px; padding: 2px 0 16px; flex-wrap: wrap; }
   .chip {
     border: 1px solid var(--line); border-radius: 999px;
-    padding: 8px 18px; min-height: 40px;
+    padding: 8px 18px; min-height: 40px; max-width: 160px;
     color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; font-size: 15px;
+    transition: max-width .3s ease, padding .3s ease, opacity .25s ease,
+                border-color .2s, background-color .18s, color .18s, transform .12s ease;
+    white-space: nowrap; overflow: hidden;
   }
   .chip:hover { border-color: var(--accent); color: var(--accent); }
   .chip:active { background: var(--accent); color: var(--bg); }
-  .chip.flash { animation: flash .45s ease; }
   .chip.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
-  @keyframes flash {
-    0% { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+  /* staggered entrance for the amount chips when the picker opens */
+  .pmenu.open .pmenu-row > * { animation: chipIn .32s ease both; }
+  .pmenu.open .pmenu-row > :nth-child(1) { animation-delay: .04s; }
+  .pmenu.open .pmenu-row > :nth-child(2) { animation-delay: .09s; }
+  .pmenu.open .pmenu-row > :nth-child(3) { animation-delay: .14s; }
+  .pmenu.open .pmenu-row > :nth-child(4) { animation-delay: .19s; }
+  .pmenu.open .pmenu-row > :nth-child(5) { animation-delay: .24s; }
+  @keyframes chipIn { from { opacity: 0; transform: translateY(6px) scale(.9); } }
+
+  /* "other" chip morphs into a full-width input capsule */
+  .chip-other { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+  .pmenu-row.other-mode > .chip:not(.chip-other),
+  .pmenu-row.other-mode > .undo {
+    max-width: 0; min-width: 0; padding-inline: 0; opacity: 0;
+    border-color: transparent; pointer-events: none;
   }
+  .pmenu-row.other-mode .chip-other {
+    max-width: 100%; flex: 1; border-color: var(--accent); overflow: visible;
+  }
+  .other-label { flex: 0 0 auto; }
+  .other-mode .chip-other .other-label { color: var(--accent); }
+  input.other-input {
+    flex: 0 1 0%; width: 0; min-width: 0; min-height: 0; opacity: 0;
+    border: none; background: none; padding: 0; margin: 0;
+    font: inherit; color: var(--text); font-variant-numeric: tabular-nums;
+    transition: opacity .25s ease .12s;
+  }
+  .other-mode input.other-input { flex: 1 1 auto; width: auto; opacity: 1; }
+  input.other-input:focus-visible { outline: none; }
+  .other-go { color: var(--accent); font-weight: 700; font-size: 14px; padding: 4px 6px; white-space: nowrap; }
   .undo { color: var(--faint); font-size: 13px; margin-inline-start: auto; }
   .undo:hover { color: var(--bad); }
 
@@ -372,7 +402,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 17</p>
+    <p class="empty-note" style="margin-top:6px">סוגרים קופה · גרסה 18</p>
   </div>
 </div>
 
@@ -654,18 +684,32 @@
     return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  // Confirms a buy-in: menu closes, the money lands with a count-up
-  // animation on the player's total, plus a light haptic where supported.
+  // Plays the picker's collapse transition, then runs `done`.
+  let menuClosing = false;
+  function animateMenuClose(done) {
+    const m = document.querySelector(".pmenu.open");
+    if (!m || menuClosing) { done(); return; }
+    menuClosing = true;
+    const plus = document.querySelector(".btn-plus.open");
+    if (plus) plus.classList.remove("open");
+    m.classList.remove("open");
+    setTimeout(() => { menuClosing = false; done(); }, 300);
+  }
+
+  // Confirms a buy-in: the picker collapses, then the money lands with a
+  // count-up animation on the player's total, plus a light haptic.
   function confirmBuyin(p, idx, amount) {
     const from = sum(p.buyins);
-    p.buyins.push(amount);
-    openMenu = null; customOpen = null; pendingAmount = null;
-    markReal(); save();
-    try { if (navigator.vibrate) navigator.vibrate(20); } catch (e) {}
-    render();
-    const fresh = document.querySelectorAll(".prow")[idx];
-    const totalEl = fresh && fresh.querySelector(".pmeta b");
-    if (totalEl) countUp(totalEl, from, from + amount);
+    animateMenuClose(() => {
+      p.buyins.push(amount);
+      openMenu = null; customOpen = null; pendingAmount = null;
+      markReal(); save();
+      try { if (navigator.vibrate) navigator.vibrate(20); } catch (e) {}
+      render();
+      const fresh = document.querySelectorAll(".prow")[idx];
+      const totalEl = fresh && fresh.querySelector(".pmeta b");
+      if (totalEl) countUp(totalEl, from, from + amount);
+    });
   }
 
   function countUp(elm, from, to) {
@@ -714,8 +758,16 @@
         if (openMenu === p.name) plus.classList.add("open");
         plus.addEventListener("click", () => {
           const opening = openMenu !== p.name;
-          openMenu = opening ? p.name : null;
-          menuJustOpened = opening ? p.name : null;
+          if (!opening) {
+            // animate the collapse before removing the menu from the DOM
+            animateMenuClose(() => {
+              openMenu = null; customOpen = null; pendingAmount = null;
+              render();
+            });
+            return;
+          }
+          openMenu = p.name;
+          menuJustOpened = p.name;
           customOpen = null;
           pendingAmount = null;
           render();
@@ -734,6 +786,13 @@
         }
         const inner = el("div", "pmenu-in");
         const mrow = el("div", "pmenu-row");
+        // the "other" capsule collapses back to a plain chip
+        const collapseOther = () => {
+          customOpen = null;
+          mrow.classList.remove("other-mode");
+          cinp.value = "";
+          cgo.hidden = true;
+        };
         BUYIN_OPTIONS.forEach(amount => {
           const selected = isOpen && pendingAmount === amount;
           const chip = el("button", "chip" + (selected ? " active" : ""), "₪" + amount + "+");
@@ -743,26 +802,67 @@
             if (pendingAmount === amount) {
               confirmBuyin(p, idx, amount); // second tap on the selected amount = confirm
             } else {
-              pendingAmount = amount;       // first tap = select and highlight
-              customOpen = null;
-              render();
+              pendingAmount = amount;       // first tap = select and highlight, in place
+              collapseOther();
+              mrow.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+              chip.classList.add("active");
             }
           });
           mrow.appendChild(chip);
         });
-        const other = el("button", "chip" + (customOpen === p.name ? " active" : ""), "אחר");
-        other.type = "button";
-        other.addEventListener("click", () => {
-          customOpen = customOpen === p.name ? null : p.name;
-          pendingAmount = null;
-          render();
-          if (customOpen === p.name) {
-            const fresh = document.querySelectorAll(".prow")[idx];
-            const ci = fresh && fresh.querySelector(".custom-line input");
-            if (ci) ci.focus();
+
+        // "other": the chip itself stretches into an input capsule
+        const other = el("div", "chip chip-other");
+        other.setAttribute("role", "button");
+        other.setAttribute("tabindex", "0");
+        const olabel = el("span", "other-label", "אחר");
+        const cinp = document.createElement("input");
+        cinp.type = "number";
+        cinp.className = "other-input";
+        cinp.min = String(MIN_BUYIN);
+        cinp.step = "1";
+        cinp.inputMode = "decimal";
+        cinp.placeholder = "סכום · מינ' ₪" + MIN_BUYIN;
+        cinp.setAttribute("aria-label", "סכום כניסה חופשי עבור " + p.name);
+        const cgo = el("button", "other-go", "הוסף");
+        cgo.type = "button";
+        cgo.hidden = customOpen !== p.name;
+        const confirmCustom = () => {
+          const amount = Number(cinp.value);
+          if (!cinp.value || !isFinite(amount) || amount < MIN_BUYIN) {
+            cinp.classList.remove("shake");
+            void cinp.offsetWidth; // restart the animation
+            cinp.classList.add("shake");
+            cinp.focus();
+            return;
           }
+          confirmBuyin(p, idx, Math.round(amount));
+        };
+        const expandOther = () => {
+          customOpen = p.name;
+          pendingAmount = null;
+          mrow.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+          mrow.classList.add("other-mode");
+          cgo.hidden = false;
+          setTimeout(() => cinp.focus(), 180);
+        };
+        other.addEventListener("click", (e) => {
+          if (e.target === cinp || e.target === cgo) return;
+          if (mrow.classList.contains("other-mode")) collapseOther();
+          else expandOther();
         });
+        other.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !mrow.classList.contains("other-mode")) { e.preventDefault(); expandOther(); }
+        });
+        cinp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); confirmCustom(); }
+        });
+        cgo.addEventListener("click", confirmCustom);
+        other.appendChild(olabel);
+        other.appendChild(cinp);
+        other.appendChild(cgo);
         mrow.appendChild(other);
+        if (customOpen === p.name) { mrow.classList.add("other-mode"); cgo.hidden = false; }
         if (p.buyins.length > 0) {
           const undo = el("button", "undo", "בטל אחרונה (₪" + p.buyins[p.buyins.length - 1] + ")");
           undo.type = "button";
@@ -774,38 +874,6 @@
           mrow.appendChild(undo);
         }
         inner.appendChild(mrow);
-
-        if (customOpen === p.name) {
-          const cline = el("div", "custom-line");
-          const cinp = document.createElement("input");
-          cinp.type = "number";
-          cinp.min = String(MIN_BUYIN);
-          cinp.step = "1";
-          cinp.inputMode = "decimal";
-          cinp.placeholder = "סכום חופשי · מינימום ₪" + MIN_BUYIN;
-          cinp.setAttribute("aria-label", "סכום כניסה חופשי עבור " + p.name);
-          const confirmCustom = () => {
-            const amount = Number(cinp.value);
-            if (!cinp.value || !isFinite(amount) || amount < MIN_BUYIN) {
-              cinp.classList.remove("shake");
-              void cinp.offsetWidth; // restart the animation
-              cinp.classList.add("shake");
-              cinp.focus();
-              return;
-            }
-            confirmBuyin(p, idx, Math.round(amount));
-          };
-          cinp.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") { e.preventDefault(); confirmCustom(); }
-          });
-          const cbtn = el("button", "btn-confirm", "הוסף");
-          cbtn.type = "button";
-          cbtn.addEventListener("click", confirmCustom);
-          cline.appendChild(cinp);
-          cline.appendChild(cbtn);
-          inner.appendChild(cline);
-        }
-
         menu.appendChild(inner);
         row.appendChild(menu);
       } else {
