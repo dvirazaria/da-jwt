@@ -65,7 +65,9 @@ test('debt notification is cleared by entering the tab and survives reload stora
   assert.deepEqual(JSON.parse(storage.get('poker-settle-profile-debts-seen')), { 'דביר': ['d1'] });
 });
 
-test('debt groups stay in a two-column layout', () => {
-  assert.match(html, /\.debt-groups\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
-  assert.match(html, /const debtGroups = el\("div", "debt-groups"\)/);
+test('debts tab has nested owed and owed-to-me tabs with owed selected first', () => {
+  assert.match(html, /let debtTab = "owed";/);
+  assert.match(html, /\[\s*\["owed", "אני חייב",[\s\S]*\["owedToMe", "חייבים לי",/);
+  assert.match(html, /const debtTabs = el\("div", "debt-tabs"\)/);
+  assert.match(html, /debtTab === key/);
 });
