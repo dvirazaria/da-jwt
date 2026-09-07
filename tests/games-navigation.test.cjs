@@ -60,7 +60,7 @@ test('dashboard creation and resume actions have dedicated handlers', () => {
 });
 
 test('active game UI data is produced through ActiveGameSummary', () => {
-  const source = sourceBetween('  function getActiveGameSummaries', '  function getGroupSummaries');
+  const source = sourceBetween('  function getActiveGameSummaries', '  function formatGameTime');
   const context = vm.createContext({});
   vm.runInContext(source, context);
   const summary = vm.runInContext(`getActiveGameSummaries({
@@ -84,7 +84,7 @@ test('active game UI data is produced through ActiveGameSummary', () => {
 });
 
 test('active game adapter hides demo, closed, and invalid optional times', () => {
-  const source = sourceBetween('  function getActiveGameSummaries', '  function getGroupSummaries');
+  const source = sourceBetween('  function getActiveGameSummaries', '  function formatGameTime');
   const context = vm.createContext({});
   vm.runInContext(source, context);
   assert.equal(vm.runInContext(`getActiveGameSummaries({example:true, phase:'active', players:[]}).length`, context), 0);
@@ -109,7 +109,7 @@ test('Games dashboard is composed from three modular sections', () => {
   assert.match(html, /function renderGroupCard\(group, actions\)/);
   assert.match(html, /renderQuickActions\(inner\)/);
   assert.match(html, /renderActiveGamesSection\(inner, getActiveGameSummaries\(state\)\)/);
-  assert.match(html, /renderGroupsSection\(inner, getGroupSummaries\(\)\)/);
+  assert.match(html, /renderGroupsSection\(inner, getGroupSummaries\(collectionsOf\(state\), me\)\)/);
   assert.match(html, /אין משחקים פעילים כרגע/);
   assert.match(html, /אין לך קבוצות עדיין/);
   assert.match(html, /בקרוב/);
@@ -129,10 +129,10 @@ test('card expansion is UI-only and is not persisted', () => {
 });
 
 test('groups adapter has no mock data', () => {
-  const source = sourceBetween('  function getGroupSummaries', '  function formatGameTime');
-  const context = vm.createContext({});
+  const source = sourceBetween('  // ---------- groups domain (pure) ----------', '  function el(');
+  const context = vm.createContext({ newId: () => 'stub-id' });
   vm.runInContext(source, context);
-  assert.deepEqual(Array.from(vm.runInContext('getGroupSummaries()', context)), []);
+  assert.deepEqual(Array.from(vm.runInContext('getGroupSummaries({groups:[]}, null)', context)), []);
 });
 
 test('player names are capped at four with a remaining count', () => {
@@ -192,6 +192,6 @@ test('final close archives the game and returns to the Games dashboard', () => {
 });
 
 test('resetting a game also returns to the Games dashboard', () => {
-  assert.match(html, /state = \{\s*\n\s*example: false, phase: "closed"/);
+  assert.match(html, /state = newCurrentGame\(state, \{ phase: "closed" \}\);/);
   assert.match(html, /save\(\);\s*\n\s*setAppView\("games"\);/);
 });

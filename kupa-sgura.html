@@ -635,7 +635,7 @@
   const THEME_KEY = "poker-settle-theme";
   const CONTACT_KEY = "poker-settle-contact";
   const PROFILE_DEBT_SEEN_KEY = "poker-settle-profile-debts-seen";
-  const HISTORY_MAX = 60;
+  const HISTORY_MAX = 400;
   const HOLD_TO_FORCE_CLOSE_MS = 1000;
   const FINISH_GAME_HOLD_MS = 1000;
 
@@ -772,6 +772,8 @@
         return { ...p, id, buyins,
           status: p.status === "exited" ? "exited" : "active",
           exitedAt: typeof p.exitedAt === "string" ? p.exitedAt : null,
+          guestId: typeof p.guestId === "string" ? p.guestId : null,
+          memberId: typeof p.memberId === "string" ? p.memberId : null,
           entryLog: buyins.map((amount, i) => {
           const saved = p.entryLog && p.entryLog[i];
           return saved && saved.amount === amount && saved.playerId === id && saved.gameId === gameId
@@ -785,6 +787,14 @@
         ? { ...s.settlementStatuses } : {},
       groupId: s.groupId || s.clanId || null,
       startedAt: typeof s.startedAt === "string" ? s.startedAt : null,
+      // Simple array pass-through, same as `history` above: these collections are shaped by
+      // normalizeGroup/normalizeGroupMember/normalizeInvite/normalizeFriendship (groups domain
+      // pure section) at the point a record is created/imported, not re-validated on every load.
+      groups: Array.isArray(s.groups) ? s.groups : [],
+      groupMembers: Array.isArray(s.groupMembers) ? s.groupMembers : [],
+      invites: Array.isArray(s.invites) ? s.invites : [],
+      friendships: Array.isArray(s.friendships) ? s.friendships : [],
+      leaderRef: s.leaderRef || null,
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
     };
   }
@@ -839,6 +849,11 @@
       settlementStatuses: state.settlementStatuses,
       groupId: state.groupId || null,
       startedAt: state.startedAt || null,
+      leaderRef: state.leaderRef || null,
+      groups: state.groups || [],
+      groupMembers: state.groupMembers || [],
+      invites: state.invites || [],
+      friendships: state.friendships || [],
       updatedAt: state.updatedAt || new Date().toISOString(),
     };
   }
@@ -866,10 +881,15 @@
       settlementStatuses: data.settlementStatuses && typeof data.settlementStatuses === "object" ? data.settlementStatuses : {},
       groupId: data.groupId || data.clanId || null,
       startedAt: typeof data.startedAt === "string" ? data.startedAt : null,
+      leaderRef: data.leaderRef && typeof data.leaderRef === "object" ? data.leaderRef : null,
+      groups: Array.isArray(data.groups) ? data.groups : [],
+      groupMembers: Array.isArray(data.groupMembers) ? data.groupMembers : [],
+      invites: Array.isArray(data.invites) ? data.invites : [],
+      friendships: Array.isArray(data.friendships) ? data.friendships : [],
       updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
     })));
-    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses, a: incoming.startedAt }) ===
-        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses, a: state.startedAt })) return;
+    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses, a: incoming.startedAt, gr: incoming.groups, gm: incoming.groupMembers, iv: incoming.invites, fr: incoming.friendships }) ===
+        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses, a: state.startedAt, gr: state.groups, gm: state.groupMembers, iv: state.invites, fr: state.friendships })) return;
     // Don't yank the UI out from under an active edit — apply on blur.
     const ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT")) { pendingRemote = incoming; return; }
@@ -942,12 +962,7 @@
   // Returns true when it wiped, so callers can stop their own action.
   function markReal() {
     if (!state.example) return false;
-    state = {
-      example: false, phase: "active", gameId: newId(), players: [], history: state.history,
-      debts: state.debts, settlementStatuses: {}, groupId: state.groupId || null,
-      startedAt: new Date().toISOString(),
-      updatedAt: state.updatedAt,
-    };
+    state = newCurrentGame(state, { phase: "active", startedAt: new Date().toISOString() });
     expandedEntries.clear();
     return true;
   }
@@ -973,6 +988,9 @@
     return {
       gameId: snapshot.gameId,
       at,
+      groupId: snapshot.groupId || null,
+      startedAt: snapshot.startedAt || null,
+      leaderRef: snapshot.leaderRef || null,
       isBalanced: balance.isBalanced,
       balanceDifference: balance.difference,
       transfers: moves.map((move, index) => ({
@@ -986,6 +1004,8 @@
         id: p.id,
         entryLog: p.entryLog.map(entry => ({ ...entry })),
         name: p.name,
+        guestId: p.guestId || null,
+        memberId: p.memberId || null,
         buyin: sum(p.buyins),
         cashout: Number(p.cashout) || 0,
         net: (Number(p.cashout) || 0) - sum(p.buyins),
@@ -1094,6 +1114,242 @@
   }
   function isExited(player) {
     return !!player && player.status === "exited";
+  }
+
+  // ---------- groups domain (pure) ----------
+  // Pre-backend identity: userId is always null; guestId is the stable local identity
+  // (resolveGuestId reuses one guestId per displayName across groups/history on this device).
+  // ParticipantRef  = { userId: string|null, guestId: string|null, displayName: string }
+  // Group           = { id, name, avatarDataUrl: string|null, createdBy: ParticipantRef, createdAt,
+  //                     archivedAt: ISO|null, deletedAt: ISO|null }
+  // GroupMember     = { id, groupId, userId: null, guestId, displayName, role: "admin"|"member",
+  //                     status: "active"|"left"|"removed", joinedAt, leftAt: ISO|null }
+  // Invite          = { id, groupId, token, createdBy: ParticipantRef, createdAt, revokedAt: ISO|null }
+  // Friendship      = { id, requester: ParticipantRef, addressee: ParticipantRef,
+  //                     status: "pending"|"accepted"|"rejected", createdAt, respondedAt: ISO|null }
+  // GroupSummary     = { groupId, name, avatarDataUrl, memberCount, members: [displayName], hasActiveGame,
+  //                      activeGamePhase, gameCount, lastGameAt, leaderNames: [displayName], isAdmin, isMember }
+  // LeaderboardEntry = { rank, identityKey, displayName, gamesPlayed, wins, isFormerMember } -- no money field
+  // GroupGameSummary = { gameId, at, startedAt, playerCount, playerNames, winnerNames, potSize, totalEntries,
+  //                      isBalanced } -- no per-player net (contract for a later task; no builder here yet)
+  function normalizeParticipantRef(ref) {
+    const r = ref && typeof ref === "object" ? ref : {};
+    return {
+      userId: null,
+      guestId: typeof r.guestId === "string" ? r.guestId : null,
+      displayName: String(r.displayName || ""),
+    };
+  }
+  function normalizeGroup(g) {
+    if (!g || typeof g !== "object" || !g.id) return null;
+    return {
+      id: String(g.id),
+      name: String(g.name || ""),
+      avatarDataUrl: typeof g.avatarDataUrl === "string" ? g.avatarDataUrl : null,
+      createdBy: normalizeParticipantRef(g.createdBy),
+      createdAt: typeof g.createdAt === "string" ? g.createdAt : "",
+      archivedAt: typeof g.archivedAt === "string" ? g.archivedAt : null,
+      deletedAt: typeof g.deletedAt === "string" ? g.deletedAt : null,
+    };
+  }
+  function normalizeGroupMember(m) {
+    if (!m || typeof m !== "object" || !m.id) return null;
+    return {
+      id: String(m.id),
+      groupId: String(m.groupId || ""),
+      userId: null,
+      guestId: typeof m.guestId === "string" ? m.guestId : null,
+      displayName: String(m.displayName || ""),
+      role: m.role === "admin" ? "admin" : "member",
+      status: m.status === "left" || m.status === "removed" ? m.status : "active",
+      joinedAt: typeof m.joinedAt === "string" ? m.joinedAt : "",
+      leftAt: typeof m.leftAt === "string" ? m.leftAt : null,
+    };
+  }
+  function normalizeInvite(i) {
+    if (!i || typeof i !== "object" || !i.id) return null;
+    return {
+      id: String(i.id),
+      groupId: String(i.groupId || ""),
+      token: String(i.token || ""),
+      createdBy: normalizeParticipantRef(i.createdBy),
+      createdAt: typeof i.createdAt === "string" ? i.createdAt : "",
+      revokedAt: typeof i.revokedAt === "string" ? i.revokedAt : null,
+    };
+  }
+  function normalizeFriendship(f) {
+    if (!f || typeof f !== "object" || !f.id) return null;
+    return {
+      id: String(f.id),
+      requester: normalizeParticipantRef(f.requester),
+      addressee: normalizeParticipantRef(f.addressee),
+      status: f.status === "accepted" || f.status === "rejected" ? f.status : "pending",
+      createdAt: typeof f.createdAt === "string" ? f.createdAt : "",
+      respondedAt: typeof f.respondedAt === "string" ? f.respondedAt : null,
+    };
+  }
+  function identityKey(ref) {
+    const r = ref || {};
+    if (r.userId) return "u:" + r.userId;
+    if (r.guestId) return "g:" + r.guestId;
+    return "n:" + (r.displayName || "");
+  }
+  function sameIdentity(a, b) {
+    return identityKey(a) === identityKey(b);
+  }
+  // Reuses the guestId already on record for this displayName (an active/former group
+  // member, or a player in a closed game) so the same person keeps one id on this device.
+  function resolveGuestId(collections, displayName) {
+    const c = collections || {};
+    const members = Array.isArray(c.groupMembers) ? c.groupMembers : [];
+    const knownMember = members.find(m => m && m.displayName === displayName && m.guestId);
+    if (knownMember) return knownMember.guestId;
+    const history = Array.isArray(c.history) ? c.history : [];
+    for (const entry of history) {
+      const players = entry && Array.isArray(entry.players) ? entry.players : [];
+      const knownPlayer = players.find(p => p && p.name === displayName && p.guestId);
+      if (knownPlayer) return knownPlayer.guestId;
+    }
+    return newId();
+  }
+  function findMyMembership(members, groupId, meName) {
+    return (Array.isArray(members) ? members : [])
+      .find(m => m && m.groupId === groupId && m.status === "active" && m.displayName === meName) || null;
+  }
+  function isGroupAdmin(members, groupId, meName) {
+    const membership = findMyMembership(members, groupId, meName);
+    return !!membership && membership.role === "admin";
+  }
+  function activeMembers(members, groupId) {
+    return (Array.isArray(members) ? members : []).filter(m => m && m.groupId === groupId && m.status === "active");
+  }
+  function formerMembers(members, groupId) {
+    return (Array.isArray(members) ? members : [])
+      .filter(m => m && m.groupId === groupId && (m.status === "left" || m.status === "removed"));
+  }
+  function visibleGroups(groups) {
+    return (Array.isArray(groups) ? groups : []).filter(g => g && !g.deletedAt && !g.archivedAt);
+  }
+  function archivedGroups(groups) {
+    return (Array.isArray(groups) ? groups : []).filter(g => g && !g.deletedAt && g.archivedAt);
+  }
+  // History is stored newest-first (unshift on close); filtering preserves that order.
+  function groupClosedGames(history, groupId) {
+    return (Array.isArray(history) ? history : []).filter(h => h && h.groupId === groupId);
+  }
+  function gameWinners(historyEntry) {
+    const players = historyEntry && Array.isArray(historyEntry.players) ? historyEntry.players : [];
+    if (!players.length) return [];
+    const maxNet = Math.max(...players.map(p => Number(p.net) || 0));
+    return players.filter(p => (Number(p.net) || 0) === maxNet);
+  }
+  // Deviation (documented): a participant is eligible when their identity matches any
+  // GroupMember of the group, active or former. Ad-hoc game guests who never joined are excluded.
+  function isLeaderboardEligible(participant, members) {
+    return (Array.isArray(members) ? members : []).some(m => m && sameIdentity(m, participant));
+  }
+  // Ranking: total net desc, then gamesPlayed desc, then displayName (he). Ties in net share a rank.
+  // The returned entries never carry a money field.
+  function buildLeaderboard(history, members, groupId) {
+    const groupMembersList = (Array.isArray(members) ? members : []).filter(m => m && m.groupId === groupId);
+    const stats = new Map();
+    groupClosedGames(history, groupId).forEach(entry => {
+      const players = Array.isArray(entry.players) ? entry.players : [];
+      const winners = gameWinners(entry);
+      players.forEach(player => {
+        const ref = { userId: null, guestId: player.guestId || null, displayName: player.name || "" };
+        if (!isLeaderboardEligible(ref, groupMembersList)) return;
+        const key = identityKey(ref);
+        if (!stats.has(key)) {
+          const member = groupMembersList.find(m => sameIdentity(m, ref));
+          stats.set(key, {
+            identityKey: key, displayName: ref.displayName, net: 0, gamesPlayed: 0, wins: 0,
+            isFormerMember: !member || member.status !== "active",
+          });
+        }
+        const row = stats.get(key);
+        row.displayName = ref.displayName || row.displayName;
+        row.net += Number(player.net) || 0;
+        row.gamesPlayed += 1;
+        if (winners.includes(player)) row.wins += 1;
+      });
+    });
+    const rows = Array.from(stats.values()).sort((a, b) => {
+      if (b.net !== a.net) return b.net - a.net;
+      if (b.gamesPlayed !== a.gamesPlayed) return b.gamesPlayed - a.gamesPlayed;
+      return a.displayName.localeCompare(b.displayName, "he");
+    });
+    let rank = 0, lastNet = null;
+    return rows.map((row, index) => {
+      if (lastNet === null || row.net !== lastNet) rank = index + 1;
+      lastNet = row.net;
+      return { rank, identityKey: row.identityKey, displayName: row.displayName, gamesPlayed: row.gamesPlayed, wins: row.wins, isFormerMember: row.isFormerMember };
+    });
+  }
+  function getGroupSummary(collections, groupId, meName) {
+    const c = collections || {};
+    const groups = Array.isArray(c.groups) ? c.groups : [];
+    const group = groups.find(g => g && g.id === groupId);
+    if (!group) return null;
+    const members = Array.isArray(c.groupMembers) ? c.groupMembers : [];
+    const history = Array.isArray(c.history) ? c.history : [];
+    const active = activeMembers(members, groupId);
+    const games = groupClosedGames(history, groupId);
+    const currentGame = c.currentGame || {};
+    const hasActiveGame = !currentGame.example && currentGame.groupId === groupId &&
+      (currentGame.phase === "active" || currentGame.phase === "settlement");
+    const leaderboard = buildLeaderboard(history, members, groupId);
+    const topRank = leaderboard.length ? leaderboard[0].rank : null;
+    const leaderNames = topRank === null ? [] : leaderboard.filter(l => l.rank === topRank).map(l => l.displayName);
+    return {
+      groupId: group.id,
+      name: group.name,
+      avatarDataUrl: group.avatarDataUrl,
+      memberCount: active.length,
+      members: active.map(m => m.displayName),
+      hasActiveGame,
+      activeGamePhase: hasActiveGame ? currentGame.phase : null,
+      gameCount: games.length,
+      lastGameAt: games.length ? games[0].at : null,
+      leaderNames,
+      isAdmin: isGroupAdmin(members, groupId, meName),
+      isMember: !!findMyMembership(members, groupId, meName),
+    };
+  }
+  function getGroupSummaries(collections, meName) {
+    const c = collections || {};
+    return visibleGroups(Array.isArray(c.groups) ? c.groups : [])
+      .map(g => getGroupSummary(c, g.id, meName))
+      .filter(Boolean);
+  }
+  // The engine has one current-game slot: a group can have at most one open game, and the
+  // whole device can have only one open game at a time (documented limitation, see plan).
+  function canStartGroupGame(collections, groupId) {
+    const c = collections || {};
+    const groups = Array.isArray(c.groups) ? c.groups : [];
+    const group = groups.find(g => g && g.id === groupId);
+    if (group && (group.archivedAt || group.deletedAt)) return { ok: false, reason: "group-archived" };
+    const currentGame = c.currentGame || {};
+    const isOpen = !currentGame.example && (currentGame.phase === "active" || currentGame.phase === "settlement");
+    if (isOpen && currentGame.groupId === groupId) return { ok: false, reason: "group-has-open-game" };
+    if (isOpen) return { ok: false, reason: "another-game-open" };
+    return { ok: true, reason: null };
+  }
+  // Rebuilds the current-game slot for a new/reset game while preserving every other
+  // collection on state (fixes a latent data-loss bug in the old hand-built object literals).
+  function newCurrentGame(base, patch) {
+    return {
+      ...base,
+      example: false,
+      phase: "closed",
+      gameId: newId(),
+      players: [],
+      settlementStatuses: {},
+      groupId: null,
+      startedAt: null,
+      leaderRef: null,
+      ...patch,
+    };
   }
 
   function el(tag, cls, text) {
@@ -1215,18 +1471,7 @@
   }
 
   function startUngroupedGame() {
-    state = {
-      example: false,
-      phase: "active",
-      gameId: newId(),
-      players: [],
-      history: state.history,
-      debts: state.debts,
-      settlementStatuses: {},
-      groupId: null,
-      startedAt: new Date().toISOString(),
-      updatedAt: state.updatedAt,
-    };
+    state = newCurrentGame(state, { phase: "active", startedAt: new Date().toISOString(), groupId: null });
     expandedEntries.clear();
     openMenu = null; customOpen = null; pendingAmount = null; exitOpen = null; exitJustOpened = null;
     save();
@@ -1236,6 +1481,24 @@
   function continueCurrentGame() {
     if (state.example || state.phase === "closed") return;
     setAppView(state.phase === "settlement" ? "settle" : "game");
+  }
+
+  // Builds the { groups, groupMembers, history, currentGame } shape the pure groups-domain
+  // adapters take as input, from the single persisted state document.
+  function collectionsOf(state) {
+    return {
+      groups: state.groups,
+      groupMembers: state.groupMembers,
+      history: state.history,
+      currentGame: {
+        gameId: state.gameId,
+        phase: state.phase,
+        groupId: state.groupId,
+        players: state.players,
+        startedAt: state.startedAt,
+        example: state.example,
+      },
+    };
   }
 
   function getActiveGameSummaries(gameState) {
@@ -1264,13 +1527,18 @@
     }];
   }
 
-  function getGroupSummaries() { return []; }
-
   function formatGameTime(timestamp) {
     if (!timestamp) return "";
     const date = new Date(timestamp);
     if (Number.isNaN(date.getTime())) return "";
     return date.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function formatGameDate(timestamp) {
+    if (!timestamp) return "";
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
   }
 
   function formatPlayerNames(names) {
@@ -1374,9 +1642,9 @@
   function renderGroupCard(group, actions) {
     const card = el("article", "games-group-card");
     const head = el("div", "games-group-head");
-    if (group.avatarUrl) {
+    if (group.avatarDataUrl) {
       const avatar = el("img", "games-group-avatar");
-      avatar.src = group.avatarUrl;
+      avatar.src = group.avatarDataUrl;
       avatar.alt = "";
       head.appendChild(avatar);
     } else {
@@ -1388,7 +1656,9 @@
     head.appendChild(copy);
     card.appendChild(head);
 
-    const hasDetails = (Array.isArray(group.members) && group.members.length) || group.lastGame || Number.isFinite(group.gameCount) || group.leader || (Array.isArray(group.topPlayers) && group.topPlayers.length);
+    const lastGameLabel = group.lastGameAt ? formatGameDate(group.lastGameAt) : "";
+    const leaderNames = Array.isArray(group.leaderNames) ? group.leaderNames : [];
+    const hasDetails = (Array.isArray(group.members) && group.members.length) || lastGameLabel || Number.isFinite(group.gameCount) || leaderNames.length;
     if (hasDetails) {
       const toggle = el("button", "games-card-toggle", "הרחב");
       toggle.type = "button";
@@ -1400,10 +1670,9 @@
       const detailsIn = el("div", "games-card-details-in");
       const content = el("div", "games-card-details-content");
       if (Array.isArray(group.members) && group.members.length) content.appendChild(el("p", "games-detail-totals", "חברים · " + group.members.join(", ")));
-      if (group.lastGame) content.appendChild(el("p", "games-detail-totals", "משחק אחרון · " + group.lastGame));
+      if (lastGameLabel) content.appendChild(el("p", "games-detail-totals", "משחק אחרון · " + lastGameLabel));
       if (Number.isFinite(group.gameCount)) content.appendChild(el("p", "games-detail-totals", "משחקים · " + group.gameCount));
-      if (group.leader) content.appendChild(el("p", "games-detail-totals", "מוביל · " + group.leader));
-      if (Array.isArray(group.topPlayers) && group.topPlayers.length) content.appendChild(el("p", "games-detail-totals", "שחקנים בולטים · " + group.topPlayers.join(", ")));
+      if (leaderNames.length) content.appendChild(el("p", "games-detail-totals", "מוביל · " + leaderNames.join(", ")));
       detailsIn.appendChild(content);
       details.appendChild(detailsIn);
       card.appendChild(details);
@@ -1444,7 +1713,7 @@
     inner.appendChild(el("p", "games-home-lead", "המשחקים הפעילים והקבוצות שלך במקום אחד."));
     renderQuickActions(inner);
     renderActiveGamesSection(inner, getActiveGameSummaries(state));
-    renderGroupsSection(inner, getGroupSummaries());
+    renderGroupsSection(inner, getGroupSummaries(collectionsOf(state), me));
     box.appendChild(inner);
   }
 
@@ -2344,10 +2613,7 @@
     resetArmed = null;
     btn.classList.remove("danger-armed");
     label.textContent = "איפוס";
-    state = {
-      example: false, phase: "closed", gameId: newId(), players: [], history: state.history,
-      debts: state.debts, settlementStatuses: {}, groupId: state.groupId || null,
-    };
+    state = newCurrentGame(state, { phase: "closed" });
     expandedEntries.clear();
     openMenu = null; customOpen = null;
     save();
