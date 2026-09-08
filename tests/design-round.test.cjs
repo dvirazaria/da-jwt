@@ -382,6 +382,21 @@ test('the settings gear shows on primary non-game views, not on the group page o
   assert.match(groupHeader, /games-group-settings-btn/);
 });
 
+test('the isolated suit mark sits first in the safe-area-padded app shell and adapts to both themes', () => {
+  const wrapStart = html.indexOf('<div class="wrap">');
+  const markStart = html.indexOf('<div class="suits-mark" aria-hidden="true">', wrapStart);
+  const headerStart = html.indexOf('<header class="load-in">', wrapStart);
+  assert.ok(wrapStart >= 0 && markStart > wrapStart && headerStart > markStart, 'the mark should sit above the app header inside .wrap');
+  const mark = html.slice(markStart, headerStart);
+  assert.match(mark, /class="base-suit suit-spade"/);
+  assert.match(mark, /class="accent-suit suit-heart"/);
+  assert.match(mark, /class="base-suit suit-club"/);
+  assert.match(mark, /class="accent-suit suit-diamond"/);
+  assert.match(html, /\.suits-mark \{[^}]*justify-content: center[^}]*margin: 0 auto/s);
+  assert.match(html, /\.suits-mark \.base-suit \{ color: var\(--text\); \}/);
+  assert.match(html, /\.suits-mark \.accent-suit \{ color: var\(--accent\); \}/);
+});
+
 test('renderGamesDashboard has no big title: the lead line is first and the column clears the corner stack', () => {
   const source = sourceBetween('  function renderGamesDashboard() {', '  // Back arrow, 64px avatar');
   assert.doesNotMatch(source, /games-home-title/);
