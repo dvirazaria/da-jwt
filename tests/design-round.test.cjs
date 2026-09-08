@@ -388,10 +388,7 @@ test('the isolated suit mark sits first in the safe-area-padded app shell and ad
   const headerStart = html.indexOf('<header class="load-in">', wrapStart);
   assert.ok(wrapStart >= 0 && markStart > wrapStart && headerStart > markStart, 'the mark should sit above the app header inside .wrap');
   const mark = html.slice(markStart, headerStart);
-  assert.match(mark, /class="base-suit suit-spade"/);
-  assert.match(mark, /class="accent-suit suit-heart"/);
-  assert.match(mark, /class="base-suit suit-club"/);
-  assert.match(mark, /class="accent-suit suit-diamond"/);
+  assert.match(mark, /class="base-suit suit-spade"[\s\S]*class="accent-suit suit-diamond"[\s\S]*class="base-suit suit-club"[\s\S]*class="accent-suit suit-heart"/);
   assert.match(html, /\.suits-mark \{[^}]*justify-content: center[^}]*margin: 0 auto/s);
   assert.match(html, /\.suits-mark \.base-suit \{ color: var\(--text\); \}/);
   assert.match(html, /\.suits-mark \.accent-suit \{ color: var\(--accent\); \}/);
