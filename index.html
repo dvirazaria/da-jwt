@@ -889,7 +889,7 @@
     <button type="button" class="set-flat" id="setSignInBtn" hidden>התחבר עם חשבון</button>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">גרסה 54</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 55</p>
   </div>
 </div>
 
@@ -1500,6 +1500,15 @@
   let cloudPushTimer = null;
   let cloudPullTimer = null;
   let cloudPulling = false;
+  let cloudPushing = false;  // a push is in flight: its writes are not on the server YET
+  // Every local record id written since the last push that confirmed it. This is the ONLY thing
+  // that decides whether a pull may drop a local row — never an inference from the diff baseline,
+  // which says what the server held at some earlier moment and nothing about what we just wrote.
+  let cloudPendingIds = new Set();
+  // Bumped on every local write. A pull carries the value it saw when its SELECTs went out; if it
+  // changed by the time the payload lands, the payload is older than the device and is dropped.
+  let cloudWriteSeq = 0;
+  let cloudPushRetried = false; // a failed push retries once before falling back to a pull
   let lastPushedRows = null; // the diff baseline: what the server is known to hold
   let cloudProfileIds = [];  // every profile id seen in a pulled row (see CloudCtx)
   let cloudGameCreators = {}; // gameId -> games.created_by, so a second device never rewrites it
@@ -1563,9 +1572,27 @@
     }));
     return ids;
   }
+  // Everything a pull must not delete: rows the baseline never confirmed, plus every id written
+  // locally since the last push that confirmed it (cloudPendingIds). The second half is the one
+  // that matters — a push confirms a row the instant its upsert returns, and a pull whose SELECTs
+  // went out before that upsert would otherwise "learn" the row does not exist.
+  function cloudKeepLocalIds() {
+    return keepLocalIdsFor(cloudPendingIds, cloudUnconfirmedIds());
+  }
+  // Marks every group-collection record as pending. Called on each local write, before the push:
+  // over-marking only ever costs a row that a pull leaves alone for one round trip.
+  function markCloudPending() {
+    cloudPendingIds = markPendingIds(cloudPendingIds, cloudCollections());
+  }
+  // A push confirmed these rows: they are on the server, so they no longer need protecting.
+  function clearCloudPending(confirmedRows) {
+    cloudPendingIds = clearPendingIds(cloudPendingIds, confirmedRows);
+  }
 
   function scheduleCloudPush() {
     if (!supabase || !authUser) return;
+    cloudWriteSeq++;
+    markCloudPending();
     dirtyUntil = Date.now() + 6000; // a fresh local edit outranks an incoming pull, as before
     syncCloudGameChannel(); // starting or closing a table changes which game we listen to
     clearTimeout(cloudPushTimer);
@@ -1578,6 +1605,14 @@
   }
 
   async function pushCloud() {
+    if (!supabase || !authUser) return;
+    // Two pushes in flight would race over lastPushedRows and could confirm a row the other one
+    // never sent. The second caller simply becomes the next scheduled push.
+    if (cloudPushing) { clearTimeout(cloudPushTimer); cloudPushTimer = setTimeout(() => { cloudPushTimer = null; pushCloud(); }, 400); return; }
+    cloudPushing = true;
+    try { await pushCloudRun(); } finally { cloudPushing = false; }
+  }
+  async function pushCloudRun() {
     if (!supabase || !authUser) return;
     const ctx = cloudContext();
     const next = buildCloudRows(cloudCollections(), ctx);
@@ -1647,11 +1682,23 @@
       // not a retry: the server is right and the next pull brings its version back — the local
       // history entry stays exactly where it is. A network failure retries on the next save.
       lastPushedRows = confirmed;
+      clearCloudPending(confirmed); // whatever DID land stops being pending; the rest stays protected
       setSync(false, "שגיאת שמירה — נשמר מקומית");
+      // One retry of the whole payload (the failed collection included) before falling back to a
+      // pull: a transient network failure must not leave the row waiting for the next local edit.
+      if (!cloudPushRetried) {
+        cloudPushRetried = true;
+        clearTimeout(cloudPushTimer);
+        cloudPushTimer = setTimeout(() => { cloudPushTimer = null; pushCloud(); }, 900);
+        return;
+      }
+      cloudPushRetried = false;
       scheduleCloudPull(1200);
       return;
     }
+    cloudPushRetried = false;
     lastPushedRows = confirmed;
+    clearCloudPending(confirmed);
     dirtyUntil = 0;
     setSync(true, "מסונכרן לחשבון");
     syncCloudGameChannel();
@@ -1671,7 +1718,11 @@
   async function pullCloud() {
     if (!supabase || !authUser) return;
     if (cloudPulling) return;
+    // Never read the server while our own writes are on their way to it: the snapshot would be
+    // older than this device and applying it would undo the write.
+    if (cloudPushTimer || cloudPushing) { scheduleCloudPull(600); return; }
     cloudPulling = true;
+    const pullSeq = cloudWriteSeq;
     try {
       // RLS already narrows this to the groups I am an active member of (or created), so there
       // is nothing to filter here — group_members/invites then follow those ids.
@@ -1712,7 +1763,7 @@
         entries: children.entries,
         transfers: children.transfers,
         debts: debtsResult.error ? [] : (debtsResult.data || []),
-      });
+      }, pullSeq);
     } catch (e) {
       setSync(false, "שגיאת סנכרון — נשמר מקומית");
     } finally {
@@ -1747,8 +1798,11 @@
     return { participants: of(payload.participants), entries: of(payload.entries), transfers: of(payload.transfers) };
   }
 
-  function applyCloudPull(payload) {
+  function applyCloudPull(payload, pullSeq) {
     if (!authUser) return;
+    // The payload was read before a local write happened, so it cannot know about that write.
+    // Drop it and read again rather than merging a snapshot that is older than this device.
+    if (pullSeq !== undefined && pullSeq !== cloudWriteSeq) { scheduleCloudPull(800); return; }
     const groupRows = payload.groups || [];
     const memberRows = payload.members || [];
     const inviteRows = payload.invites || [];
@@ -1769,7 +1823,7 @@
     // Never yank a field out from under an active edit, and never let the server undo an edit
     // that has not been pushed yet — the same rule the document sync has always used.
     const active = document.activeElement;
-    if ((active && active.tagName === "INPUT") || cloudPushTimer || Date.now() < dirtyUntil) {
+    if ((active && active.tagName === "INPUT") || cloudPushTimer || cloudPushing || Date.now() < dirtyUntil) {
       scheduleCloudPull(800);
       return;
     }
@@ -1813,7 +1867,7 @@
       debts: (payload.debts || []).map(row => rowToDebt(row, ctx, transfersByGame)),
       game: picked.action === "load" ? picked.game : null,
     };
-    const merged = normalize(mergeCloudIntoState(state, pulled, { keepLocalIds: cloudUnconfirmedIds() }));
+    const merged = normalize(mergeCloudIntoState(state, pulled, { keepLocalIds: cloudKeepLocalIds() }));
     if (merged) state = merged;
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     // The baseline is what the SERVER holds, not what we now hold: a record the merge kept is
@@ -1927,6 +1981,9 @@
     cloudPushTimer = null;
     cloudPullTimer = null;
     cloudPulling = false;
+    cloudPushing = false;
+    cloudPushRetried = false;
+    cloudPendingIds = new Set();
     lastPushedRows = null;
     cloudProfileIds = [];
     cloudGameCreators = {};
@@ -3536,6 +3593,75 @@
     return pulled.concat(local.filter(debt => debt && !serverIds.has(String(debt.id))));
   }
 
+  // ---- pending ids: the explicit record of local writes the server has not confirmed ----
+  // CLOUD_MERGED_KEYS are the four collections a pull replaces wholesale, so they are the only
+  // ones a pull can destroy. markPendingIds runs on every local write; clearPendingIds runs on the
+  // rows a push actually confirmed. Nothing here infers anything from the diff baseline.
+  const CLOUD_MERGED_KEYS = ["groups", "groupMembers", "invites", "friendships"];
+  function markPendingIds(pending, collections) {
+    const next = new Set(pending || []);
+    const c = collections || {};
+    CLOUD_MERGED_KEYS.forEach(key => (Array.isArray(c[key]) ? c[key] : []).forEach(record => {
+      if (record && record.id) next.add(String(record.id));
+    }));
+    return next;
+  }
+  function clearPendingIds(pending, confirmedRows) {
+    const next = new Set(pending || []);
+    const rows = confirmedRows || {};
+    CLOUD_MERGED_KEYS.forEach(key => (Array.isArray(rows[key]) ? rows[key] : []).forEach(row => {
+      if (row && row.id) next.delete(String(row.id));
+    }));
+    return next;
+  }
+  function keepLocalIdsFor(pending, unconfirmedIds) {
+    const ids = new Set((Array.isArray(unconfirmedIds) ? unconfirmedIds : []).map(String));
+    (pending || []).forEach(id => ids.add(String(id)));
+    return Array.from(ids);
+  }
+
+  // Self-heal for the membership row this bug used to lose. Opening a group that I created and
+  // that has no active member at all means my own admin membership is gone (a pull dropped it, or
+  // it never reached the server); rebuild it locally so the push can put it back.
+  // Returns null when there is nothing to repair, which makes a second call a no-op:
+  //   { mode: "create", member }     — no row of mine exists, add this one;
+  //   { mode: "reactivate", member } — a left/removed row of mine exists, replace it by id.
+  function buildAdminMembershipRepair(collections, groupId, identity, at) {
+    const c = collections || {};
+    const gid = String(groupId || "");
+    const id = identity || {};
+    const meName = String(id.displayName || "").trim();
+    if (!gid || !meName || !id.newId) return null;
+    const group = (Array.isArray(c.groups) ? c.groups : [])
+      .find(g => g && String(g.id) === gid && !g.deletedAt);
+    if (!group) return null;
+    const createdBy = group.createdBy || {};
+    const mine = (!!createdBy.userId && !!id.userId && createdBy.userId === id.userId)
+      || (!!createdBy.guestId && !!id.guestId && createdBy.guestId === id.guestId)
+      || String(createdBy.displayName || "").trim() === meName;
+    if (!mine) return null;
+    const members = (Array.isArray(c.groupMembers) ? c.groupMembers : [])
+      .filter(m => m && String(m.groupId) === gid);
+    if (members.some(m => m.status === "active")) return null; // the group has members: nothing to do
+    // Prefer reviving my own former row: game history is attributed by its guestId.
+    const former = members.find(m => (!!m.userId && !!id.userId && m.userId === id.userId)
+      || (!!m.guestId && !!id.guestId && m.guestId === id.guestId)
+      || String(m.displayName || "").trim() === meName);
+    const member = {
+      id: former ? String(former.id) : String(id.newId),
+      groupId: gid,
+      userId: id.userId || null,
+      guestId: id.guestId || null,
+      displayName: meName,
+      role: "admin",
+      status: "active",
+      joinedAt: (former && former.joinedAt) || String(at || ""),
+      leftAt: null,
+      hiddenAt: null,
+    };
+    return { mode: former ? "reactivate" : "create", member };
+  }
+
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -3745,7 +3871,33 @@
 
   function openGroup(groupId) {
     currentGroupId = String(groupId || "");
+    repairMyGroupMembership(currentGroupId);
     setAppView("group");
+  }
+
+  // Signed in only: a group I created that shows no active member has lost my own membership row.
+  // Rebuild it and let the normal push carry it up. Idempotent — the second call finds an active
+  // member and does nothing.
+  function repairMyGroupMembership(groupId) {
+    if (!cloudMode() || !me) return;
+    const identity = {
+      newId: newId(),
+      userId: null, // same as buildGroupCreation: an account lands on the row as profile_id, not here
+      guestId: resolveGuestId(collectionsOf(state), me),
+      displayName: me,
+    };
+    const repair = buildAdminMembershipRepair(collectionsOf(state), groupId, identity, new Date().toISOString());
+    if (!repair) return;
+    const member = normalizeGroupMember(repair.member);
+    if (!member) return;
+    if (repair.mode === "reactivate") {
+      const index = state.groupMembers.findIndex(m => m && String(m.id) === member.id);
+      if (index < 0) return;
+      state.groupMembers[index] = member;
+    } else {
+      state.groupMembers.push(member);
+    }
+    save();
   }
 
   // Creates a group and its creator admin membership. Requires a signed-in name; when there
