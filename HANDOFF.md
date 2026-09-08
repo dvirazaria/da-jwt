@@ -6,8 +6,10 @@ Context file for any coding agent picking up this project.
 A Hebrew, RTL, mobile-first PWA for settling home poker cash games:
 the Games dashboard opens a contextual "שולחן" screen for players and buy-ins,
 then a "חישוב" settlement screen with minimal transfers and a "פרופיל" record.
-Deployed on Vercel (static, auto-deploys from `main`), installable to the
-home screen. Current release version: 38.
+The dashboard also owns groups: create a group, add members, start a
+group-linked game, see its history and leaderboard. Deployed on Vercel
+(static, auto-deploys from `main`), installable to the home screen.
+Current release version: 43.
 
 ## Files
 - `kupa-sgura.html` — THE app. Single file: CSS + HTML + one IIFE of vanilla JS.
@@ -15,9 +17,18 @@ home screen. Current release version: 38.
 - `index.html` — GENERATED standalone PWA wrapper. Never edit by hand.
 - `build.py` — release script. Single source of the version number: stamps it
   into the app + `sw.js` cache name and regenerates `index.html`. Run on every release.
-- `sw.js`, `manifest.webmanifest`, `icon-180/192/512.png` — PWA assets. The
+- `sw.js` — service-worker cache list. Hand-maintained; `build.py` only regex-replaces the
+  `CACHE = "kupa-vNN"` constant inside it on release, it does not regenerate the file.
+- `manifest.webmanifest`, `icon-180/192/512.png` — PWA assets. The
   home-screen icons use the poker-table artwork supplied for this app.
 - `poker-settle.html` — FROZEN legacy version for an old artifact URL. Do not edit.
+- `tools/local-state-to-sql.js` — offline converter from a `poker-settle-v1` export to
+  Postgres inserts matching `docs/backend/schema.sql`. Not part of the app; excluded from the
+  Vercel deploy via `.vercelignore` (`tools/`). See `docs/backend/migration-from-local-state.md`.
+- `docs/backend/` — portable backend artifacts written ahead of any account setup:
+  `platform-research.md` (Supabase decision), `schema.sql` (DDL), `rls-policies.sql`,
+  `migration-from-local-state.md`, `frontend-seam.md` (what changes in this file when the
+  backend lands). `docs/backend-readiness.md` is the narrative summary that links all of them.
 
 ## Start here when continuing work
 
@@ -37,13 +48,18 @@ Floating capsule bottom tab bar (active tab = filled pill with label).
 All animations respect `prefers-reduced-motion`.
 
 ## Data model (current, local/demo)
-`state = { example, phase, gameId, players: [{id, name, buyins:[], entryLog:[], cashout}], history: [...], debts: [...], settlementStatuses: {}, groupId, updatedAt }`
+`state = { example, phase, gameId, players: [{id, name, buyins:[], entryLog:[], cashout, status,
+exitedAt, guestId, memberId}], history: [...], debts: [...], settlementStatuses: {}, groupId,
+startedAt, leaderRef, groups: [...], groupMembers: [...], invites: [...], friendships: [...],
+updatedAt }`. Everything lives in this one document — one localStorage key, one sync target — per the
+project's "keep one source of truth" rule; nothing here is a second store.
 - `phase` is persisted as `active`, `settlement`, or `closed`. Legacy real snapshots
   that contain players migrate to `active`; legacy demo/empty snapshots migrate to
   `closed` and open the Games dashboard.
-- `appView` is UI-only routing with `games`, `game`, `settle`, and `profile`.
-  Games is the primary dashboard; table and settlement remain contextual screens
-  inside the current game. Refresh derives the initial view from `state.phase`.
+- `appView` is UI-only routing with `games`, `game`, `settle`, `profile`, and `group` (a group's own
+  page, `currentGroupId` selects which one). Games is the primary dashboard; `game`, `settle`, and
+  `group` are contextual screens. Refresh derives the initial view from `state.phase` only —
+  opening a group page is never the boot destination.
 - Each entryLog item is {id, timestamp, amount, playerId, gameId}; timestamp is ISO UTC,
   displayed as local HH:mm. Legacy entries use null time (shown as —), never invented times.
   Numeric buyins stay unchanged for calculation compatibility. Add/undo must update both arrays.
@@ -60,19 +76,105 @@ All animations respect `prefers-reduced-motion`.
   with `paidAt` and never changes the poker result. The current app has name-based local
   identity, so profile filtering and creditor checks use the current player name until
   the planned authenticated backend supplies stable user IDs and RLS.
-- The Games dashboard exposes active games, the current groups placeholder, and
-  "משחק ללא קבוצה". There is intentionally no generic "התחל משחק" action.
+- A player can `exitPlayer()` mid-game (status `active`→`exited`, `exitedAt`, cashout stored on the
+  existing `cashout` field). Exited players lose the buy-in plus button, show a quiet "יצא · ₪X" tag,
+  and cannot rebuy; `activePlayers()`/`exitedPlayers()` partition the roster. Settlement/`tableBalance`/
+  transfers are unchanged — they already count every player's cashout.
+- Groups (`Group`), members (`GroupMember`), invites (`Invite`) and friend requests (`Friendship`)
+  are pure data contracts documented as JSDoc typedefs at the top of the
+  `// ---------- groups domain (pure) ----------` section. Pre-backend identity:
+  `ParticipantRef = { userId: null, guestId, displayName }` — `userId` is always `null` until real
+  accounts exist; `guestId` is the stable local identity (`resolveGuestId` reuses one guestId per
+  displayName across groups/history on this device). "Who am I" inside a group is the member whose
+  `displayName === me` (`findMyMembership`) — replaced by `userId === session.userId` post-backend.
+  Nothing is ever computed and stored: `GroupSummary`, `LeaderboardEntry`, `GroupGameSummary`,
+  `gameWinners` are all adapters over `groups`/`groupMembers`/`history`, never persisted fields.
+  `getGroupSummaries(collections, meName)` is the real adapter the dashboard calls today (no longer
+  a stub); `collectionsOf(state)` builds its input.
+- The Games dashboard exposes active games, real groups (create/open/expand), and
+  "משחק ללא קבוצה". There is intentionally no generic "התחל משחק" action outside a group's own page.
 - "סיים משחק" is a cancellable one-second pointer hold that changes only
   `phase` to `settlement`. "חזור לעריכת המשחק" changes it back to `active`.
-  Only "סגור שולחן" finalizes the existing history/debt flow and routes to Games.
-- Regression checks: `node --test tests/*.test.cjs` (currently 37 tests across entry logs, navigation/game phases, and profile/debt tabs).
+  Only "סגור שולחן" finalizes the existing history/debt flow; for an ungrouped game it routes to
+  Games, for a group game it routes back to that group's page (`setAppView("group")`) so the closer
+  immediately sees the last game and the updated leaderboard.
+- Regression checks: `node --test tests/*.test.cjs` (currently 228 tests across 20 files: entry
+  logs, navigation/game phases, profile/debt tabs, player exit, the groups domain, group creation,
+  the group page, group members, friends, invites, starting/closing a group game, the active-group
+  game, group history/leaderboard, group privacy, group lifecycle (archive/delete/leave), dashboard
+  integration, the local-state→SQL export tool, the Task 18 motion pass, and an end-to-end domain
+  scenario driving create-group → members → start game → buy-ins → exit → close → history → leaderboard).
 - localStorage key `poker-settle-v1` (legacy prefix kept for continuity;
-  also `poker-settle-me`, `-theme`, `-contact`).
+  also `poker-settle-me`, `-theme`, `-contact`, `-profile-debts-seen`). No new keys were added for
+  the groups work — everything flows through the same `normalize()`/`save()`/`remoteBody()` triple.
 - Optional realtime sync via `window.claude.use("db")` (works only when
   served as a claude.ai artifact; on Vercel it's localStorage only).
   Whole-state doc, last-writer-wins, `updatedAt` guards stale overwrites,
   snapshot bodies are frozen (must deep-clone). This entire sync layer is
-  meant to be REPLACED by a real backend.
+  meant to be REPLACED by a real backend — see "Next milestone" below for the concrete plan.
+
+## New flows (groups, members, invites, friends)
+
+- **Player exit** — "יציאה" next to "פירוט כניסות" on an active player's row opens an inline
+  capsule (reuses `.pmenu`) for a cashout amount; confirming calls `exitPlayer()`. An exited row
+  shows "יצא · ₪X" and "עריכה" to change the amount (`updateExitCashout()`), never re-adds the plus
+  button.
+- **Create a group** — dashboard "+ צור קבוצה" (now enabled) opens an inline panel: name + an avatar
+  picker that resizes the image on canvas to 96×96 JPEG q0.8 and stores it as a data URL. `createGroup()`
+  builds the group and an admin `GroupMember` for the creator, then navigates straight to the group page.
+- **Group page** (`appView === "group"`) — header (avatar/name/member count), a primary action gated
+  by `canStartGroupGame()` (open a table for this group, or a quiet reason it's blocked), leaders,
+  last game, members, invite, and history — each section is its own `renderGroup*` function reading
+  only from the adapters, composed by `renderGroupPage()`.
+- **Members** — admins add a guest by name inline ("+ הוסף חבר"; duplicate active name shakes),
+  remove a member with a two-step armed button (refused if it's the last admin), promote a member to
+  admin. Former members collapse under "חברים לשעבר (N)". A registered member cannot be added yet —
+  there are no accounts; the note under the input says so.
+- **Invites** — any active member sees a single active invite per group: a large code, "העתק קישור",
+  "שתף" (when `navigator.share` exists), and a QR tile that is a deliberate placeholder ("QR יופיע עם
+  חיבור לשרת" — rendering is deferred, not broken). Admins can revoke/regenerate. Opening `?join=CODE`
+  shows a full-screen notice and does **not** join anything yet; the query string is stripped.
+- **Friends tab** — a third profile tab ("חברים") shows three adapter-driven lists (friends, incoming,
+  outgoing), always empty today because nothing in the UI calls `createFriendRequest()` — the pure
+  functions exist and are tested, but there is deliberately no path to fabricate a local friendship.
+- **Group games** — a group's "התחל משחק" opens a participant picker (checkbox rows for active
+  members + "+ הוסף אורח"); `startGroupGame()` builds the current-game slot via `newCurrentGame()`
+  and reuses the existing table/settlement/close flow unchanged. Closing a group game writes
+  `groupId`/`startedAt`/`leaderRef` into the history entry and frees the slot (`groupId`/`leaderRef`
+  reset to `null`) so the group can start its next game.
+- **Group history & leaderboard** — every closed game for a group is a derived `GroupGameSummary`
+  (date, player count, winner names, pot, balance flag); tapping a row expands a by-place ranking
+  (names only). `buildLeaderboard()` ranks by total net desc → games played desc → name, with tied
+  net sharing a rank, and never exposes a money field to the renderer (enforced by
+  `tests/group-privacy.test.cjs`).
+- **Archive / delete / leave** — a group-page "הגדרות קבוצה" overlay (admin: rename, avatar,
+  archive/unarchive, delete; any member: leave). Delete and archive are soft (`deletedAt`/
+  `archivedAt`); history entries and debts are never touched. Deleting or leaving while the group's
+  game is open, or leaving as the last admin, is refused with an inline reason instead of allowed.
+
+## Documented limitations (intentional, not bugs)
+
+- **Single active game slot** — the engine still has exactly one current-game slot per device
+  (`state.players/phase/gameId`), so a group can have at most one open game **and** the whole device
+  can only have one open game at a time, even across different groups. `canStartGroupGame()` reports
+  `group-has-open-game` vs `another-game-open` accordingly. The backend removes the second
+  limitation: `schema.sql`'s `games_one_open_per_group_uk` is a per-group unique index, not per-device.
+- **Name-based identity** — "who am I" is still a typed name (`me`), not authentication;
+  `ParticipantRef.userId` is always `null`. `resolveGuestId()` gives the same name the same `guestId`
+  across groups/history on one device, but two different people can collide if they type the same
+  name. This is a pre-backend simplification the group model was built around, not an oversight.
+- **Leaderboard eligibility rule** — since nobody is a linked account yet, "eligible for the
+  leaderboard" is defined as "matches a `GroupMember` record of this group, in any status" rather
+  than the spec's `userId != null`. Ad-hoc game guests who never joined the group are excluded. This
+  tightens to `userId != null` post-backend without touching the UI (`isLeaderboardEligible`).
+- **QR placeholder** — the invite block always renders a QR-shaped tile with explanatory text
+  instead of an actual QR code; encoding `inviteLink()` into a real QR is deferred, not missing by
+  accident.
+- **`HISTORY_MAX` is 400**, not the old 60 — the leaderboard and group history need the full group
+  history, not just a recent slice. Anything beyond that cap on a given device is simply absent from
+  a local-state export (see `docs/backend/migration-from-local-state.md`).
+- **Avatar images are data URLs** (~12KB, 96×96 JPEG) inside `state`, not uploaded files — fine for
+  one localStorage document, not meant to survive as-is once there's a backend with real file storage.
 
 ## Hard-won gotchas (do not regress)
 - The claude.ai artifact iframe blocks `form submit`, `window.confirm`,
@@ -85,19 +187,31 @@ All animations respect `prefers-reduced-motion`.
 - Duplicate player names are rejected (name is the identity key everywhere).
 
 ## Next milestone (the reason for this handoff): real users
-Goal: each player signs in (phone/Google), joins a shared table from their
-own phone, adds their own buy-ins; closing the table writes an immutable
-per-player record; append-only audit log of every action (who/when).
-Agreed plan: Supabase free tier (auth + Postgres + RLS + realtime):
-- tables: profiles, tables, table_players, buyins (append-only), games (closed),
-  game_results, audit_log (insert-only RLS, no update/delete policies).
-- RLS: a player writes only their own buy-ins; only the table owner closes.
-- Replace the localStorage/artifact-db sync layer with Supabase client calls;
-  keep the UI and flows as-is.
-- NEVER commit keys/secrets (this repo already had one leaked+rotated
-  Google service-account key — history still contains the dead key).
-- The current "login" screen (name only) becomes the real auth screen;
-  `me`/contact fields in settings were built as placeholders for this.
+
+Goal: each player signs in, joins a shared table/group from their own phone, adds their own
+buy-ins; closing the table writes an immutable per-player record. The groups/friends/invites data
+model above was built specifically so this milestone is additive, not a rewrite — every collection
+already flows through `normalize()`/`save()`/`remoteBody()`, and the pure domain functions
+(`createGroup`, `addGroupMember`, `createInvite`, `createFriendRequest`, …) are already the exact
+spec for the matching backend action.
+
+Full research, schema, RLS policies, migration plan, and the seam where the sync layer gets replaced
+are already written — read them before starting, don't re-derive them:
+- `docs/backend-readiness.md` — narrative summary: entities, endpoints, auth, permissions, migration.
+- `docs/backend/platform-research.md` — **decision: Supabase** (Postgres + RLS + Realtime + Auth),
+  free tier, cost projection, and the exit path if it's ever outgrown.
+- `docs/backend/schema.sql` / `docs/backend/rls-policies.sql` — the DDL and RLS to run, ready to paste.
+- `docs/backend/migration-from-local-state.md` + `tools/local-state-to-sql.js` — one-time, one-device
+  export of the current `poker-settle-v1` into the new schema.
+- `docs/backend/frontend-seam.md` — exactly which functions in `kupa-sgura.html` change
+  (`initSync`→`initBackend`, `remoteBody`/`applyRemote`/`scheduleRemoteSave` replaced by row-level
+  mutations + realtime) and which stay untouched (`settle()`, `tableBalance()`, every renderer).
+
+NEVER commit keys/secrets (this repo already had one leaked+rotated Google service-account key —
+history still contains the dead key). Only the `sb_publishable_...` key is meant to reach the client;
+`sb_secret_...` must never appear in source, commits, or Vercel static assets. The current "login"
+screen (name only) becomes the real auth screen; `me`/contact fields in settings were built as
+placeholders for this, and `ParticipantRef.userId` starts getting real values instead of `null`.
 
 ## Release process
 1. Edit `kupa-sgura.html` only.
@@ -110,14 +224,26 @@ Agreed plan: Supabase free tier (auth + Postgres + RLS + realtime):
 ## Current release snapshot
 
 - Git remote: `https://github.com/dvirazaria/da-jwt.git`.
-- Current commit at handoff: `7ea1248` (the Games dashboard foundation is already on `main`).
-- Release builder version: `38`; generated service-worker cache is `kupa-v38`.
+- Current commit at handoff: `ca8b75c` (the groups/friends/invites foundation — plan
+  `docs/superpowers/plans/2026-09-07-groups-foundation.md` — is complete through Task 19 and on
+  `main`; see `docs/superpowers/plans/2026-09-08-pre-backend-gaps.md` for the Task 19 gap audit).
+- Release builder version: `43`; generated service-worker cache is `kupa-v43`.
 - Live deployment: `https://poker-tau-pink.vercel.app/`.
 - `archive/all-in-cash/` is an unrelated old prototype, ignored by Git and excluded from Vercel. Do not use it as the source for this app.
 - The current local identity is a typed name (`poker-settle-me`), not authentication. Do not treat it as secure identity or build authorization on it.
 
 ## Next work boundaries
 
-The next major milestone is real multi-user persistence. Before implementing it, inspect the current sync functions (`remoteBody`, `applyRemote`, `scheduleRemoteSave`, `initRemote`) and preserve the existing UI flows. Supabase is the agreed direction, but there is no Supabase schema or client in this repository yet. Never place keys in source, commits, `index.html`, or Vercel static assets.
+The next major milestone is real multi-user persistence. Before implementing it, read
+`docs/backend-readiness.md` and `docs/backend/frontend-seam.md` — they already inventory exactly
+which functions change (`initSync`, `remoteBody`, `applyRemote`, `scheduleRemoteSave` on the sync
+side) and which don't, so this isn't a cold start. Supabase is the agreed and researched direction
+(`docs/backend/platform-research.md`), and `docs/backend/schema.sql`/`rls-policies.sql` are ready to
+run — but no Supabase project exists yet; step 1 of the connection plan needs the owner's own
+account. Never place keys in source, commits, `index.html`, or Vercel static assets.
 
-The Games dashboard currently has no group backend. `getGroupSummaries()` must stay an empty adapter until groups are real. The disabled `+ צור קבוצה` control is intentional. `ActiveGameSummary` is the only data shape the active-game dashboard UI should consume, and card expansion is in-memory UI state only.
+The Games dashboard's group data is real (`getGroupSummaries(collectionsOf(state), me)`, `+ צור קבוצה`
+enabled), but it is still entirely local/per-device: no remote membership, no real invite redemption,
+no cross-device identity. `ActiveGameSummary` remains the only data shape the active-game dashboard
+UI should consume; `GroupSummary`/`LeaderboardEntry`/`GroupGameSummary` are the equivalent contracts
+for groups. Card/panel expansion stays in-memory UI state and must never call `save()`.

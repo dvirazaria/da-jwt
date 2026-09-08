@@ -5,22 +5,24 @@ Read [`HANDOFF.md`](HANDOFF.md) and [`DESIGN.md`](DESIGN.md) before making chang
 ## Fast project map
 
 - `kupa-sgura.html`: only runtime source. It contains CSS, HTML, and one vanilla-JS IIFE.
-- `build.py`: release builder. It bumps the version in the source, updates the service-worker cache, and regenerates `index.html`.
+- `build.py`: release builder. It bumps the version in the source, replaces the `CACHE = "kupa-vNN"` name inside `sw.js`, and regenerates `index.html`.
 - `index.html`: generated deployable PWA. Never edit by hand.
-- `sw.js`: generated cache file. Never hand-edit the cache version.
+- `sw.js`: hand-maintained service-worker cache list. `build.py` only regex-replaces the cache-name constant inside it; the file itself is not regenerated. Never hand-edit the cache version string.
 - `manifest.webmanifest`, `icon-180.png`, `icon-192.png`, `icon-512.png`: PWA metadata/assets.
 - `poker-settle.html`: frozen legacy artifact. Do not edit.
-- `tests/*.test.cjs`: Node built-in tests run against source slices with `vm`.
+- `tests/*.test.cjs`: Node built-in tests run against source slices with `vm` (228 tests across 20 files).
+- `tools/local-state-to-sql.js`: offline converter, `poker-settle-v1` export → Postgres inserts. Not part of the app; excluded from the Vercel deploy via `.vercelignore`.
+- `docs/backend/`: portable backend artifacts (platform decision, schema, RLS, migration plan, frontend seam) — see `docs/backend-readiness.md` for the narrative summary.
 - `docs/superpowers/`: historical design/spec/plan notes; useful context, not runtime code.
 - `archive/all-in-cash/`: unrelated ignored prototype; do not use it as a source.
 
 ## Architecture contract
 
-Keep one source of truth: the `state` object in `kupa-sgura.html`. The UI route is `appView` (`games | game | settle | profile`); persisted game phase is `state.phase` (`active | settlement | closed`). `games` is the home dashboard. `game` and `settle` are internal screens for the current game. Only final `סגור שולחן` closes the game, creates history/debts, and returns to Games.
+Keep one source of truth: the `state` object in `kupa-sgura.html`. The UI route is `appView` (`games | game | settle | profile | group`); persisted game phase is `state.phase` (`active | settlement | closed`). `games` is the home dashboard. `game`, `settle`, and `group` (a single group's own page, selected by the UI-only `currentGroupId`) are contextual screens. Only final `סגור שולחן` closes the game, creates history/debts, and returns to Games (or, for a group game, to that group's page).
 
-The current app is local/demo storage with optional Claude artifact document sync. LocalStorage keys are intentionally legacy-named: `poker-settle-v1`, `poker-settle-me`, `poker-settle-theme`, `poker-settle-contact`, and `poker-settle-profile-debts-seen`. Do not add another state store or new localStorage keys for UI-only state.
+The current app is local/demo storage with optional Claude artifact document sync. LocalStorage keys are intentionally legacy-named: `poker-settle-v1`, `poker-settle-me`, `poker-settle-theme`, `poker-settle-contact`, and `poker-settle-profile-debts-seen`. Do not add another state store or new localStorage keys for UI-only state. `state` also carries `groups`, `groupMembers`, `invites`, and `friendships` — all pure data contracts (JSDoc typedefs at the top of `// ---------- groups domain (pure) ----------`), normalized/saved/synced through the same `normalize()`/`save()`/`remoteBody()` path as everything else.
 
-For the Games dashboard, `getActiveGameSummaries(gameState)` is the only adapter the active-game UI consumes. `getGroupSummaries()` returns `[]` until a real groups data source exists. `startedAt` is created only for new games; missing legacy timestamps stay missing. `updatedAt` is shown only when valid. Expanded cards use in-memory Sets and never call `save()`.
+For the Games dashboard, `getActiveGameSummaries(gameState, groups)` is the only adapter the active-game UI consumes. `getGroupSummaries(collectionsOf(state), me)` is the real groups adapter (no longer a stub) and is the only shape the group UI consumes; derived data (leaderboards, winners, per-group game summaries) is computed by adapters and never stored. `startedAt` is created only for new games; missing legacy timestamps stay missing. `updatedAt` is shown only when valid. Expanded cards/panels use in-memory Sets and never call `save()`.
 
 ## Behavior that must not regress
 
