@@ -382,16 +382,19 @@ test('the settings gear shows on primary non-game views, not on the group page o
   assert.match(groupHeader, /games-group-settings-btn/);
 });
 
-test('the isolated suit mark sits first in the safe-area-padded app shell and adapts to both themes', () => {
+test('the photographed suit artwork sits first in the safe-area-padded app shell and adapts to both themes', () => {
   const wrapStart = html.indexOf('<div class="wrap">');
   const markStart = html.indexOf('<div class="suits-mark" aria-hidden="true">', wrapStart);
   const headerStart = html.indexOf('<header class="load-in">', wrapStart);
   assert.ok(wrapStart >= 0 && markStart > wrapStart && headerStart > markStart, 'the mark should sit above the app header inside .wrap');
   const mark = html.slice(markStart, headerStart);
-  assert.match(mark, /class="base-suit suit-spade"[\s\S]*class="accent-suit suit-diamond"[\s\S]*class="base-suit suit-club"[\s\S]*class="accent-suit suit-heart"/);
+  assert.match(mark, /<img class="suits-mark-dark" src="data:image\/png;base64,iVBOR/);
+  assert.match(mark, /<img class="suits-mark-light" src="data:image\/png;base64,iVBOR/);
+  assert.doesNotMatch(mark, /<svg|suit-spade/);
   assert.match(html, /\.suits-mark \{[^}]*justify-content: center[^}]*margin: 0 auto/s);
-  assert.match(html, /\.suits-mark \.base-suit \{ color: var\(--text\); \}/);
-  assert.match(html, /\.suits-mark \.accent-suit \{ color: var\(--accent\); \}/);
+  assert.match(html, /\.suits-mark \.suits-mark-light \{ display: none; \}/);
+  assert.match(html, /:root\[data-theme="light"\] \.suits-mark-dark \{ display: none; \}/);
+  assert.match(html, /:root\[data-theme="light"\] \.suits-mark-light \{ display: block; \}/);
 });
 
 test('renderGamesDashboard has no big title: the lead line is first and the column clears the corner stack', () => {
