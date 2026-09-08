@@ -159,8 +159,9 @@ project's "keep one source of truth" rule; nothing here is a second store.
   can only have one open game at a time, even across different groups. `canStartGroupGame()` reports
   `group-has-open-game` vs `another-game-open` accordingly. The backend removes the second
   limitation: `schema.sql`'s `games_one_open_per_group_uk` is a per-group unique index, not per-device.
-- **Name-based identity** — "who am I" is still a typed name (`me`), not authentication;
-  `ParticipantRef.userId` is always `null`. `resolveGuestId()` gives the same name the same `guestId`
+- **Name-based identity** — inside the app "who am I" is still a name (`me`). Supabase phase 1 can
+  now *fill* that name from a real session (`profiles.display_name`, see "Backend (phase 1)" below),
+  but nothing downstream uses the session yet: `ParticipantRef.userId` is always `null`. `resolveGuestId()` gives the same name the same `guestId`
   across groups/history on one device, but two different people can collide if they type the same
   name. This is a pre-backend simplification the group model was built around, not an oversight.
 - **Leaderboard eligibility rule** — since nobody is a linked account yet, "eligible for the
@@ -185,6 +186,52 @@ project's "keep one source of truth" rule; nothing here is a second store.
   confirms are dropped via `menuClosing` (prevents double buy-ins).
 - Editing example data wipes it (`markReal()` returns true = stop the action).
 - Duplicate player names are rejected (name is the identity key everywhere).
+
+## Backend (phase 1: client, public config, real sign-in)
+
+**What is wired.** `kupa-sgura.html` loads `@supabase/supabase-js@2` (UMD) from jsDelivr in a
+deferred `<script>` placed just before the app script, and builds one client in the
+`// ---------- backend config ----------` block at the top of the IIFE. `defer` is ignored on inline
+scripts, so the app script starts *first*: `bootBackend()` therefore builds the client again on
+`DOMContentLoaded`, once the CDN file has actually executed. The `// ---------- auth (Supabase
+session) ----------` section owns everything else: `initAuth()` (`getSession` +
+`onAuthStateChange`), `applySession()`, `ensureProfile()` (upsert into `profiles`:
+`id`/`display_name`/`email` only — the columns `profiles_insert_self`/`profiles_update_self` allow),
+`signInWithGoogle()`, `sendEmailCode()` / `verifyEmailCode()` (email OTP), `signOutAccount()`, and
+`stripAuthParamsFromUrl()` (tidies `?code=` / `#access_token=` after the session is set, and keeps
+`?join=` intact). `me` is now fed from `profiles.display_name`; `poker-settle-me` stays as the
+offline cache. `#settings` shows the signed-in address under the avatar and "התנתקות" signs the
+session out before the existing local swap flow.
+
+**What is NOT wired.** Everything else. Game data is still the local/Claude-doc document sync:
+`save()`, `remoteBody()`, `scheduleRemoteSave()`, `applyRemote()`, `initSync()` are byte-for-byte
+unchanged, no table besides `profiles` is read or written, there is no realtime channel, and
+`ParticipantRef.userId` is still always `null` (phase 2). Nothing else in the app knows the session
+exists.
+
+**Offline / CDN-blocked is a first-class path.** `supabase` is `null` whenever supabase-js is
+missing, every call site early-returns on it (enforced by `tests/backend-config.test.cjs`), and the
+login screen then shows only the existing local name flow plus the note
+"כניסה עם חשבון לא זמינה כרגע". The service worker does not cache the CDN file; that is accepted
+for this phase.
+
+**The two constants are public on purpose.**
+`SUPABASE_URL = https://aztfjlssjbjhxdqsflgn.supabase.co` and
+`SUPABASE_PUBLISHABLE_KEY = sb_publishable_…` are meant to ship in the client: the publishable key
+only grants what the RLS policies in `docs/backend/rls-policies.sql` grant the `authenticated` role.
+The security boundary is RLS, not key secrecy. A service-role / secret key must never appear in the
+source — `tests/backend-config.test.cjs` fails if one does.
+
+**Testing locally.**
+```sh
+cd "/Users/dvirazaria/פוקר" && python3 -m http.server 8765
+# then open http://localhost:8765/kupa-sgura.html
+```
+`http://localhost:8765/**` is an allowed redirect URL in the Supabase project, so the Google
+round-trip returns to the page it left. Email OTP works out of the box but is rate-limited to
+**2 mails/hour** until custom SMTP is configured; Google sign-in needs the provider enabled in the
+Supabase dashboard with the OAuth client from Google Cloud. Opening `kupa-sgura.html` over `file://`
+gives no session (no allowed origin) — the local name flow still works there.
 
 ## Next milestone (the reason for this handoff): real users
 

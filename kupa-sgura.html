@@ -696,6 +696,31 @@
   .btn-primary:hover { background: var(--accent); color: var(--bg); }
   .btn-skip { color: var(--dim); font-size: 13px; align-self: flex-start; }
 
+  /* sign-in: the account block sits above, the existing local name flow stays below it, quieter */
+  .auth-block, .auth-step, .auth-local { display: flex; flex-direction: column; gap: 14px; }
+  .auth-local { gap: 12px; padding-top: 4px; border-top: 1px solid var(--line); }
+  /* when there is no client at all the local flow is the only flow: no rule, no "בלי חשבון" label */
+  .auth-local.auth-local-only { border-top: none; padding-top: 0; }
+  .auth-local.auth-local-only .auth-local-title { display: none; }
+  .login .auth-local-title { color: var(--faint); font-size: 12px; font-weight: 700; letter-spacing: .04em; margin: 6px 0 -4px; }
+  .btn-google {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    border: 1px solid var(--line); border-radius: 999px;
+    color: var(--text); font-weight: 700; font-size: 15px;
+    padding: 12px 22px; min-height: 48px; width: 100%;
+  }
+  .btn-google:hover { border-color: var(--accent); }
+  .btn-google:active { transform: scale(.97); }
+  .btn-google:disabled { opacity: .45; cursor: default; }
+  .btn-google svg { width: 20px; height: 20px; flex: 0 0 20px; }
+  .auth-divider { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 12px; }
+  .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  /* the email → code swap reuses the standard panel entrance instead of a hard cut */
+  .auth-step.auth-step-in { animation: rise .28s ease both; }
+  .login .auth-note { color: var(--dim); font-size: 13px; margin: 0; }
+  .login .auth-error { color: var(--bad); font-size: 13px; margin: -6px 0 0; animation: fadeIn .25s ease both; }
+  .login .set-account { color: var(--dim); font-size: 12px; margin: -16px 0 0; overflow-wrap: anywhere; }
+
   /* settings — flat, centered */
   .back-arrow {
     position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); inset-inline-start: 18px;
@@ -799,6 +824,7 @@
   <div class="login-in set-in">
     <div class="avatar" id="setAvatar">?</div>
     <div class="set-name" id="setName"></div>
+    <p class="set-account" id="setAccount" dir="ltr" hidden></p>
     <input type="tel" id="setPhone" inputmode="tel" placeholder="טלפון" autocomplete="tel" aria-label="טלפון">
     <input type="email" id="setEmail" inputmode="email" placeholder="מייל" autocomplete="email" aria-label="מייל">
     <div class="theme-row">
@@ -834,11 +860,40 @@
   <div class="login" id="login" hidden>
   <div class="login-in">
     <h2>מי אתה?</h2>
-    <p>בחר את השם שלך או הקלד אחד חדש — ככה הרקורד שלך יישמר בין ערבים.</p>
-    <div class="who-row" id="loginChips"></div>
-    <input type="text" id="loginName" placeholder="השם שלך" autocomplete="off" aria-label="השם שלך">
-    <button type="button" class="btn-primary" id="loginGo">המשך</button>
-    <button type="button" class="btn-skip" id="loginSkip">דלג בינתיים</button>
+    <div class="auth-block" id="authBlock" hidden>
+      <button type="button" class="btn-google" id="authGoogleBtn">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.99-4.3 2.99-7.35Z"></path>
+          <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.42l-3.23-2.5c-.9.6-2.05.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H3.07v2.58A10 10 0 0 0 12 22Z"></path>
+          <path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.83V7.5H3.07a10 10 0 0 0 0 9l3.34-2.58Z"></path>
+          <path fill="#EA4335" d="M12 5.98c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.95 2.99 14.7 2 12 2a10 10 0 0 0-8.93 5.5l3.34 2.59C7.2 7.73 9.4 5.98 12 5.98Z"></path>
+        </svg>
+        <span id="authGoogleLabel">המשך עם Google</span>
+      </button>
+      <p class="auth-error" id="authGoogleError" hidden></p>
+      <div class="auth-divider"><span>או</span></div>
+      <div class="auth-step" id="authEmailStep">
+        <input type="email" id="authEmail" dir="ltr" inputmode="email" autocomplete="email" placeholder="name@mail.com" aria-label="כתובת מייל">
+        <button type="button" class="btn-primary" id="authEmailBtn">שלחו לי קוד</button>
+        <p class="auth-error" id="authEmailError" hidden></p>
+      </div>
+      <div class="auth-step" id="authCodeStep" hidden>
+        <p class="auth-note" id="authCodeSent"></p>
+        <input type="text" id="authCode" dir="ltr" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" aria-label="קוד מהמייל">
+        <button type="button" class="btn-primary" id="authCodeBtn">אישור</button>
+        <p class="auth-error" id="authCodeError" hidden></p>
+        <button type="button" class="btn-skip" id="authCodeBackBtn">מייל אחר</button>
+      </div>
+    </div>
+    <p class="auth-note" id="authOffline" hidden>כניסה עם חשבון לא זמינה כרגע</p>
+    <div class="auth-local" id="authLocal">
+      <p class="auth-local-title">בלי חשבון</p>
+      <p>בחר את השם שלך או הקלד אחד חדש — ככה הרקורד שלך יישמר בין ערבים.</p>
+      <div class="who-row" id="loginChips"></div>
+      <input type="text" id="loginName" placeholder="השם שלך" autocomplete="off" aria-label="השם שלך">
+      <button type="button" class="btn-primary" id="loginGo">המשך</button>
+      <button type="button" class="btn-skip" id="loginSkip">דלג בינתיים</button>
+    </div>
   </div>
 </div>
 
@@ -907,6 +962,11 @@
 
 </div>
 
+<!-- supabase-js v2 (UMD build → window.supabase). Deferred, so it never blocks first paint, and
+     placed before the app script for readability. The inline app script below still starts first
+     (defer is ignored on inline scripts), so it builds the client again on DOMContentLoaded once
+     this file has executed — and stays fully usable when the request fails (offline / CDN blocked). -->
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
 (function () {
   const MIN_BUYIN = 50;
@@ -923,6 +983,26 @@
   const SERVER_NOTE = "יעבוד כשהאפליקציה תתחבר לשרת";
   const HOLD_TO_FORCE_CLOSE_MS = 1000;
   const FINISH_GAME_HOLD_MS = 1000;
+
+  // ---------- backend config (public values; RLS is the security boundary) ----------
+  // Both constants are meant to ship inside the client. The publishable key can only do what the
+  // row-level-security policies in docs/backend/rls-policies.sql allow the "authenticated" role to
+  // do; it is not a secret. A service-role / secret key must NEVER appear in this file —
+  // tests/backend-config.test.cjs fails if one ever does.
+  const SUPABASE_URL = "https://aztfjlssjbjhxdqsflgn.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JsCuQh8iaszmRzjITbhOVA_vWqEXrUV";
+
+  // null whenever supabase-js is missing (offline, CDN blocked, test harness). Every call site
+  // guards on it, so the whole app keeps working exactly as before in local-only mode.
+  let supabase = createBackendClient();
+  function createBackendClient() {
+    try {
+      if (!SUPABASE_URL || !window.supabase || typeof window.supabase.createClient !== "function") return null;
+      return window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      });
+    } catch (e) { return null; }
+  }
 
   const EXAMPLE = {
     example: true,
@@ -4267,10 +4347,221 @@
     finishCloseTable();
   });
 
+  // ---------- auth (Supabase session) ----------
+  // Phase 1 wires identity only: a real session, a `profiles` row, and `me` fed from it. No game
+  // data moves to the server yet — save()/initSync()/remoteBody() are untouched, and nothing here
+  // invents a `userId` on a participant ref (that is phase 2).
+  let authUser = null;          // null | { id, email, displayName }
+  let authAppliedUserId = null; // last session already turned into a profile — avoids double upserts
+  let authEmailPending = "";    // address a code was sent to; "" while the email step is showing
+  let authRedirectError = "";   // an error the OAuth redirect came back with, shown on the login screen
+
+  function emailLocalPart(email) {
+    const at = typeof email === "string" ? email.indexOf("@") : -1;
+    return at > 0 ? email.slice(0, at) : "";
+  }
+
+  // profiles.display_name is NOT NULL, 1..40 chars. An existing row wins (the person may have
+  // renamed themselves), then the local name this device already plays under, then what the
+  // provider knows, then the email local part.
+  function preferredDisplayName(user, existingName) {
+    const meta = (user && user.user_metadata) || {};
+    const candidates = [existingName, me, meta.full_name, meta.name, emailLocalPart(user && user.email)];
+    for (const candidate of candidates) {
+      const name = typeof candidate === "string" ? candidate.trim() : "";
+      if (name) return name.slice(0, 40);
+    }
+    return "שחקן";
+  }
+
+  async function ensureProfile(user) {
+    if (!supabase || !user) return null;
+    let existingName = "";
+    try {
+      const { data } = await supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle();
+      existingName = (data && data.display_name) || "";
+    } catch (e) {}
+    const displayName = preferredDisplayName(user, existingName);
+    // Exactly the profiles columns this user is allowed to write (profiles_insert_self /
+    // profiles_update_self): the row id must equal the auth user id.
+    const row = { id: user.id, display_name: displayName, email: user.email || null };
+    try { await supabase.from("profiles").upsert(row, { onConflict: "id" }); } catch (e) {}
+    return { id: user.id, email: user.email || "", displayName };
+  }
+
+  async function applySession(session) {
+    const user = session && session.user;
+    if (!user) {
+      if (!authUser && authAppliedUserId === null) return; // no session before, no session now
+      authUser = null;
+      authAppliedUserId = null;
+      render(); // `me` deliberately stays: local play continues after a sign-out
+      return;
+    }
+    if (authAppliedUserId === user.id) return; // token refresh / repeated event — nothing to do
+    authAppliedUserId = user.id;
+    const profile = await ensureProfile(user);
+    authUser = profile || { id: user.id, email: user.email || "", displayName: me || "" };
+    if (authUser.displayName && authUser.displayName !== me) { me = authUser.displayName; saveMe(); }
+    stripAuthParamsFromUrl();
+    document.getElementById("login").hidden = true;
+    render();
+  }
+
+  function initAuth() {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => applySession(data && data.session)).catch(() => {});
+    supabase.auth.onAuthStateChange((event, session) => { applySession(session); });
+  }
+
+  function signOutAccount() {
+    if (!supabase || !authUser) return;
+    authUser = null;
+    authAppliedUserId = null;
+    supabase.auth.signOut().catch(() => {});
+  }
+
+  // A provider redirect comes back with ?code= (PKCE) or #access_token=; supabase-js consumes it
+  // through detectSessionInUrl. We only tidy the address bar afterwards — and ?join= survives,
+  // because the join notice below reads it from the same URL.
+  function readAuthRedirectError() {
+    const search = new URLSearchParams(location.search);
+    const hash = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+    return search.get("error_description") || hash.get("error_description") ||
+           search.get("error") || hash.get("error") || "";
+  }
+  function stripAuthParamsFromUrl() {
+    const params = new URLSearchParams(location.search);
+    let touched = /(access_token|refresh_token|error_description)=/.test(location.hash || "");
+    ["code", "state", "error", "error_code", "error_description"].forEach(k => {
+      if (params.has(k)) { params.delete(k); touched = true; }
+    });
+    if (!touched) return;
+    const qs = params.toString();
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
+  }
+
+  function setAuthError(id, message) {
+    const line = document.getElementById(id);
+    if (!line) return;
+    line.textContent = message || "";
+    line.hidden = !message;
+  }
+  function setAuthBusy(id, busy, busyLabel, idleLabel) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = !!busy;
+    btn.textContent = busy ? busyLabel : idleLabel;
+  }
+  function setGoogleBusy(busy) {
+    const btn = document.getElementById("authGoogleBtn");
+    btn.disabled = !!busy;
+    document.getElementById("authGoogleLabel").textContent = busy ? "מעביר…" : "המשך עם Google";
+  }
+  function setAuthStep(step) {
+    const emailStep = document.getElementById("authEmailStep");
+    const codeStep = document.getElementById("authCodeStep");
+    emailStep.hidden = step !== "email";
+    codeStep.hidden = step === "email";
+    const shown = step === "email" ? emailStep : codeStep;
+    shown.classList.remove("auth-step-in");
+    void shown.offsetWidth; // restart the panel entrance
+    shown.classList.add("auth-step-in");
+    if (step !== "email") document.getElementById("authCodeSent").textContent = "שלחנו קוד ל־" + authEmailPending;
+  }
+  // The CDN script is deferred, so the account block may only become available after first paint.
+  function refreshAuthBlock() {
+    document.getElementById("authBlock").hidden = !supabase;
+    document.getElementById("authOffline").hidden = !!supabase;
+    document.getElementById("authLocal").classList.toggle("auth-local-only", !supabase);
+  }
+
+  async function signInWithGoogle() {
+    if (!supabase) return;
+    setAuthError("authGoogleError", "");
+    setGoogleBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: location.origin + location.pathname },
+      });
+      if (error) throw error;
+    } catch (e) {
+      setGoogleBusy(false);
+      setAuthError("authGoogleError", "לא הצלחנו להתחבר עם Google");
+    }
+  }
+
+  async function sendEmailCode() {
+    if (!supabase) return;
+    const input = document.getElementById("authEmail");
+    const email = input.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setAuthError("authEmailError", "כתובת מייל לא תקינה");
+      shakeEl(input);
+      return;
+    }
+    setAuthError("authEmailError", "");
+    setAuthBusy("authEmailBtn", true, "שולח…", "שלחו לי קוד");
+    try {
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+      if (error) throw error;
+      authEmailPending = email;
+      document.getElementById("authCode").value = "";
+      setAuthStep("code");
+      document.getElementById("authCode").focus();
+    } catch (e) {
+      setAuthError("authEmailError", "לא הצלחנו לשלוח מייל");
+    }
+    setAuthBusy("authEmailBtn", false, "שולח…", "שלחו לי קוד");
+  }
+
+  async function verifyEmailCode() {
+    if (!supabase) return;
+    const input = document.getElementById("authCode");
+    const token = input.value.replace(/\D/g, "");
+    if (token.length !== 6) {
+      setAuthError("authCodeError", "הקוד לא נכון");
+      shakeEl(input);
+      return;
+    }
+    setAuthError("authCodeError", "");
+    setAuthBusy("authCodeBtn", true, "בודק…", "אישור");
+    try {
+      const { error } = await supabase.auth.verifyOtp({ email: authEmailPending, token, type: "email" });
+      if (error) throw error;
+      authEmailPending = "";
+    } catch (e) {
+      setAuthError("authCodeError", "הקוד לא נכון");
+    }
+    setAuthBusy("authCodeBtn", false, "בודק…", "אישור");
+  }
+
+  document.getElementById("authGoogleBtn").addEventListener("click", signInWithGoogle);
+  document.getElementById("authEmailBtn").addEventListener("click", sendEmailCode);
+  document.getElementById("authEmail").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); sendEmailCode(); }
+  });
+  document.getElementById("authCodeBtn").addEventListener("click", verifyEmailCode);
+  document.getElementById("authCode").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); verifyEmailCode(); }
+  });
+  document.getElementById("authCodeBackBtn").addEventListener("click", () => {
+    authEmailPending = "";
+    setAuthError("authCodeError", "");
+    setAuthStep("email");
+  });
+
   // ---------- login (who are you — asked once per device, on first open) ----------
   function showLogin() {
     const box = document.getElementById("login");
     box.hidden = false;
+    refreshAuthBlock();
+    setAuthStep(authEmailPending ? "code" : "email");
+    setAuthError("authGoogleError", authRedirectError);
+    authRedirectError = ""; // shown once — a later visit to this screen starts clean
+    setAuthError("authEmailError", "");
+    setAuthError("authCodeError", "");
     const chips = document.getElementById("loginChips");
     chips.innerHTML = "";
     knownNames().forEach(n => {
@@ -4776,6 +5067,11 @@
   function refreshSettings() {
     document.getElementById("setAvatar").textContent = me ? me.trim()[0] : "?";
     document.getElementById("setName").textContent = me || "אורח";
+    // The signed-in address sits under the name so "התנתקות" below is unambiguous about what
+    // it disconnects. Local-only play shows nothing here.
+    const account = document.getElementById("setAccount");
+    account.textContent = (authUser && authUser.email) || "";
+    account.hidden = !account.textContent;
     const c = loadContact();
     document.getElementById("setPhone").value = c.phone || "";
     document.getElementById("setEmail").value = c.email || "";
@@ -4806,6 +5102,7 @@
     refreshSettings();
   });
   document.getElementById("setSwapBtn").addEventListener("click", () => {
+    signOutAccount(); // ends the Supabase session first when there is one; no-op in local mode
     me = null; saveMe();
     document.getElementById("settings").hidden = true;
     render();
@@ -4857,6 +5154,17 @@
   // ---------- boot ----------
   appView = initialAppView(state);
   render();
+  // Auth first: a redirect back from Google carries ?code=/#access_token=, and the join reader
+  // below must not see those. bootBackend() runs immediately when supabase-js is already there,
+  // otherwise once the deferred CDN script has executed (DOMContentLoaded is after that).
+  if (readAuthRedirectError()) { authRedirectError = "ההתחברות לא הושלמה, נסו שוב"; stripAuthParamsFromUrl(); }
+  function bootBackend() {
+    if (!supabase) supabase = createBackendClient();
+    refreshAuthBlock();
+    initAuth();
+  }
+  if (supabase) bootBackend();
+  else document.addEventListener("DOMContentLoaded", bootBackend, { once: true });
   const joinToken = parseJoinToken(location.search);
   if (joinToken) {
     // Nothing is joined here — this only shows the code and strips the query. Real redemption
