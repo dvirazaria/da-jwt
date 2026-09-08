@@ -801,6 +801,22 @@
   .set-flat:disabled { color: var(--faint); cursor: default; }
   .set-flat:disabled:hover { color: var(--faint); }
 
+  /* iOS cannot be locked to portrait, so a short landscape phone gets a quiet, blocking cue. */
+  #rotateNotice {
+    position: fixed; inset: 0; z-index: 50; display: none;
+    flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    background: var(--bg); color: var(--dim); text-align: center; padding: 24px;
+  }
+  #rotateNotice svg {
+    width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.7;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  #rotateNotice strong { color: var(--text); font-size: 17px; font-weight: 700; }
+  #rotateNotice span { color: var(--dim); font-size: 14px; font-weight: 400; }
+  @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+    #rotateNotice { display: flex; pointer-events: auto; animation: fadeIn .3s ease both; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
@@ -914,6 +930,12 @@
     </div>
   </div>
 </div>
+
+<aside id="rotateNotice" role="status" aria-live="polite">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7.5" y="3" width="9" height="18" rx="2"></rect><path d="M4 9.5a8.5 8.5 0 0 1 14.7-4.1"></path><path d="M18.7 3.8v3.7H15"></path></svg>
+  <strong>האפליקציה עובדת במצב אנכי</strong>
+  <span>סובבו את הטלפון חזרה</span>
+</aside>
 
 <div class="wrap">
   <header class="load-in">
@@ -6610,6 +6632,9 @@
   // ---------- boot ----------
   appView = initialAppView(state);
   render();
+  if (typeof screen.orientation?.lock === "function" && matchMedia("(display-mode: standalone)").matches) {
+    try { screen.orientation.lock("portrait").catch(() => {}); } catch (e) {}
+  }
   // Auth first: a redirect back from Google carries ?code=/#access_token=, and the join reader
   // below must not see those. bootBackend() runs immediately when supabase-js is already there,
   // otherwise once the deferred CDN script has executed (DOMContentLoaded is after that).
