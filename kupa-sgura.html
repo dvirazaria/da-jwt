@@ -129,9 +129,11 @@
 
   /* ---------- player rows ---------- */
   .prow { border-bottom: 1px solid var(--line); }
-  .prow.anim { animation: rise .38s ease both; }
+  .anim { animation: rise .38s ease both; }
   .load-in { animation: rise .5s ease both; }
   @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  /* small fade-in for feedback text/tags that appear in place (no movement) */
+  @keyframes fadeIn { from { opacity: 0; } }
   @keyframes shake {
     20%, 60% { transform: translateX(5px); }
     40%, 80% { transform: translateX(-5px); }
@@ -228,13 +230,13 @@
   .exit-toggle {
     display: flex; align-items: center; padding: 4px 0;
     color: var(--dim); font-size: 12px; font-weight: 400;
-    margin-inline-start: 10px;
+    margin-inline-start: 10px; transition: color .2s;
   }
   .exit-toggle:hover { color: var(--bad); }
-  .exit-tag { color: var(--dim); font-size: 12px; }
+  .exit-tag { color: var(--dim); font-size: 12px; animation: fadeIn .25s ease; }
   .exit-edit {
     color: var(--dim); font-size: 12px; font-weight: 400;
-    padding: 4px 0 4px 8px; margin-inline-start: 4px;
+    padding: 4px 0 4px 8px; margin-inline-start: 4px; transition: color .2s;
   }
   .exit-edit:hover { color: var(--accent); }
   .prow.exited .pname { opacity: .55; }
@@ -326,6 +328,7 @@
     border: 1px solid var(--line); border-radius: 999px;
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     color: var(--text); font-size: 14px; font-weight: 600;
+    transition: background-color .2s, color .2s, border-color .2s;
   }
   .games-quick-action.primary { border-color: var(--accent); color: var(--accent); }
   .games-quick-action.primary:hover { background: var(--accent); color: var(--bg); }
@@ -337,9 +340,9 @@
   .games-card-meta, .games-card-time { display: block; color: var(--dim); font-size: 12px; font-weight: 300; }
   .games-card-time { margin-top: 2px; }
   .games-card-actions { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 10px; }
-  .games-card-enter { border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 13px; font-weight: 700; padding: 6px 15px; min-height: 34px; }
+  .games-card-enter { border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 13px; font-weight: 700; padding: 6px 15px; min-height: 34px; transition: background-color .2s, color .2s, border-color .2s; }
   .games-card-enter:hover { background: var(--accent); color: var(--bg); }
-  .games-card-toggle { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); font-size: 12px; padding: 6px 0; }
+  .games-card-toggle { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); font-size: 12px; padding: 6px 0; transition: color .2s; }
   .games-card-toggle:hover { color: var(--accent); }
   .games-card-toggle svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .22s ease; }
   .games-card-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
@@ -353,7 +356,8 @@
   .games-detail-totals { color: var(--dim); font-size: 12px; font-weight: 300; margin: 8px 0 0; }
   .games-detail-totals b { color: var(--text); font-weight: 600; }
   .games-group-head { display: flex; align-items: center; justify-content: center; gap: 10px; }
-  .games-group-head[role="button"] { cursor: pointer; }
+  .games-group-head[role="button"] { cursor: pointer; transition: opacity .18s ease, transform .12s ease; }
+  .games-group-head[role="button"]:active { transform: scale(.97); }
   .games-group-head[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
   .games-group-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; background: var(--line); color: var(--dim); font-weight: 700; }
   .games-empty { color: var(--faint); font-size: 14px; font-weight: 300; margin: 0; }
@@ -397,9 +401,10 @@
   .group-start-member[aria-checked="true"] .group-start-check { background: var(--accent); border-color: var(--accent); }
   .group-start-check svg {
     width: 13px; height: 13px; opacity: 0; stroke: var(--bg); stroke-width: 2.4;
-    fill: none; stroke-linecap: round; stroke-linejoin: round; transition: opacity .15s;
+    fill: none; stroke-linecap: round; stroke-linejoin: round; transform: scale(.4);
+    transition: opacity .15s, transform .15s ease;
   }
-  .group-start-member[aria-checked="true"] .group-start-check svg { opacity: 1; }
+  .group-start-member[aria-checked="true"] .group-start-check svg { opacity: 1; transform: scale(1); }
   .group-start-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
   .group-start-guests { margin-top: 4px; }
   .group-start-guest-row {
@@ -411,6 +416,7 @@
   .group-start-add { margin-top: 10px; text-align: center; }
   .group-start-add-label { margin: 0 0 8px; color: var(--dim); font-size: 13px; font-weight: 600; }
   .group-start-add-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .group-start-confirm { transition: background-color .2s, color .2s, border-color .2s; }
 
   /* group page: header, primary action, leaderboard, last game, members, history */
   .games-group-header { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 40px; text-align: center; }
@@ -425,13 +431,13 @@
   .games-primary-action .btn-primary { min-width: 200px; }
   .btn-primary:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--faint); }
   .btn-primary:disabled:hover { background: none; color: var(--faint); }
-  .games-primary-reason { margin: 10px 0 0; color: var(--dim); font-size: 12px; font-weight: 300; }
+  .games-primary-reason { margin: 10px 0 0; color: var(--dim); font-size: 12px; font-weight: 300; animation: fadeIn .25s ease; }
   .games-leader-row, .games-member-row {
     margin: 0; padding: 8px 0; border-bottom: 1px solid var(--line);
     font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere;
   }
   .games-leader-row:last-of-type, .games-member-row:last-of-type { border-bottom: none; }
-  .games-member-tag { margin-inline-start: 6px; color: var(--dim); font-size: 12px; font-weight: 400; }
+  .games-member-tag { margin-inline-start: 6px; color: var(--dim); font-size: 12px; font-weight: 400; animation: fadeIn .25s ease; }
 
   /* group members: admin row actions, add-member panel, former members */
   .games-member-row.with-actions { display: flex; align-items: center; gap: 10px; text-align: start; }
@@ -439,23 +445,27 @@
   .games-member-remove {
     flex: 0 0 auto; margin-inline-start: auto;
     color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0 4px 8px;
+    transition: color .2s;
   }
   .games-member-remove:hover, .games-member-remove.armed { color: var(--bad); }
   .games-member-add { margin-top: 14px; text-align: center; }
-  .games-member-add-toggle { color: var(--dim); font-size: 13px; font-weight: 600; padding: 6px 2px; }
+  .games-member-add-toggle { color: var(--dim); font-size: 13px; font-weight: 600; padding: 6px 2px; transition: color .2s; }
   .games-member-add-toggle:hover { color: var(--accent); }
   .games-member-add-note { margin: 0; color: var(--faint); font-size: 11px; font-weight: 300; }
   .games-former-members { margin-top: 14px; text-align: center; }
-  .games-former-toggle { color: var(--dim); font-size: 12px; font-weight: 500; padding: 6px 2px; }
+  .games-former-toggle { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); font-size: 12px; font-weight: 500; padding: 6px 2px; transition: color .2s; }
   .games-former-toggle:hover { color: var(--accent); }
+  .games-former-toggle svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .22s ease; }
+  .games-former-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 
   /* group history: tappable rows expanding into a per-game ranking (Task 11) */
   .games-history-item { padding: 8px 0; border-bottom: 1px solid var(--line); text-align: center; }
   .games-history-item:last-of-type { border-bottom: none; }
-  .games-history-head { cursor: pointer; }
+  .games-history-head { cursor: pointer; transition: opacity .18s ease, transform .12s ease; }
+  .games-history-head:active { transform: scale(.97); }
   .games-history-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
   .games-history-row { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
-  .games-history-tag { margin-inline-start: 6px; color: var(--bad); font-size: 12px; font-weight: 500; }
+  .games-history-tag { margin-inline-start: 6px; color: var(--bad); font-size: 12px; font-weight: 500; animation: fadeIn .25s ease; }
   .games-history-rank { margin: 0; padding: 4px 0; font-size: 13px; font-weight: 500; color: var(--text); }
 
   .btn-close-table {
@@ -533,7 +543,7 @@
   .debt-pane { width: 100%; }
   .debt-group .empty-note { width: 100%; text-align: center; }
   .debt-group h3 { color: var(--dim); font-size: 13px; font-weight: 500; margin: 0 0 4px; }
-  .debt-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .debt-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); animation: rise .3s ease both; }
   .debt-copy { min-width: 0; flex: 1; }
   .debt-person { display: block; color: var(--text); font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
   .debt-meta { display: block; color: var(--dim); font-size: 12px; font-weight: 300; }
@@ -620,7 +630,7 @@
   }
   .switch.on { border-color: var(--accent); }
   .switch.on::after { transform: translateX(-23px); background: var(--accent); }
-  .set-flat { font-size: 17px; font-weight: 500; color: var(--accent); padding: 10px; min-height: 46px; }
+  .set-flat { font-size: 17px; font-weight: 500; color: var(--accent); padding: 10px; min-height: 46px; transition: color .2s, background-color .2s, border-color .2s; }
   .set-flat:hover { color: var(--accent-press); }
   .set-flat.danger { color: var(--bad); }
   .set-flat.danger:hover, .set-flat.danger.armed { color: var(--bad); }
@@ -629,9 +639,10 @@
   .games-invite-create {
     border: 1px solid var(--accent); border-radius: 999px; color: var(--accent);
     font-weight: 700; font-size: 15px; padding: 10px 24px; min-height: 44px;
+    transition: background-color .2s, color .2s, border-color .2s;
   }
   .games-invite-create:hover { background: var(--accent); color: var(--bg); }
-  .games-invite-card { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .games-invite-card { display: flex; flex-direction: column; align-items: center; gap: 12px; animation: rise .3s ease both; }
   .games-invite-code {
     margin: 0; text-align: center; color: var(--text);
     font-size: 28px; font-weight: 800; letter-spacing: .12em;
@@ -641,16 +652,17 @@
   .games-invite-action {
     border: 1px solid var(--line); border-radius: 999px; color: var(--text);
     font-size: 13px; font-weight: 600; padding: 8px 16px; min-height: 40px;
+    transition: background-color .2s, color .2s, border-color .2s;
   }
   .games-invite-action:hover { border-color: var(--accent); color: var(--accent); }
-  .games-invite-copied { color: var(--accent); font-size: 12px; font-weight: 500; }
+  .games-invite-copied { color: var(--accent); font-size: 12px; font-weight: 500; animation: fadeIn .25s ease; }
   .games-invite-qr {
     width: 120px; height: 120px; border: 1px solid var(--line); border-radius: 12px;
     display: flex; align-items: center; justify-content: center; text-align: center;
     padding: 10px; color: var(--faint); font-size: 12px; font-weight: 300;
   }
   .games-invite-note { margin: 0; color: var(--dim); font-size: 12px; font-weight: 300; max-width: 280px; }
-  .games-invite-revoke { color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; }
+  .games-invite-revoke { color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; transition: color .2s; }
   .games-invite-revoke:hover { color: var(--bad); }
 
   /* group page: settings corner button, member promote action, disabled group avatar picker */
@@ -658,9 +670,10 @@
     position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); inset-inline-end: 0;
     display: inline-flex; align-items: center; min-height: 44px;
     color: var(--dim); font-size: 13px; font-weight: 500; padding: 10px 8px;
+    transition: color .2s;
   }
   .games-group-settings-btn:hover { color: var(--accent); }
-  .games-member-promote { flex: 0 0 auto; color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; }
+  .games-member-promote { flex: 0 0 auto; color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; transition: color .2s; }
   .games-member-promote:hover { color: var(--accent); }
   .games-create-avatar:disabled { cursor: default; opacity: .55; }
   .set-flat:disabled { opacity: .5; cursor: default; }
@@ -839,12 +852,17 @@
   let removeMemberArmedId = null;      // memberId whose "הסר" is armed (two-step confirm)
   let removeMemberArmedTimeout = null; // auto-disarm timer for the above
   let formerMembersOpen = false;       // whether the "חברים לשעבר" collapsed list is expanded
+  let formerMembersJustOpened = false; // list should animate open on the next render
   let startGameOpen = false;          // whether the group-page "start game" participant panel is expanded
   let startGameJustOpened = false;    // panel should animate open on the next render
   let startGameSelection = new Set(); // active-member ids selected as participants (creator preselected)
   let startGameGuests = [];           // [{ name, guestId }] ad-hoc guests added in the panel — not group members
   let animNext = "all";       // row entrance animation for the next render: "all" | "one" | null
   let animName = null;        // the player to animate when animNext === "one"
+  let groupPageEnterNext = false; // group page sections should stagger in on the next renderGroupPage() —
+                                   // set only by openGroup()/setAppView(), never by an in-place re-render
+  let cardDetailsJustOpenedId = null; // gameId/groupId/historyGameId whose .games-card-details should
+                                       // animate its grid-collapse open on the next render (Task 18 motion)
   let me = loadMe();
   let profileTab = "balance";
   let debtTab = "owed";
@@ -1935,7 +1953,22 @@
     }
     resetStartGamePanel();
     animNext = "all";
+    groupPageEnterNext = nextView === "group";
     render();
+    flashViewEnter(nextView);
+  }
+
+  // Short fade+rise on the container that just became visible after a view switch (games/group
+  // share #gamesHome; game/settle share #rows; profile is #profile). Adds the shared .load-in
+  // class and removes it once its animation finishes so the next switch can replay it.
+  function flashViewEnter(nextView) {
+    const id = nextView === "profile" ? "profile" : (nextView === "game" || nextView === "settle") ? "rows" : "gamesHome";
+    const container = document.getElementById(id);
+    if (!container) return;
+    container.classList.remove("load-in");
+    void container.offsetWidth; // force reflow so re-adding the class restarts the animation
+    container.classList.add("load-in");
+    container.addEventListener("animationend", () => container.classList.remove("load-in"), { once: true });
   }
 
   function startUngroupedGame() {
@@ -2399,7 +2432,7 @@
       toggle.innerHTML = '<span>הרחב</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
       toggle.addEventListener("click", actions.onToggle);
       card.appendChild(toggle);
-      const details = el("div", "games-card-details" + (actions.expanded ? " open" : ""));
+      const details = el("div", "games-card-details");
       const detailsIn = el("div", "games-card-details-in");
       const content = el("div", "games-card-details-content");
       if (Array.isArray(group.members) && group.members.length) content.appendChild(el("p", "games-detail-totals", "חברים · " + group.members.join(", ")));
@@ -2408,6 +2441,14 @@
       if (leaderNames.length) content.appendChild(el("p", "games-detail-totals", "מוביל · " + leaderNames.join(", ")));
       detailsIn.appendChild(content);
       details.appendChild(detailsIn);
+      // First expand of this card plays the grid-collapse open transition (see cardDetailsJustOpenedId).
+      const groupIdForAnim = String(group.groupId || group.id || "");
+      if (actions.expanded && cardDetailsJustOpenedId === groupIdForAnim) {
+        cardDetailsJustOpenedId = null;
+        requestAnimationFrame(() => requestAnimationFrame(() => details.classList.add("open")));
+      } else if (actions.expanded) {
+        details.classList.add("open");
+      }
       card.appendChild(details);
     }
     return card;
@@ -2424,7 +2465,8 @@
         section.appendChild(renderGroupCard(group, {
           expanded: expandedGroupCards.has(groupId),
           onToggle: () => {
-            expandedGroupCards.has(groupId) ? expandedGroupCards.delete(groupId) : expandedGroupCards.add(groupId);
+            if (expandedGroupCards.has(groupId)) expandedGroupCards.delete(groupId);
+            else { expandedGroupCards.add(groupId); cardDetailsJustOpenedId = groupId; }
             renderGamesDashboard();
           },
           onOpen: () => openGroup(groupId),
@@ -2435,32 +2477,60 @@
   }
 
   // Collapsed "ארכיון (N)" line under "הקבוצות שלי", shown only when archived-not-deleted groups
-  // exist on this device (same collapse pattern as renderFormerMembers). Reuses renderGroupCard
-  // with the "archived" tag; opening a card leads to the read-only archived group page.
+  // exist on this device — same grid-collapse pattern as renderFormerMembers below. Reuses
+  // renderGroupCard with the "archived" tag; opening a card leads to the read-only archived group page.
   function renderArchivedGroupsSection(parent, archived) {
     const list = Array.isArray(archived) ? archived : [];
     if (!list.length) return;
     const wrap = el("div", "games-former-members");
-    const toggle = el("button", "games-former-toggle", "ארכיון (" + list.length + ")");
+    const toggle = el("button", "games-former-toggle");
     toggle.type = "button";
     toggle.setAttribute("aria-expanded", String(archivedGroupsOpen));
-    toggle.addEventListener("click", () => { archivedGroupsOpen = !archivedGroupsOpen; renderGamesDashboard(); });
+    toggle.innerHTML = "<span>ארכיון (" + list.length + ")</span>" +
+      '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
+    toggle.addEventListener("click", () => {
+      if (archivedGroupsOpen) { closeArchivedGroups(); return; }
+      archivedGroupsOpen = true;
+      archivedGroupsJustOpened = true;
+      renderGamesDashboard();
+    });
     wrap.appendChild(toggle);
-    if (archivedGroupsOpen) {
-      list.forEach(group => {
-        const groupId = String(group.groupId || group.id || "");
-        wrap.appendChild(renderGroupCard(group, {
-          expanded: expandedGroupCards.has(groupId),
-          archived: true,
-          onToggle: () => {
-            expandedGroupCards.has(groupId) ? expandedGroupCards.delete(groupId) : expandedGroupCards.add(groupId);
-            renderGamesDashboard();
-          },
-          onOpen: () => openGroup(groupId),
-        }));
-      });
+
+    const details = el("div", "games-card-details");
+    const detailsIn = el("div", "games-card-details-in");
+    const content = el("div", "games-card-details-content");
+    list.forEach(group => {
+      const groupId = String(group.groupId || group.id || "");
+      content.appendChild(renderGroupCard(group, {
+        expanded: expandedGroupCards.has(groupId),
+        archived: true,
+        onToggle: () => {
+          if (expandedGroupCards.has(groupId)) expandedGroupCards.delete(groupId);
+          else { expandedGroupCards.add(groupId); cardDetailsJustOpenedId = groupId; }
+          renderGamesDashboard();
+        },
+        onOpen: () => openGroup(groupId),
+      }));
+    });
+    detailsIn.appendChild(content);
+    details.appendChild(detailsIn);
+    if (archivedGroupsOpen && archivedGroupsJustOpened) {
+      archivedGroupsJustOpened = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => details.classList.add("open")));
+    } else if (archivedGroupsOpen) {
+      details.classList.add("open");
     }
+    wrap.appendChild(details);
     parent.appendChild(wrap);
+  }
+  // Plays the archive list's collapse transition (matching closeAddMemberPanel's approach)
+  // before flipping the state and rebuilding the dashboard without it.
+  function closeArchivedGroups() {
+    const panel = document.querySelector(".games-former-members .games-card-details.open");
+    const finish = () => { archivedGroupsOpen = false; archivedGroupsJustOpened = false; renderGamesDashboard(); };
+    if (!panel) { finish(); return; }
+    panel.classList.remove("open");
+    setTimeout(finish, 250);
   }
 
   function enterActiveGame(gameId) {
@@ -2559,7 +2629,7 @@
     const content = el("div", "games-create-panel-content");
 
     const members = activeMembers(state.groupMembers, currentGroupId);
-    members.forEach(member => content.appendChild(renderStartGameMemberRow(member)));
+    members.forEach((member, i) => content.appendChild(renderStartGameMemberRow(member, i)));
 
     if (startGameGuests.length) content.appendChild(renderStartGameGuestsList());
     content.appendChild(renderStartGameAddGuest());
@@ -2597,9 +2667,10 @@
   }
 
   // A single checkbox row for an active member (custom control: button[role=checkbox], ≥44px).
-  function renderStartGameMemberRow(member) {
+  function renderStartGameMemberRow(member, index) {
     const checked = startGameSelection.has(member.id);
-    const row = el("button", "group-start-member");
+    const row = el("button", "group-start-member anim");
+    row.style.animationDelay = ((index || 0) * 40) + "ms";
     row.type = "button";
     row.setAttribute("role", "checkbox");
     row.setAttribute("aria-checked", String(checked));
@@ -2634,7 +2705,8 @@
   function renderStartGameGuestsList() {
     const wrap = el("div", "group-start-guests");
     startGameGuests.forEach((guest, idx) => {
-      const row = el("div", "group-start-guest-row");
+      const row = el("div", "group-start-guest-row anim");
+      row.style.animationDelay = (idx * 40) + "ms";
       row.appendChild(el("span", "group-start-name", guest.name));
       const removeBtn = el("button", "group-start-guest-remove", "הסר");
       removeBtn.type = "button";
@@ -2722,8 +2794,9 @@
     if (!list.length) {
       section.appendChild(el("p", "games-empty", "הדירוג יופיע אחרי המשחק הראשון"));
     } else {
-      list.forEach(entry => {
-        const row = el("p", "games-leader-row");
+      list.forEach((entry, i) => {
+        const row = el("p", "games-leader-row anim");
+        row.style.animationDelay = (i * 45) + "ms";
         const name = el("span", "", entry.rank + ". " + entry.displayName);
         if (entry.isFormerMember) name.appendChild(el("span", "games-member-tag", "לשעבר"));
         row.appendChild(name);
@@ -2879,19 +2952,46 @@
   // — expands to a flat list of names tagged "לשעבר". UI-only boolean, not persisted.
   function renderFormerMembers(former) {
     const wrap = el("div", "games-former-members");
-    const toggle = el("button", "games-former-toggle", "חברים לשעבר (" + former.length + ")");
+    const toggle = el("button", "games-former-toggle");
     toggle.type = "button";
     toggle.setAttribute("aria-expanded", String(formerMembersOpen));
-    toggle.addEventListener("click", () => { formerMembersOpen = !formerMembersOpen; renderGroupPage(); });
+    toggle.innerHTML = "<span>חברים לשעבר (" + former.length + ")</span>" +
+      '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
+    toggle.addEventListener("click", () => {
+      if (formerMembersOpen) { closeFormerMembers(); return; }
+      formerMembersOpen = true;
+      formerMembersJustOpened = true;
+      renderGroupPage();
+    });
     wrap.appendChild(toggle);
-    if (formerMembersOpen) {
-      former.forEach(member => {
-        const row = el("p", "games-member-row", member.displayName);
-        row.appendChild(el("span", "games-member-tag", "לשעבר"));
-        wrap.appendChild(row);
-      });
+
+    const details = el("div", "games-card-details");
+    const detailsIn = el("div", "games-card-details-in");
+    const content = el("div", "games-card-details-content");
+    former.forEach(member => {
+      const row = el("p", "games-member-row", member.displayName);
+      row.appendChild(el("span", "games-member-tag", "לשעבר"));
+      content.appendChild(row);
+    });
+    detailsIn.appendChild(content);
+    details.appendChild(detailsIn);
+    if (formerMembersOpen && formerMembersJustOpened) {
+      formerMembersJustOpened = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => details.classList.add("open")));
+    } else if (formerMembersOpen) {
+      details.classList.add("open");
     }
+    wrap.appendChild(details);
     return wrap;
+  }
+  // Plays the former-members list's collapse transition (matching closeAddMemberPanel's approach)
+  // before flipping the state and rebuilding the group page without it.
+  function closeFormerMembers() {
+    const panel = document.querySelector(".games-former-members .games-card-details.open");
+    const finish = () => { formerMembersOpen = false; formerMembersJustOpened = false; renderGroupPage(); };
+    if (!panel) { finish(); return; }
+    panel.classList.remove("open");
+    setTimeout(finish, 250);
   }
 
   // One flat, tappable GroupGameSummary row: date · N שחקנים · winner(s), a quiet meta line
@@ -2920,13 +3020,25 @@
     head.appendChild(meta);
     item.appendChild(head);
 
-    const details = el("div", "games-card-details" + (expanded ? " open" : ""));
+    const details = el("div", "games-card-details");
     const detailsIn = el("div", "games-card-details-in");
     const content = el("div", "games-card-details-content");
     const ranking = Array.isArray(game.ranking) ? game.ranking : [];
-    ranking.forEach((name, idx) => content.appendChild(el("p", "games-history-rank", (idx + 1) + ". " + name)));
+    ranking.forEach((name, idx) => {
+      const row = el("p", "games-history-rank anim", (idx + 1) + ". " + name);
+      row.style.animationDelay = (idx * 40) + "ms";
+      content.appendChild(row);
+    });
     detailsIn.appendChild(content);
     details.appendChild(detailsIn);
+    // First expand of this row plays the grid-collapse open transition; a re-render while it's
+    // already open (e.g. some other action on the page) just keeps it open with no replay.
+    if (expanded && cardDetailsJustOpenedId === game.gameId) {
+      cardDetailsJustOpenedId = null;
+      requestAnimationFrame(() => requestAnimationFrame(() => details.classList.add("open")));
+    } else if (expanded) {
+      details.classList.add("open");
+    }
     item.appendChild(details);
     return item;
   }
@@ -2944,7 +3056,8 @@
     }
     list.forEach(game => {
       section.appendChild(renderGroupHistoryRow(game, expandedGroupGames.has(game.gameId), () => {
-        expandedGroupGames.has(game.gameId) ? expandedGroupGames.delete(game.gameId) : expandedGroupGames.add(game.gameId);
+        if (expandedGroupGames.has(game.gameId)) expandedGroupGames.delete(game.gameId);
+        else { expandedGroupGames.add(game.gameId); cardDetailsJustOpenedId = game.gameId; }
         renderGroupPage();
       }));
     });
@@ -3028,6 +3141,10 @@
   }
 
   function renderGroupPage() {
+    // Only a fresh navigation into the group page (openGroup()/setAppView) stagger-animates the
+    // sections below; an in-place re-render after e.g. removing a member must not replay it.
+    const enterStagger = groupPageEnterNext;
+    groupPageEnterNext = false;
     const box = document.getElementById("gamesHome");
     box.innerHTML = "";
     const collections = collectionsOf(state);
@@ -3053,6 +3170,12 @@
     inner.appendChild(renderGroupHistory(gameSummaries));
     const inviteSection = renderGroupInvite(summary, activeInvite(state.invites, currentGroupId), summary.isAdmin);
     if (inviteSection) inner.appendChild(inviteSection);
+    if (enterStagger) {
+      Array.from(inner.children).forEach((child, i) => {
+        child.classList.add("anim");
+        child.style.animationDelay = (i * 55) + "ms";
+      });
+    }
     box.appendChild(inner);
   }
 
@@ -3785,8 +3908,9 @@
   function renderFriendGroup(parent, title, refs, metaLabel) {
     const group = el("div", "debt-group");
     group.appendChild(el("h3", "", title));
-    refs.forEach(ref => {
+    refs.forEach((ref, i) => {
       const row = el("div", "debt-row");
+      row.style.animationDelay = (i * 45) + "ms";
       const copy = el("div", "debt-copy");
       copy.appendChild(el("span", "debt-person", ref.displayName));
       if (metaLabel) copy.appendChild(el("span", "debt-meta", metaLabel));
@@ -4023,6 +4147,7 @@
   let groupDeleteArmed = false;        // "מחק קבוצה" two-step confirm state
   let groupDeleteArmedTimeout = null;
   let archivedGroupsOpen = false;      // dashboard "ארכיון (N)" collapsed toggle
+  let archivedGroupsJustOpened = false; // list should animate open on the next render
 
   // ---------- group settings overlay ----------
   // Reachable by any active member (so "עזוב קבוצה" always has a way in); admin-only controls
