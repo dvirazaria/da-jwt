@@ -93,8 +93,11 @@
   input[type=number]::-webkit-inner-spin-button { display: none; }
 
   /* ---------- add row ---------- */
-  .addrow { display: flex; align-items: flex-end; gap: 14px; margin: 18px 0 2px; }
+  .addrow { display: flex; align-items: flex-end; gap: 14px; margin: 18px 0 2px; flex-wrap: wrap; }
   .addrow input { flex: 1; font-size: 17px; }
+  /* group member chips above the name input (Task 9) — forced onto their own line inside the
+     wrapping .addrow flex row; chip entrance stagger reuses .chip + .anim (see .addrow above). */
+  #addrowChips { flex-basis: 100%; margin-top: 0; }
   .btn-add {
     color: var(--accent); font-weight: 700; font-size: 15px;
     padding: 8px 2px 10px; white-space: nowrap; letter-spacing: .02em;
@@ -444,7 +447,9 @@
   .games-primary-action .btn-primary { min-width: 200px; }
   .btn-primary:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--faint); }
   .btn-primary:disabled:hover { background: none; color: var(--faint); }
-  .games-primary-reason { margin: 10px 0 0; color: var(--dim); font-size: 12px; font-weight: 300; animation: fadeIn .25s ease; }
+  /* status line above the CTA when the group's own game is open (Task 9): phase + player count + start time */
+  .games-primary-status { margin: 0; color: var(--text); font-size: 13px; font-weight: 500; animation: fadeIn .25s ease; }
+  .games-primary-reason { margin: 10px 0; color: var(--dim); font-size: 12px; font-weight: 300; animation: fadeIn .25s ease; }
   .games-leader-row, .games-member-row {
     margin: 0; padding: 8px 0; border-bottom: 1px solid var(--line);
     font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere;
@@ -730,7 +735,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">גרסה 41</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 42</p>
   </div>
 </div>
 
@@ -776,6 +781,7 @@
   </header>
 
   <div class="addrow load-in" style="animation-delay:.08s" id="addrow">
+    <div class="who-row addrow-chips" id="addrowChips" hidden></div>
     <input type="text" id="newName" placeholder="שם שחקן חדש" autocomplete="off" aria-label="שם שחקן חדש">
     <button type="button" class="btn-add" id="addBtn">+ הוסף</button>
   </div>
@@ -2175,7 +2181,10 @@
     };
   }
 
-  function getActiveGameSummaries(gameState) {
+  // groups is optional (existing single-argument callers/tests keep working): when omitted, or
+  // when gameState.groupId doesn't match a group in it, title falls back to "משחק ללא קבוצה". A
+  // match resolves the group's name even when the group is archived.
+  function getActiveGameSummaries(gameState, groups) {
     if (!gameState || gameState.example || (gameState.phase !== "active" && gameState.phase !== "settlement")) return [];
     const validTime = value => typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null;
     const players = (Array.isArray(gameState.players) ? gameState.players : []).map(player => {
@@ -2187,9 +2196,11 @@
         entryCount: buyins.length,
       };
     });
+    const groupList = Array.isArray(groups) ? groups : [];
+    const matchedGroup = gameState.groupId ? groupList.find(g => g && g.id === gameState.groupId) : null;
     return [{
       gameId: String(gameState.gameId || ""),
-      title: gameState.groupId ? null : "משחק ללא קבוצה",
+      title: matchedGroup ? matchedGroup.name : "משחק ללא קבוצה",
       phase: gameState.phase,
       playerCount: players.length,
       playerNames: players.map(player => player.name),
@@ -2561,7 +2572,7 @@
     inner.appendChild(el("h2", "games-home-title", "משחקים"));
     inner.appendChild(el("p", "games-home-lead", "המשחקים הפעילים והקבוצות שלך במקום אחד."));
     renderQuickActions(inner);
-    renderActiveGamesSection(inner, getActiveGameSummaries(state));
+    renderActiveGamesSection(inner, getActiveGameSummaries(state, state.groups));
     renderGroupsSection(inner, getGroupSummaries(collectionsOf(state), me));
     renderArchivedGroupsSection(inner, getArchivedGroupSummaries(collectionsOf(state), me));
     box.appendChild(inner);
@@ -2598,7 +2609,8 @@
     return header;
   }
 
-  // The group's own game has an active table → jump straight into it / its settlement.
+  // The group's own game has an active table → jump straight into it / its settlement, with a
+  // status line ("משחק פעיל · N שחקנים · התחיל ב־HH:mm") and player names above the CTA (Task 9).
   // Otherwise "התחל משחק" renders disabled: Task 8 wires the actual start-game handler here.
   // canStartGroupGame()'s reason (when not ok) gets a quiet line under the button; when it IS
   // ok the button is still disabled for this task, with no reason line to explain that away.
@@ -2609,6 +2621,14 @@
     let reason = null;
     const canStart = !summary.hasActiveGame && gate && gate.ok;
     if (summary.hasActiveGame) {
+      const activeSummary = getActiveGameSummaries(state, state.groups)[0];
+      if (activeSummary) {
+        const phaseLabel = summary.activeGamePhase === "settlement" ? "בסגירה" : "משחק פעיל";
+        const statusParts = [phaseLabel, formatPlayerCount(activeSummary.playerCount)];
+        if (activeSummary.startedAt) statusParts.push("התחיל ב־" + formatGameTime(activeSummary.startedAt));
+        wrap.appendChild(el("p", "games-primary-status", statusParts.join(" · ")));
+        wrap.appendChild(el("p", "games-primary-reason", formatPlayerNames(activeSummary.playerNames)));
+      }
       btn.textContent = summary.activeGamePhase === "settlement" ? "המשך סגירה" : "כנס לשולחן";
       btn.addEventListener("click", continueCurrentGame);
     } else if (canStart) {
@@ -3195,6 +3215,45 @@
     box.appendChild(inner);
   }
 
+  // Member chips above the "שם שחקן חדש" input, shown only for a group game (Task 9): one chip
+  // per active member of the current group not yet at the table (matched by memberId, falling
+  // back to displayName for members added before this device knew their memberId). Hidden for
+  // an ungrouped game. Tapping a chip adds that member via the same addPlayerToTable() tail as
+  // typed-name addPlayer(). The chip set only replays its entrance stagger when it actually
+  // changes, so re-rendering for unrelated reasons (a buy-in, an entry toggle) doesn't re-animate it.
+  let addRowChipsAnimKey = null;
+  function renderAddRowChips() {
+    const container = document.getElementById("addrowChips");
+    if (!container) return;
+    container.innerHTML = "";
+    const group = state.groupId
+      ? (Array.isArray(state.groups) ? state.groups : []).find(g => g && g.id === state.groupId)
+      : null;
+    if (!group) {
+      container.hidden = true;
+      addRowChipsAnimKey = null;
+      return;
+    }
+    const members = activeMembers(state.groupMembers, state.groupId).filter(member =>
+      !state.players.some(p => (member.id && p.memberId === member.id) || p.name === member.displayName));
+    if (!members.length) {
+      container.hidden = true;
+      addRowChipsAnimKey = null;
+      return;
+    }
+    container.hidden = false;
+    const key = members.map(m => m.id).join(",");
+    const justChanged = key !== addRowChipsAnimKey;
+    addRowChipsAnimKey = key;
+    members.forEach((member, i) => {
+      const chip = el("button", justChanged ? "chip anim" : "chip", member.displayName);
+      chip.type = "button";
+      if (justChanged) chip.style.animationDelay = (i * 45) + "ms";
+      chip.addEventListener("click", () => addPlayerToTable(member.displayName, { guestId: member.guestId, memberId: member.id }));
+      container.appendChild(chip);
+    });
+  }
+
   function render() {
     const anim = animNext; animNext = null;
     const inGames = appView === "games" || appView === "game" || appView === "settle" || appView === "group";
@@ -3204,6 +3263,7 @@
     document.getElementById("modeGames").classList.toggle("on", inGames);
     document.getElementById("modeProfile").classList.toggle("on", appView === "profile");
     document.getElementById("addrow").hidden = appView !== "game";
+    renderAddRowChips();
     document.getElementById("settingsBtn").hidden = appView !== "profile";
     document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games" || appView === "group";
     document.getElementById("gamesHome").hidden = appView !== "games" && appView !== "group";
@@ -3764,6 +3824,7 @@
     const balanced = t.diff === 0;
     const btn = document.getElementById("closeTableBtn");
     const closingAt = new Date().toISOString();
+    const closedGroupId = state.groupId;
     const moves = settle();
     const paidStatuses = { ...state.settlementStatuses };
     const newDebts = buildDebtRecords(state, moves, paidStatuses, closingAt);
@@ -3783,11 +3844,15 @@
     state.gameId = newId();
     state.phase = "closed";
     state.settlementStatuses = {};
+    state.groupId = null;
+    state.leaderRef = null;
     expandedEntries.clear();
     state.example = false;
     openMenu = null; customOpen = null;
     save();
-    setAppView("games");
+    const closedGroup = closedGroupId && state.groups.find(g => g.id === closedGroupId && !g.deletedAt);
+    if (closedGroup) openGroup(closedGroupId);
+    else setAppView("games");
     if (balanced) confetti();
   }
 
@@ -4095,6 +4160,24 @@
     box.appendChild(histSec);
   }
 
+  // Shared tail of "add a player to the open table": builds the Player, gives it its first
+  // buy-in, opens its buy-in menu, and saves/re-renders. Used by both addPlayer() (typed name)
+  // and the group member chips in renderAddRowChips() (tapped member, memberId/guestId known).
+  function addPlayerToTable(name, opts) {
+    const o = opts || {};
+    const player = createPlayer({ name, guestId: o.guestId || null, memberId: o.memberId || null });
+    addEntry(player, MIN_BUYIN);
+    state.players.push(player);
+    state.phase = "active";
+    appView = "game";
+    openMenu = name;
+    customOpen = null;
+    pendingAmount = null;
+    animNext = "one"; animName = name;
+    save(); render();
+    return player;
+  }
+
   function addPlayer() {
     const inp = document.getElementById("newName");
     const name = inp.value.trim();
@@ -4110,17 +4193,8 @@
       const member = activeMembers(state.groupMembers, state.groupId).find(m => m.displayName === name);
       memberId = member ? member.id : null;
     }
-    const player = createPlayer({ name, guestId, memberId });
-    addEntry(player, MIN_BUYIN);
-    state.players.push(player);
     inp.value = "";
-    state.phase = "active";
-    appView = "game";
-    openMenu = name;
-    customOpen = null;
-    pendingAmount = null;
-    animNext = "one"; animName = name;
-    save(); render();
+    addPlayerToTable(name, { guestId, memberId });
   }
   document.getElementById("addBtn").addEventListener("click", addPlayer);
   document.getElementById("newName").addEventListener("keydown", (e) => {
