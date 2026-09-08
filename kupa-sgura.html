@@ -346,11 +346,13 @@
 
   /* ---------- Games dashboard ---------- */
   .games-view header { text-align: center; }
-  .games-view header .eyebrow { justify-content: center; }
+  /* The sync dot stays at the inline-start corner (same spot as on the profile) — the eyebrow is never centered. */
   .games-home { margin-top: 26px; animation: rise .4s ease both; text-align: center; }
   .games-home-in { width: 100%; max-width: 380px; margin: 0 auto; }
-  .games-home-title { margin: 0; font-size: 24px; font-weight: 800; }
-  .games-home-lead { color: var(--dim); font-size: 14px; font-weight: 300; margin: 6px 0 26px; }
+  /* No big title on the dashboard: the column starts below the corner stack (theme + settings, ~86px)
+     so the lead line and the quick actions never sit beside the gear. */
+  .games-home-dash { padding-top: 52px; }
+  .games-home-lead { color: var(--dim); font-size: 14px; font-weight: 300; margin: 0 0 26px; }
   .games-section { margin-top: 24px; text-align: center; }
   .games-section:first-of-type { margin-top: 0; }
   .games-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -2840,8 +2842,7 @@
     gamesPageEnterNext = false;
     const box = document.getElementById("gamesHome");
     box.innerHTML = "";
-    const inner = el("div", "games-home-in");
-    inner.appendChild(el("h2", "games-home-title", "משחקים"));
+    const inner = el("div", "games-home-in games-home-dash");
     inner.appendChild(el("p", "games-home-lead", "המשחקים הפעילים והקבוצות שלך במקום אחד."));
     renderQuickActions(inner);
     renderActiveGamesSection(inner, getActiveGameSummaries(state, state.groups), enterStagger);
@@ -3695,7 +3696,9 @@
     document.getElementById("addrow").hidden = appView !== "game";
     renderTableHeader();
     renderAddRowChips();
-    document.getElementById("settingsBtn").hidden = appView !== "profile";
+    // Settings gear: profile and the games dashboard only. The group page has its own "הגדרות" (group
+    // settings) in its header, and game/settle keep the reset control in that corner.
+    document.getElementById("settingsBtn").hidden = appView !== "profile" && appView !== "games";
     document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games" || appView === "group";
     document.getElementById("gamesHome").hidden = appView !== "games" && appView !== "group";
 

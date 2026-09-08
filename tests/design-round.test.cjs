@@ -361,3 +361,39 @@ test('row 32: both inline panels share the title + full-width field + confirm/ca
       assert.match(html.slice(idx, idx + 420), /transition|animation|:active/);
     });
   });
+
+// ---------- round 2, batch 1: dashboard header (sync dot in the corner, settings gear, no title) ----------
+
+test('the sync dot is never centered on the dashboard/group shell — same corner as on the profile', () => {
+  assert.doesNotMatch(html, /\.games-view header \.eyebrow \{[^}]*justify-content: center/s);
+  // the base eyebrow rule has no justify-content, so flex-start (inline start) is the only position
+  const idx = html.indexOf('\n  .eyebrow {');
+  assert.ok(idx >= 0, '.eyebrow base rule not found');
+  assert.doesNotMatch(html.slice(idx, html.indexOf('}', idx)), /justify-content/);
+  assert.match(html, /<div class="eyebrow"><span class="dot" id="syncDot"/);
+});
+
+test('the settings gear shows on the profile and on the games dashboard, not on the group page or the table', () => {
+  assert.match(html, /document\.getElementById\("settingsBtn"\)\.hidden = appView !== "profile" && appView !== "games";/);
+  assert.match(html, /document\.getElementById\("resetBtn"\)\.hidden = appView === "profile" \|\| appView === "games" \|\| appView === "group";/);
+  assert.match(html, /document\.getElementById\("settingsBtn"\)\.addEventListener\("click"/);
+  // the group page keeps its own group-settings control in the page header
+  const groupHeader = sourceBetween('  function renderGroupHeader(summary) {', '  // The group\'s own game has an active table');
+  assert.match(groupHeader, /games-group-settings-btn/);
+});
+
+test('renderGamesDashboard has no big title: the lead line is first and the column clears the corner stack', () => {
+  const source = sourceBetween('  function renderGamesDashboard() {', '  // Back arrow, 64px avatar');
+  assert.doesNotMatch(source, /games-home-title/);
+  assert.doesNotMatch(source, /"h2"/);
+  assert.match(source, /el\("div", "games-home-in games-home-dash"\)/);
+  assert.match(source, /inner\.appendChild\(el\("p", "games-home-lead", "המשחקים הפעילים והקבוצות שלך במקום אחד\."\)\);\s*renderQuickActions\(inner\);/);
+  assert.doesNotMatch(html, /\.games-home-title/);
+  // 52px: corner stack (theme 23px + 16px gap + gear 41px, from top 6px) ends at ~86px; the lead starts ~99px
+  assert.match(html, /\.games-home-dash \{ padding-top: 52px; \}/);
+  assert.match(html, /\.games-home-lead \{[^}]*margin: 0 0 26px;/);
+  // the group page reuses .games-home-in but not the dashboard padding
+  const group = sourceBetween('  function renderGroupPage() {', '  function renderAddRowChips() {');
+  assert.match(group, /el\("div", "games-home-in"\)/);
+  assert.doesNotMatch(group, /games-home-dash/);
+});
