@@ -103,15 +103,17 @@ test('startedAt travels through normalization and remote persistence without leg
 
 test('Games dashboard is composed from three modular sections', () => {
   assert.match(html, /function renderQuickActions\(parent\)/);
-  assert.match(html, /function renderActiveGamesSection\(parent, summaries\)/);
+  // Task 15: renderActiveGamesSection/renderGroupsSection gain an `enterStagger` argument that
+  // gates the dashboard's card entrance animation (see the dedicated motion test below).
+  assert.match(html, /function renderActiveGamesSection\(parent, summaries, enterStagger\)/);
   assert.match(html, /function renderActiveGameCard\(summary, actions\)/);
-  assert.match(html, /function renderGroupsSection\(parent, groups\)/);
+  assert.match(html, /function renderGroupsSection\(parent, groups, enterStagger\)/);
   assert.match(html, /function renderGroupCard\(group, actions\)/);
   assert.match(html, /renderQuickActions\(inner\)/);
   // Task 9: getActiveGameSummaries gains an optional `groups` argument for title resolution;
   // the dashboard call site passes state.groups.
-  assert.match(html, /renderActiveGamesSection\(inner, getActiveGameSummaries\(state, state\.groups\)\)/);
-  assert.match(html, /renderGroupsSection\(inner, getGroupSummaries\(collectionsOf\(state\), me\)\)/);
+  assert.match(html, /renderActiveGamesSection\(inner, getActiveGameSummaries\(state, state\.groups\), enterStagger\)/);
+  assert.match(html, /renderGroupsSection\(inner, getGroupSummaries\(collectionsOf\(state\), me\), enterStagger\)/);
   assert.match(html, /אין משחקים פעילים כרגע/);
   assert.match(html, /אין לך קבוצות עדיין/);
   // Task 3 enables the create-group quick action; it's no longer a "coming soon" placeholder.
