@@ -3748,6 +3748,7 @@
     const balanced = t.diff === 0;
     const btn = document.getElementById("closeTableBtn");
     const closingAt = new Date().toISOString();
+    const closedGroupId = state.groupId;
     const moves = settle();
     const paidStatuses = { ...state.settlementStatuses };
     const newDebts = buildDebtRecords(state, moves, paidStatuses, closingAt);
@@ -3767,11 +3768,15 @@
     state.gameId = newId();
     state.phase = "closed";
     state.settlementStatuses = {};
+    state.groupId = null;
+    state.leaderRef = null;
     expandedEntries.clear();
     state.example = false;
     openMenu = null; customOpen = null;
     save();
-    setAppView("games");
+    const closedGroup = closedGroupId && state.groups.find(g => g.id === closedGroupId && !g.deletedAt);
+    if (closedGroup) openGroup(closedGroupId);
+    else setAppView("games");
     if (balanced) confetti();
   }
 
