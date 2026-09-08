@@ -169,6 +169,9 @@
     display: flex; align-items: center; justify-content: center;
     transition: transform .2s ease, background-color .18s, color .18s, border-color .18s;
   }
+  /* Row 30: the circle stays 38px, the touch area is 44px. */
+  .btn-plus { position: relative; }
+  .btn-plus::before { content: ""; position: absolute; inset: -3px; border-radius: 50%; }
   .btn-plus:hover { border-color: var(--accent); color: var(--accent); }
   .btn-plus.open { transform: rotate(45deg); background: var(--accent); border-color: var(--accent); color: var(--bg); }
   .btn-plus.open:active { transform: rotate(45deg) scale(.92); }
@@ -240,7 +243,7 @@
   }
   .player-heading .pname { flex-basis: 100%; }
   .entry-toggle {
-    display: flex; align-items: center; gap: 5px; padding: 4px 0;
+    display: flex; align-items: center; gap: 5px; padding: 10px 0;
     color: var(--dim); font-size: 12px; font-weight: 400;
   }
   .entry-toggle:hover { color: var(--accent); }
@@ -251,15 +254,18 @@
   }
   .entry-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
   .exit-toggle {
-    display: flex; align-items: center; padding: 4px 0;
+    display: flex; align-items: center; padding: 10px 0;
     color: var(--dim); font-size: 12px; font-weight: 400;
     margin-inline-start: 10px; transition: color .2s;
   }
   .exit-toggle:hover { color: var(--bad); }
   .exit-tag { color: var(--dim); font-size: 12px; animation: fadeIn .25s ease; }
+  /* Row 17: "עריכה" is an action, not another piece of meta — a 12px gap and a hairline
+     separate it from the "יצא · ₪X" tag instead of one more middot in the same run. */
   .exit-edit {
     color: var(--dim); font-size: 12px; font-weight: 400;
-    padding: 4px 0 4px 8px; margin-inline-start: 4px; transition: color .2s;
+    padding: 6px 0 6px 12px; margin-inline-start: 12px; transition: color .2s;
+    border-inline-start: 1px solid var(--line);
   }
   .exit-edit:hover { color: var(--accent); }
   .prow.exited .pname { opacity: .55; }
@@ -272,12 +278,24 @@
     transition: border-color .2s;
   }
   input.exit-cashout-input:focus-visible { outline: none; border-bottom-color: var(--accent); }
+  .exit-field {
+    flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px;
+    border-bottom: 1px solid var(--line); transition: border-color .2s;
+  }
+  .exit-field:focus-within { border-bottom-color: var(--accent); }
+  .exit-currency { flex: 0 0 auto; color: var(--dim); font-size: 15px; }
+  .exit-field input.exit-cashout-input { border-bottom: none; }
   .exit-confirm {
     flex: 0 0 auto; min-height: 44px;
     border-color: var(--accent); color: var(--accent); font-weight: 700;
     white-space: nowrap;
   }
   .exit-confirm:hover { background: var(--accent); color: var(--bg); }
+  .exit-cancel {
+    flex: 0 0 auto; min-height: 44px; padding: 10px 6px;
+    color: var(--dim); font-size: 13px; font-weight: 400; transition: color .2s;
+  }
+  .exit-cancel:hover { color: var(--text); }
   .entry-details { display: grid; grid-template-rows: 0fr; visibility: hidden;
     transition: grid-template-rows .28s ease, visibility .28s; }
   .entry-details.open { grid-template-rows: 1fr; visibility: visible; }
@@ -307,13 +325,17 @@
   .statline .sep { color: var(--faint); }
   .statline .bad { color: var(--bad); font-weight: 700; }
   .statline .good { color: var(--accent); font-weight: 700; }
+  /* Row 20: the gap is called out once, in the red sentence below — the stat itself stays neutral. */
+  .statline .neutral { color: var(--text); font-weight: 700; }
 
   .warn { color: var(--bad); font-size: 14px; margin: 14px 0 0; font-weight: 400; animation: rise .3s ease both; }
 
   .results { margin-top: 24px; }
-  .results h2, .ptitle {
+  /* Row 14: one section title across the dashboard, the group page, the profile and the
+     results — same size, weight, colour, tracking and bottom margin, whatever the class name. */
+  .games-section-title, .ptitle, .results h2, .debt-group h3 {
     font-size: 13px; letter-spacing: .04em; font-weight: 500;
-    color: var(--dim); margin: 0 0 4px;
+    color: var(--dim); margin: 0 0 10px;
   }
   .transfer {
     display: flex; align-items: baseline; gap: 10px;
@@ -342,9 +364,8 @@
   .games-home-in { width: 100%; max-width: 380px; margin: 0 auto; }
   .games-home-title { margin: 0; font-size: 24px; font-weight: 800; }
   .games-home-lead { color: var(--dim); font-size: 14px; font-weight: 300; margin: 6px 0 26px; }
-  .games-section { margin-top: 28px; text-align: center; }
+  .games-section { margin-top: 24px; text-align: center; }
   .games-section:first-of-type { margin-top: 0; }
-  .games-section-title { color: var(--dim); font-size: 13px; font-weight: 500; margin: 0 0 10px; }
   .games-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .games-quick-action {
     min-width: 0; min-height: 46px; padding: 9px 12px;
@@ -378,7 +399,7 @@
   .games-detail-meta { color: var(--dim); font-weight: 300; font-variant-numeric: tabular-nums; }
   .games-detail-totals { color: var(--dim); font-size: 12px; font-weight: 300; margin: 8px 0 0; }
   .games-detail-totals b { color: var(--text); font-weight: 600; }
-  .games-group-head { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .games-group-head { display: flex; align-items: center; justify-content: flex-start; gap: 10px; text-align: start; }
   .games-group-head[role="button"] { cursor: pointer; transition: opacity .18s ease, transform .12s ease; }
   .games-group-head[role="button"]:active { transform: scale(.97); }
   .games-group-head[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
@@ -398,7 +419,9 @@
   }
   .games-create-avatar:hover { border-color: var(--accent); color: var(--accent); }
   .games-create-avatar img { width: 100%; height: 100%; object-fit: cover; }
-  .games-create-panel input[type="text"] { max-width: 260px; text-align: center; }
+  /* Row 32: one inline-panel shape — a title, a full-width field, then confirm + cancel. */
+  .games-create-panel-content input[type="text"] { width: 100%; max-width: 100%; text-align: center; }
+  .games-create-panel-content > .games-section-title { align-self: stretch; margin-bottom: 0; }
   .games-create-submit {
     border: 1px solid var(--accent); border-radius: 999px; color: var(--accent);
     font-weight: 700; font-size: 15px; padding: 10px 24px; min-height: 44px;
@@ -410,6 +433,13 @@
   /* group-page "start game" participant panel (Task 8) — checkbox rows + guest add, reusing
      .games-create-panel above for the collapse/expand animation */
   .group-start-panel { margin-top: 14px; }
+  .group-start-title { align-self: stretch; margin-bottom: 0; }
+  /* Row 15: "נבחרו N מתוך M", updated in place as rows are ticked. */
+  .group-start-counter {
+    align-self: stretch; margin: 0 0 4px;
+    color: var(--dim); font-size: 12px; font-weight: 300; animation: fadeIn .25s ease;
+    transition: color .2s;
+  }
   .group-start-member {
     display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px;
     padding: 8px 4px; border-bottom: 1px solid var(--line);
@@ -457,6 +487,10 @@
   /* status line above the CTA when the group's own game is open (Task 9): phase + player count + start time */
   .games-primary-status { margin: 0; color: var(--text); font-size: 13px; font-weight: 500; animation: fadeIn .25s ease; }
   .games-primary-reason { margin: 10px 0; color: var(--dim); font-size: 12px; font-weight: 300; animation: fadeIn .25s ease; }
+  /* D8: leaving is step one; this removes the group from THIS device only. */
+  .games-hide-group { margin-top: 10px; animation: fadeIn .25s ease; }
+  .games-hide-group-btn { font-size: 15px; min-height: 44px; }
+  .games-hide-group .games-primary-reason { max-width: 300px; margin-inline: auto; }
   .games-leader-row, .games-member-row {
     margin: 0; padding: 8px 0; border-bottom: 1px solid var(--line);
     font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere;
@@ -464,19 +498,35 @@
   .games-leader-row:last-of-type, .games-member-row:last-of-type { border-bottom: none; }
   .games-member-tag { margin-inline-start: 6px; color: var(--dim); font-size: 12px; font-weight: 400; animation: fadeIn .25s ease; }
 
-  /* group members: admin row actions, add-member panel, former members */
-  .games-member-row.with-actions { display: flex; align-items: center; gap: 10px; text-align: start; }
+  /* group members: tappable admin rows, their action strip, add-member panel, former members */
+  /* D3: the separator moves to the wrapper so the strip below a row stays inside the same block. */
+  .games-member-item { border-bottom: 1px solid var(--line); }
+  .games-member-item:last-of-type { border-bottom: none; }
+  .games-member-item .games-member-row { border-bottom: none; }
+  .games-member-row.with-actions { display: flex; align-items: center; gap: 10px; text-align: start; min-height: 44px; }
+  .games-member-row[role="button"] { cursor: pointer; transition: opacity .18s ease, transform .12s ease; }
+  .games-member-row[role="button"]:active { transform: scale(.97); }
+  .games-member-row[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
   .games-member-name { flex: 1 1 auto; min-width: 0; display: inline-flex; align-items: center; flex-wrap: wrap; }
-  .games-member-remove {
-    flex: 0 0 auto; margin-inline-start: auto;
-    color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0 4px 8px;
-    transition: color .2s;
+  .games-member-chevron { flex: 0 0 auto; display: inline-flex; color: var(--dim); }
+  .games-member-chevron svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .22s ease; }
+  .games-member-row[aria-expanded="true"] .games-member-chevron svg { transform: rotate(180deg); }
+  /* Row 18: a text action gets a real touch target, and the destructive one keeps its distance. */
+  .games-member-action {
+    flex: 0 0 auto; min-height: 44px; padding: 10px 0;
+    font-size: 13px; font-weight: 500; transition: color .2s;
   }
+  .games-member-actions .games-card-details-content {
+    margin-top: 0; padding-top: 0; border-top: none;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 16px; padding-bottom: 6px;
+  }
+  .games-member-remove { color: var(--dim); margin-inline-start: auto; transition: color .2s; }
   .games-member-remove:hover, .games-member-remove.armed { color: var(--bad); }
+  .games-member-note { margin: 0; padding: 8px 0; color: var(--dim); font-size: 12px; font-weight: 300; animation: fadeIn .25s ease; }
   .games-member-add { margin-top: 14px; text-align: center; }
   .games-member-add-toggle { color: var(--dim); font-size: 13px; font-weight: 600; padding: 6px 2px; transition: color .2s; }
   .games-member-add-toggle:hover { color: var(--accent); }
-  .games-member-add-note { margin: 0; color: var(--faint); font-size: 11px; font-weight: 300; }
+  .games-member-add-note { margin: 0; color: var(--dim); font-size: 12px; font-weight: 300; }
   .games-former-members { margin-top: 14px; text-align: center; }
   .games-former-toggle { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); font-size: 12px; font-weight: 500; padding: 6px 2px; transition: color .2s; }
   .games-former-toggle:hover { color: var(--accent); }
@@ -491,7 +541,7 @@
   .games-history-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
   .games-history-row { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
   .games-history-tag { margin-inline-start: 6px; color: var(--bad); font-size: 12px; font-weight: 500; animation: fadeIn .25s ease; }
-  .games-history-rank { margin: 0; padding: 4px 0; font-size: 13px; font-weight: 500; color: var(--text); }
+  .games-history-rank { margin: 0; padding: 4px 0; padding-inline-start: 14px; font-size: 13px; font-weight: 500; color: var(--dim); }
   /* Rank number ("1.") isolated in its own dir="ltr" span so the digit+dot never gets reversed
      by the bidi algorithm inside an RTL row (D4) — used by both the leaderboard and history rank. */
   .games-rank { margin-inline-end: 4px; font-variant-numeric: tabular-nums; }
@@ -534,7 +584,7 @@
 
   /* ---------- profile (centered) ---------- */
   .profile { margin-top: 6px; text-align: center; }
-  .psection { margin-top: 22px; animation: rise .4s ease both; }
+  .psection { margin-top: 24px; animation: rise .4s ease both; }
   .profile .psection { display: flex; flex-direction: column; align-items: center; }
   .profile .pgrid { justify-items: center; width: 100%; max-width: 340px; }
   .profile .hgame { justify-content: center; width: 100%; }
@@ -570,15 +620,17 @@
   .debt-section { width: 100%; max-width: 380px; text-align: start; }
   .debt-pane { width: 100%; }
   .debt-group .empty-note { width: 100%; text-align: center; }
-  .debt-group h3 { color: var(--dim); font-size: 13px; font-weight: 500; margin: 0 0 4px; }
   .debt-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); animation: rise .3s ease both; }
   .debt-copy { min-width: 0; flex: 1; }
   .debt-person { display: block; color: var(--text); font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
   .debt-meta { display: block; color: var(--dim); font-size: 12px; font-weight: 300; }
   .debt-amount { flex: 0 0 auto; color: var(--text); font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  /* D4: direction of the debt, readable from the row itself. */
+  .debt-amount.pos { color: var(--accent); }
+  .debt-amount.neg { color: var(--bad); }
   .debt-paid-btn { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); font-size: 12px; font-weight: 500; padding: 4px 10px; min-height: 30px; }
   .debt-paid-btn:hover { color: var(--accent); border-color: var(--accent); }
-  .friend-helper { color: var(--faint); font-size: 12px; font-weight: 300; margin-top: 8px; text-align: center; }
+  .friend-helper { color: var(--dim); font-size: 12px; font-weight: 300; margin-top: 8px; text-align: center; }
   .empty-note { color: var(--dim); font-size: 14px; font-weight: 300; margin-top: 10px; }
   .pid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .pname-big { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
@@ -586,6 +638,7 @@
   .pcell { display: flex; flex-direction: column; gap: 1px; }
   .plab { font-size: 12px; color: var(--dim); font-weight: 300; }
   .pval { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pval.pos { color: var(--accent); } .pval.neg { color: var(--bad); } .pval.zero { color: var(--faint); font-weight: 300; }
 
   .example-tag { color: var(--accent); font-size: 12px; font-weight: 400; }
 
@@ -607,6 +660,24 @@
   header { padding-inline-end: 96px; }
   /* Keep the main content below the fixed corner controls after the app title was removed. */
   .game-view .wrap > header, .settle-view .wrap > header { min-height: 64px; }
+  /* D2: back-to-the-group line on the table and settlement screens. It sits inside <header>, so
+     it inherits the 96px inline-end padding that keeps the corner reset/theme controls clear. */
+  .table-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 4px; min-height: 44px;
+    animation: rise .3s ease both;
+  }
+  .table-header .back-arrow {
+    position: static; flex: 0 0 auto;
+    display: inline-flex; align-items: center; padding: 8px; margin-inline-start: -8px;
+  }
+  .table-header-name {
+    min-width: 0; font-size: 17px; font-weight: 700; color: var(--text); overflow-wrap: anywhere;
+  }
+  .table-header-label {
+    margin-inline-start: auto; flex: 0 0 auto;
+    color: var(--dim); font-size: 12px; font-weight: 400; white-space: nowrap;
+  }
 
   /* ---------- login overlay ---------- */
   .login {
@@ -616,6 +687,16 @@
     padding: 24px;
   }
   .login-in { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 18px; animation: rise .45s ease both; }
+  /* D1: the group settings overlay carries the invite block and the add-member panel now, so it
+     scrolls from the top instead of centring a column that can outgrow the screen. */
+  #groupSettings {
+    align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding-block: calc(58px + env(safe-area-inset-top, 0px)) calc(28px + env(safe-area-inset-bottom, 0px));
+  }
+  #groupSettings .login-in { margin-inline: auto; }
+  .group-set-section { width: 100%; }
+  .group-set-section .games-section { margin-top: 0; }
+  .join-notice-actions { display: flex; align-items: center; gap: 16px; }
   .login .eyebrow { justify-content: flex-start; }
   .login h2 { font-weight: 900; font-size: 34px; margin: 0; line-height: 1.1; }
   .login p { color: var(--dim); font-size: 14px; font-weight: 300; margin: -8px 0 0; }
@@ -658,8 +739,8 @@
   }
   .switch.on { border-color: var(--accent); }
   .switch.on::after { transform: translateX(-23px); background: var(--accent); }
-  .set-flat { font-size: 17px; font-weight: 500; color: var(--accent); padding: 10px; min-height: 46px; transition: color .2s, background-color .2s, border-color .2s; }
-  .set-flat:hover { color: var(--accent-press); }
+  .set-flat { font-size: 17px; font-weight: 500; color: var(--text); padding: 10px; min-height: 46px; transition: color .2s, background-color .2s, border-color .2s; }
+  .set-flat:hover { color: var(--accent); }
   .set-flat.danger { color: var(--bad); }
   .set-flat.danger:hover, .set-flat.danger.armed { color: var(--bad); }
 
@@ -686,11 +767,6 @@
   }
   .games-invite-action:hover { border-color: var(--accent); color: var(--accent); }
   .games-invite-copied { color: var(--accent); font-size: 12px; font-weight: 500; animation: fadeIn .25s ease; }
-  .games-invite-qr {
-    width: 120px; height: 120px; border: 1px solid var(--line); border-radius: 12px;
-    display: flex; align-items: center; justify-content: center; text-align: center;
-    padding: 10px; color: var(--dim); font-size: 12px; font-weight: 300;
-  }
   .games-invite-note { margin: 0; color: var(--dim); font-size: 12px; font-weight: 300; max-width: 280px; }
   .games-invite-revoke { color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; transition: color .2s; }
   .games-invite-revoke:hover { color: var(--bad); }
@@ -698,15 +774,16 @@
   /* group page: settings corner button, member promote action, disabled group avatar picker */
   .games-group-settings-btn {
     position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); inset-inline-end: 0;
-    display: inline-flex; align-items: center; min-height: 44px;
+    display: inline-flex; align-items: center; gap: 6px; min-height: 44px;
     color: var(--dim); font-size: 13px; font-weight: 500; padding: 10px 8px;
     transition: color .2s;
   }
+  .games-group-settings-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .games-group-settings-btn:hover { color: var(--accent); }
-  .games-member-promote { flex: 0 0 auto; color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; transition: color .2s; }
+  .games-member-promote { color: var(--dim); }
   .games-member-promote:hover { color: var(--accent); }
   .games-create-avatar:disabled { cursor: default; opacity: .55; }
-  .set-flat:disabled { opacity: .5; cursor: default; }
+  .set-flat:disabled { color: var(--faint); cursor: default; }
   .set-flat:disabled:hover { color: var(--faint); }
 
   @media (prefers-reduced-motion: reduce) {
@@ -747,7 +824,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">גרסה 45</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 46</p>
   </div>
 </div>
 
@@ -756,6 +833,8 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
   </button>
   <div class="login-in set-in">
+    <div class="group-set-section" id="groupSetInvite" hidden></div>
+    <div class="group-set-section" id="groupSetAddMember" hidden></div>
     <button type="button" class="games-create-avatar" id="groupSetAvatarBtn" aria-label="שינוי תמונת הקבוצה">?</button>
     <input type="file" id="groupSetAvatarFile" accept="image/*" hidden aria-hidden="true">
     <input type="text" id="groupSetName" maxlength="40" placeholder="שם הקבוצה" autocomplete="off" aria-label="שם הקבוצה">
@@ -782,15 +861,20 @@
 <div class="login" id="joinNotice" hidden>
   <div class="login-in">
     <h2>קיבלת הזמנה לקבוצה</h2>
+    <p class="games-primary-status" id="joinNoticeGroup" hidden></p>
     <p class="games-invite-code" id="joinNoticeCode" dir="ltr"></p>
-    <p>הצטרפות תעבוד כשהשרת יחובר.</p>
-    <button type="button" class="btn-primary" id="joinNoticeContinueBtn">המשך</button>
+    <p id="joinNoticeNote"></p>
+    <div class="join-notice-actions">
+      <button type="button" class="btn-primary" id="joinNoticeContinueBtn">המשך</button>
+      <button type="button" class="btn-skip" id="joinNoticeLaterBtn">לא עכשיו</button>
+    </div>
   </div>
 </div>
 
 <div class="wrap">
   <header class="load-in">
     <div class="eyebrow"><span class="dot" id="syncDot" title="מצב סנכרון"></span></div>
+    <div class="table-header" id="tableHeader" hidden></div>
   </header>
 
   <div class="addrow load-in" style="animation-delay:.08s" id="addrow">
@@ -850,6 +934,9 @@
   const CONTACT_KEY = "poker-settle-contact";
   const PROFILE_DEBT_SEEN_KEY = "poker-settle-profile-debts-seen";
   const HISTORY_MAX = 400;
+  // One wording for every "not yet, needs a backend" note (design review, row 22): the invite
+  // note, the add-member note, the friends tab helper and the join notice all read this.
+  const SERVER_NOTE = "יעבוד כשהאפליקציה תתחבר לשרת";
   const HOLD_TO_FORCE_CLOSE_MS = 1000;
   const FINISH_GAME_HOLD_MS = 1000;
 
@@ -886,6 +973,10 @@
   let addMemberName = "";              // draft member name, kept across unrelated re-renders
   let removeMemberArmedId = null;      // memberId whose "הסר" is armed (two-step confirm)
   let removeMemberArmedTimeout = null; // auto-disarm timer for the above
+  let memberActionsOpenId = null;      // memberId whose inline action strip is open (D3, UI-only)
+  let memberActionsJustOpenedId = null; // strip that should animate open on the next render
+  let hideGroupArmed = false;          // "מחק קבוצה" (remove a left group from this device) armed
+  let hideGroupArmedTimeout = null;    // auto-disarm timer for the above
   let formerMembersOpen = false;       // whether the "חברים לשעבר" collapsed list is expanded
   let formerMembersJustOpened = false; // list should animate open on the next render
   let startGameOpen = false;          // whether the group-page "start game" participant panel is expanded
@@ -1416,7 +1507,9 @@
   // Group           = { id, name, avatarDataUrl: string|null, createdBy: ParticipantRef, createdAt,
   //                     archivedAt: ISO|null, deletedAt: ISO|null }
   // GroupMember     = { id, groupId, userId: null, guestId, displayName, role: "admin"|"member",
-  //                     status: "active"|"left"|"removed", joinedAt, leftAt: ISO|null }
+  //                     status: "active"|"left"|"removed", joinedAt, leftAt: ISO|null,
+  //                     hiddenAt: ISO|null } -- hiddenAt: a group I left and removed from THIS
+  //                     device only (D8); it never affects anybody else's data.
   // Invite          = { id, groupId, token, createdBy: ParticipantRef, createdAt, revokedAt: ISO|null }
   // Friendship      = { id, requester: ParticipantRef, addressee: ParticipantRef,
   //                     status: "pending"|"accepted"|"rejected", createdAt, respondedAt: ISO|null }
@@ -1457,6 +1550,7 @@
       status: m.status === "left" || m.status === "removed" ? m.status : "active",
       joinedAt: typeof m.joinedAt === "string" ? m.joinedAt : "",
       leftAt: typeof m.leftAt === "string" ? m.leftAt : null,
+      hiddenAt: typeof m.hiddenAt === "string" ? m.hiddenAt : null,
     };
   }
   function normalizeInvite(i) {
@@ -1569,15 +1663,15 @@
       isBalanced: !!entry.isBalanced,
     };
   }
-  // Short Hebrew duration for group history rows: "Xשע׳ Yדק׳" / "Yדק׳" / "פחות מדקה". Empty
+  // Short Hebrew duration for group history rows: "X שע׳ Y דק׳" / "Y דק׳" / "פחות מדקה". Empty
   // string when null (no startedAt on legacy/ungrouped games).
   function formatDuration(minutes) {
     if (minutes === null || minutes === undefined || !Number.isFinite(minutes)) return "";
     const total = Math.max(0, Math.round(minutes));
     const hours = Math.floor(total / 60);
     const mins = total % 60;
-    if (hours <= 0) return mins > 0 ? mins + "דק׳" : "פחות מדקה";
-    return mins > 0 ? hours + "שע׳ " + mins + "דק׳" : hours + "שע׳";
+    if (hours <= 0) return mins > 0 ? mins + " דק׳" : "פחות מדקה";
+    return mins > 0 ? hours + " שע׳ " + mins + " דק׳" : hours + " שע׳";
   }
   // Deviation (documented): a participant is eligible when their identity matches any
   // GroupMember of the group, active or former. Ad-hoc game guests who never joined are excluded.
@@ -1654,7 +1748,9 @@
   }
   function getGroupSummaries(collections, meName) {
     const c = collections || {};
+    const members = Array.isArray(c.groupMembers) ? c.groupMembers : [];
     return visibleGroups(Array.isArray(c.groups) ? c.groups : [])
+      .filter(g => !isGroupHiddenForMember(members, g.id, meName))
       .map(g => getGroupSummary(c, g.id, meName))
       .filter(Boolean);
   }
@@ -1662,7 +1758,9 @@
   // dashboard's collapsed "ארכיון" list and the read-only archived group page read from this.
   function getArchivedGroupSummaries(collections, meName) {
     const c = collections || {};
+    const members = Array.isArray(c.groupMembers) ? c.groupMembers : [];
     return archivedGroups(Array.isArray(c.groups) ? c.groups : [])
+      .filter(g => !isGroupHiddenForMember(members, g.id, meName))
       .map(g => getGroupSummary(c, g.id, meName))
       .filter(Boolean);
   }
@@ -1734,6 +1832,7 @@
       former.status = "active";
       former.leftAt = null;
       former.joinedAt = at;
+      former.hiddenAt = null; // rejoining un-hides the group on this device (D8)
       return former;
     }
     const member = normalizeGroupMember({
@@ -1764,6 +1863,25 @@
     membership.status = "left";
     membership.leftAt = at;
     return true;
+  }
+  // D8, step two of leaving: after leaving (or being removed) I can also drop the group from
+  // THIS device. Local-only — it stamps hiddenAt on my own membership record and touches
+  // nothing else, so the group, its history and every other member stay exactly as they were.
+  // Refused (false, no mutation) while I am still an active member, or when I was never one.
+  function hideGroupForMember(members, groupId, meName, at) {
+    const list = Array.isArray(members) ? members : [];
+    const membership = list.find(m => m && m.groupId === groupId && m.displayName === meName);
+    if (!membership) return false;
+    if (membership.status !== "left" && membership.status !== "removed") return false;
+    membership.hiddenAt = at;
+    return true;
+  }
+  // The dashboard-side reader for the flag above: true only for a group I am no longer a member
+  // of AND have hidden. Opening such a group directly still works (getGroupSummary is unfiltered).
+  function isGroupHiddenForMember(members, groupId, meName) {
+    const list = Array.isArray(members) ? members : [];
+    const membership = list.find(m => m && m.groupId === groupId && m.displayName === meName);
+    return !!membership && membership.status !== "active" && !!membership.hiddenAt;
   }
   // Promotes/demotes a member. Refused (false, no mutation) when not found, or when demoting
   // the group's last active admin would leave it with none.
@@ -2022,6 +2140,10 @@
     resetStartGamePanel();
     resetCreateGroupPanel();
     disarmRemoveMember();
+    memberActionsOpenId = null;
+    memberActionsJustOpenedId = null;
+    clearTimeout(hideGroupArmedTimeout);
+    hideGroupArmed = false;
     animNext = "all";
     groupPageEnterNext = nextView === "group";
     gamesPageEnterNext = nextView === "games";
@@ -2124,6 +2246,7 @@
     createInvite(state.invites, groupId, byRef, generateInviteToken(randomInviteBytes()), at);
     save();
     renderGroupPage();
+    refreshGroupSettings(); // the invite block lives in the settings overlay now (D1)
   }
 
   function revokeGroupInvite(groupId) {
@@ -2132,6 +2255,7 @@
     revokeInvite(state.invites, invite.id, new Date().toISOString());
     save();
     renderGroupPage();
+    refreshGroupSettings(); // the invite block lives in the settings overlay now (D1)
   }
 
   function resetCreateGroupPanel() {
@@ -2173,7 +2297,7 @@
     if (!member) return null;
     save();
     renderGroupPage();
-    return member;
+    return member; // the caller (renderAddMemberPanel) refreshes the overlay as it closes
   }
 
   // Removes (soft) a member from a group; see removeGroupMember for the history-preserving
@@ -2193,6 +2317,17 @@
     const member = state.groupMembers.find(m => m && m.id === memberId && m.groupId === groupId);
     if (!member) return false;
     if (!setMemberRole(state.groupMembers, memberId, "admin")) return false;
+    save();
+    renderGroupPage();
+    return true;
+  }
+
+  // The mirror of promoteMember (D3's "הסר ניהול"). setMemberRole keeps the last-admin guard,
+  // so demoting the group's only admin is refused there, not here.
+  function demoteMember(groupId, memberId) {
+    const member = state.groupMembers.find(m => m && m.id === memberId && m.groupId === groupId);
+    if (!member) return false;
+    if (!setMemberRole(state.groupMembers, memberId, "member")) return false;
     save();
     renderGroupPage();
     return true;
@@ -2312,8 +2447,8 @@
   }
 
   function renderQuickActions(parent) {
+    // D7: no section title — the two capsules explain themselves and sit straight under the lead.
     const section = el("section", "games-section games-quick-section");
-    section.appendChild(el("h3", "games-section-title", "פעולות מהירות"));
     const actions = el("div", "games-quick-actions");
 
     const createGroupBtn = el("button", "games-quick-action primary", "+ צור קבוצה");
@@ -2335,6 +2470,7 @@
     const panel = el("div", "games-create-panel");
     const panelIn = el("div", "games-create-panel-in");
     const content = el("div", "games-create-panel-content");
+    content.appendChild(el("h3", "games-section-title", "קבוצה חדשה"));
 
     const avatarBtn = el("button", "games-create-avatar");
     avatarBtn.type = "button";
@@ -2662,9 +2798,12 @@
     // Reachable by any active member — not admin-only — since "עזוב קבוצה" must stay reachable
     // for everyone; admin-only controls (rename, avatar, archive, delete) live inside the overlay.
     if (summary.isMember) {
-      const settingsBtn = el("button", "games-group-settings-btn", "הגדרות");
+      const settingsBtn = el("button", "games-group-settings-btn");
       settingsBtn.type = "button";
       settingsBtn.setAttribute("aria-label", "הגדרות קבוצה");
+      // Row 34: same gear as the profile's corner control, so "הגדרות" looks the same in both.
+      settingsBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>';
+      settingsBtn.appendChild(el("span", "", "הגדרות"));
       settingsBtn.addEventListener("click", openGroupSettings);
       header.appendChild(settingsBtn);
     }
@@ -2707,6 +2846,9 @@
     } else if (canStart) {
       btn.textContent = "התחל משחק";
       btn.setAttribute("aria-expanded", String(startGameOpen));
+      // Row 15: while the picker is open the panel owns the screen's one turquoise capsule
+      // ("פתח שולחן"); the CTA that opened it steps aside instead of competing with it.
+      btn.hidden = startGameOpen;
       btn.addEventListener("click", toggleStartGamePanel);
     } else {
       btn.textContent = "התחל משחק";
@@ -2725,7 +2867,35 @@
     }
     wrap.appendChild(btn);
     if (reason) wrap.appendChild(el("p", "games-primary-reason", reason));
+    if (!summary.isMember) wrap.appendChild(renderHideGroupAction());
     if (canStart) wrap.appendChild(renderStartGamePanel());
+    return wrap;
+  }
+
+  // D8, step two of leaving: once I am out of a group, the page offers to drop it from this
+  // device. Same two-step armed pattern as every other destructive action here (no confirm()),
+  // auto-disarming after 4s. hideGroupForMember only stamps my own membership — the group and
+  // everybody else's history are untouched, which is what the helper line promises.
+  function renderHideGroupAction() {
+    const wrap = el("div", "games-hide-group");
+    const btn = el("button", "set-flat danger games-hide-group-btn" + (hideGroupArmed ? " armed" : ""),
+      hideGroupArmed ? "בטוח? הקבוצה תוסר מהמכשיר" : "מחק קבוצה");
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      if (!hideGroupArmed) {
+        hideGroupArmed = true;
+        hideGroupArmedTimeout = setTimeout(() => { hideGroupArmed = false; renderGroupPage(); }, 4000);
+        renderGroupPage();
+        return;
+      }
+      clearTimeout(hideGroupArmedTimeout);
+      hideGroupArmed = false;
+      if (!hideGroupForMember(state.groupMembers, currentGroupId, me, new Date().toISOString())) return;
+      save();
+      setAppView("games");
+    });
+    wrap.appendChild(btn);
+    wrap.appendChild(el("p", "games-primary-reason", "הקבוצה תוסר מהמכשיר שלך. ההיסטוריה של שאר החברים נשמרת."));
     return wrap;
   }
 
@@ -2740,6 +2910,9 @@
     const content = el("div", "games-create-panel-content");
 
     const members = activeMembers(state.groupMembers, currentGroupId);
+    content.appendChild(el("h3", "games-section-title group-start-title", "מי משחק?"));
+    content.appendChild(el("p", "group-start-counter",
+      startGameCounterLabel(startGameSelection.size + startGameGuests.length, members.length + startGameGuests.length)));
     members.forEach((member, i) => content.appendChild(renderStartGameMemberRow(member, i)));
 
     if (startGameGuests.length) content.appendChild(renderStartGameGuestsList());
@@ -2802,13 +2975,24 @@
     return row;
   }
 
-  // Keeps the "פתח שולחן" button's disabled state in sync after an in-place row toggle.
+  // Row 15: "נבחרו N מתוך M" above the checkbox rows, so the picker says what it has.
+  function startGameCounterLabel(selected, total) {
+    return "נבחרו " + selected + " מתוך " + total;
+  }
+
+  // Keeps the "פתח שולחן" button's disabled state and the counter in sync after an in-place
+  // row toggle (the panel is not re-rendered, so a half-typed guest name survives).
   function updateStartGameConfirmState() {
     const btn = document.querySelector(".group-start-confirm");
     if (!btn) return;
-    const total = startGameSelection.size + startGameGuests.length;
-    btn.disabled = total < 1;
-    btn.setAttribute("aria-disabled", String(total < 1));
+    const selected = startGameSelection.size + startGameGuests.length;
+    btn.disabled = selected < 1;
+    btn.setAttribute("aria-disabled", String(selected < 1));
+    const counter = document.querySelector(".group-start-counter");
+    if (counter) {
+      const total = activeMembers(state.groupMembers, currentGroupId).length + startGameGuests.length;
+      counter.textContent = startGameCounterLabel(selected, total);
+    }
   }
 
   // Ad-hoc guests added in the panel; NOT group members (no addGroupMember call — see Task 8).
@@ -2925,43 +3109,91 @@
     return section;
   }
 
-  // Flat member rows, name + a quiet "מנהל" tag for admins. Admins additionally get an inline
-  // "+ הוסף חבר" add action and a per-row "הסר" (except on their own row and the group's last
-  // active admin). Former members appear collapsed under a toggle, shown only when there are any.
+  // Flat member rows, name + a quiet "מנהל" tag for admins. For an admin each row is tappable
+  // and opens an inline action strip (D3); "+ הוסף חבר" moved to the settings overlay (D1).
+  // Former members appear collapsed under a toggle, shown only when there are any.
   function renderGroupMembers(members, former, isAdmin) {
     const section = el("section", "games-section");
     section.appendChild(el("h3", "games-section-title", "חברים"));
     const list = Array.isArray(members) ? members : [];
     list.forEach(member => section.appendChild(renderMemberRow(member, list, isAdmin)));
-    if (isAdmin) section.appendChild(renderAddMemberPanel());
     const formerList = Array.isArray(former) ? former : [];
     if (formerList.length) section.appendChild(renderFormerMembers(formerList));
     return section;
   }
 
-  // A single member row (kept as a <p>, like before, so the last-row border-hiding
-  // :last-of-type rule still targets it even once sibling <div> panels are appended below).
-  // Admins get a trailing "הסר" pushed to the far end via margin-inline-start:auto, except on
-  // their own row and on the group's last active admin (isLastActiveAdmin over this same list).
+  // D3: a member row shows name + role tag only. For an admin the row itself is the control
+  // (role="button", Enter/Space, aria-expanded) and taps open an inline action strip below it —
+  // one row at a time, so a destructive "הסר" is never a stray tap away in a dense list. The row
+  // stays a <p> inside a .games-member-item wrapper, which now carries the hairline separator.
   function renderMemberRow(member, activeList, isAdmin) {
-    const row = el("p", "games-member-row" + (isAdmin ? " with-actions" : ""));
+    const item = el("div", "games-member-item");
+    const row = el("p", "games-member-row");
     const name = el("span", "games-member-name", member.displayName);
     if (member.role === "admin") name.appendChild(el("span", "games-member-tag", "מנהל"));
     row.appendChild(name);
-    // Cheap admin transfer/second-admin: any non-admin row gets "הפוך למנהל" so a group is never
-    // left with a single point of failure (Task 14 decision).
-    if (isAdmin && member.role !== "admin") {
-      row.appendChild(renderMakeAdminButton(member));
+    if (!isAdmin) { item.appendChild(row); return item; }
+
+    const open = memberActionsOpenId === member.id;
+    const actionsId = "member-actions-" + member.id;
+    row.classList.add("with-actions");
+    row.setAttribute("role", "button");
+    row.setAttribute("tabindex", "0");
+    row.setAttribute("aria-expanded", open ? "true" : "false");
+    row.setAttribute("aria-controls", actionsId);
+    row.setAttribute("aria-label", "פעולות עבור " + member.displayName);
+    const chevron = el("span", "games-member-chevron");
+    chevron.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
+    row.appendChild(chevron);
+    const toggle = () => {
+      const next = memberActionsOpenId === member.id ? null : member.id;
+      disarmRemoveMember(); // an armed "הסר" belongs to the row that was open
+      memberActionsOpenId = next;
+      memberActionsJustOpenedId = next;
+      renderGroupPage();
+    };
+    row.addEventListener("click", toggle);
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
+    item.appendChild(row);
+    item.appendChild(renderMemberActions(member, activeList, actionsId, open));
+    return item;
+  }
+
+  // The strip itself: the shared .games-card-details grid-collapse, holding "הפוך למנהל" (or
+  // "הסר ניהול" for an admin who isn't the last one) and the two-step "הסר". The group's last
+  // active admin gets neither — only the quiet reason line, same wording as the settings overlay.
+  function renderMemberActions(member, activeList, actionsId, open) {
+    const details = el("div", "games-card-details games-member-actions");
+    details.id = actionsId;
+    const detailsIn = el("div", "games-card-details-in");
+    const content = el("div", "games-card-details-content games-member-actions-row");
+    const isLastAdmin = isLastActiveAdmin(activeList, member.id);
+    if (member.role !== "admin") content.appendChild(renderMakeAdminButton(member));
+    else if (!isLastAdmin) content.appendChild(renderRemoveAdminButton(member));
+    if (member.displayName !== me && !isLastAdmin) content.appendChild(renderRemoveMemberButton(member));
+    if (isLastAdmin) content.appendChild(el("p", "games-member-note", "העבר ניהול לחבר אחר קודם"));
+    detailsIn.appendChild(content);
+    details.appendChild(detailsIn);
+    if (open && memberActionsJustOpenedId === member.id) {
+      memberActionsJustOpenedId = null;
+      requestAnimationFrame(() => requestAnimationFrame(() => details.classList.add("open")));
+    } else if (open) {
+      details.classList.add("open");
     }
-    if (isAdmin && member.displayName !== me && !isLastActiveAdmin(activeList, member.id)) {
-      row.appendChild(renderRemoveMemberButton(member));
-    }
-    return row;
+    return details;
   }
   function renderMakeAdminButton(member) {
-    const btn = el("button", "games-member-promote", "הפוך למנהל");
+    const btn = el("button", "games-member-action games-member-promote", "הפוך למנהל");
     btn.type = "button";
     btn.addEventListener("click", () => promoteMember(member.groupId, member.id));
+    return btn;
+  }
+  function renderRemoveAdminButton(member) {
+    const btn = el("button", "games-member-action games-member-promote", "הסר ניהול");
+    btn.type = "button";
+    btn.addEventListener("click", () => demoteMember(member.groupId, member.id));
     return btn;
   }
 
@@ -2984,7 +3216,7 @@
   }
   function renderRemoveMemberButton(member) {
     const armed = removeMemberArmedId === member.id;
-    const btn = el("button", "games-member-remove" + (armed ? " armed" : ""), armed ? "בטוח?" : "הסר");
+    const btn = el("button", "games-member-action games-member-remove" + (armed ? " armed" : ""), armed ? "בטוח?" : "הסר");
     btn.type = "button";
     btn.addEventListener("click", () => {
       if (removeMemberArmedId === member.id) {
@@ -3036,8 +3268,14 @@
     submitBtn.type = "button";
     submitBtn.addEventListener("click", submit);
 
-    content.append(nameInput, submitBtn);
-    content.appendChild(el("p", "games-member-add-note", "חיבור חשבונות יגיע עם השרת"));
+    const cancelBtn = el("button", "games-create-cancel", "ביטול");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", closeAddMemberPanel);
+
+    // Row 32: same shape as the create-group panel — title, full-width field, confirm + cancel.
+    content.appendChild(el("h3", "games-section-title", "חבר חדש"));
+    content.append(nameInput, submitBtn, cancelBtn);
+    content.appendChild(el("p", "games-member-add-note", SERVER_NOTE));
     panelIn.appendChild(content);
     panel.appendChild(panelIn);
 
@@ -3054,13 +3292,18 @@
     if (addMemberOpen) { closeAddMemberPanel(); return; }
     addMemberOpen = true;
     addMemberJustOpened = true;
-    renderGroupPage();
+    refreshGroupSettings();
   }
   // Plays the panel's collapse transition (matching closeCreateGroupPanel's approach) before
-  // clearing the draft name and rebuilding the group page without it.
+  // clearing the draft name and rebuilding the overlay — and the group page behind it, whose
+  // member list just changed (renderGroupPage is guarded by appView, so it is a no-op elsewhere).
   function closeAddMemberPanel() {
     const panel = document.querySelector(".games-member-add .games-create-panel.open");
-    const finish = () => { addMemberOpen = false; addMemberJustOpened = false; addMemberName = ""; renderGroupPage(); };
+    const finish = () => {
+      addMemberOpen = false; addMemberJustOpened = false; addMemberName = "";
+      renderGroupPage();
+      refreshGroupSettings();
+    };
     if (!panel) { finish(); return; }
     panel.classList.remove("open");
     setTimeout(finish, 280);
@@ -3189,10 +3432,10 @@
     return section;
   }
 
-  // The group's invite: any active member sees it (returns null otherwise). No invite yet →
-  // "צור הזמנה". With one → the code, copy/share, a QR placeholder (rendering is deferred to a
-  // backend that can host a redemption endpoint), and, for admins only, a text action to revoke
-  // it (which brings back "צור הזמנה").
+  // The group's invite, rendered inside the group settings overlay (D1): any active member sees
+  // it (returns null otherwise). No invite yet → "צור הזמנה". With one → the code, copy/share,
+  // the shared server note, and, for admins only, a text action to revoke it (which brings back
+  // "צור הזמנה").
   function renderGroupInvite(summary, invite, isAdmin) {
     if (!summary || !summary.isMember) return null;
     const section = el("section", "games-section games-invite-section");
@@ -3254,8 +3497,9 @@
     }
     card.appendChild(actions);
 
-    card.appendChild(el("div", "games-invite-qr", "QR יופיע עם חיבור לשרת"));
-    card.appendChild(el("p", "games-invite-note", "הצטרפות דרך הזמנה תעבוד כשהאפליקציה תתחבר לשרת."));
+    // D6: no QR placeholder tile — a real QR will be generated from inviteLink(...) once a
+    // backend can redeem it; until then the shared note below says exactly that, once.
+    card.appendChild(el("p", "games-invite-note", SERVER_NOTE));
 
     if (isAdmin) {
       const revokeBtn = el("button", "games-invite-revoke", "בטל הזמנה");
@@ -3291,6 +3535,7 @@
     if (isArchived) {
       const note = el("div", "games-primary-action");
       note.appendChild(el("p", "games-primary-reason", "הקבוצה בארכיון"));
+      if (!summary.isMember) note.appendChild(renderHideGroupAction());
       inner.appendChild(note);
     } else {
       inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
@@ -3299,8 +3544,8 @@
     const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
     inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
-    const inviteSection = renderGroupInvite(summary, activeInvite(state.invites, currentGroupId), summary.isAdmin);
-    if (inviteSection) inner.appendChild(inviteSection);
+    // D1: the invite block and "+ הוסף חבר" live in the group settings overlay now — this page
+    // stays short (header, primary action, דירוג, חברים, היסטוריה).
     if (enterStagger) {
       Array.from(inner.children).forEach((child, i) => {
         child.classList.add("anim");
@@ -3349,6 +3594,31 @@
     });
   }
 
+  // D2: the table (game) and settlement screens get a compact header line — back arrow, the
+  // group name, and a quiet phase label — so a game opened from a group can get back to it. It
+  // renders inside <header>, which already reserves 96px on the inline-end side for the corner
+  // reset/theme controls, below the .game-view/.settle-view min-height that keeps them clear.
+  // An ungrouped game gets the same line, going back to the games dashboard.
+  function renderTableHeader() {
+    const box = document.getElementById("tableHeader");
+    if (!box) return;
+    box.hidden = appView !== "game" && appView !== "settle";
+    box.innerHTML = "";
+    if (box.hidden) return;
+    const group = state.groupId
+      ? (Array.isArray(state.groups) ? state.groups : []).find(g => g && g.id === state.groupId)
+      : null;
+    const back = el("button", "back-arrow");
+    back.type = "button";
+    back.setAttribute("aria-label", group ? "חזרה לקבוצה" : "חזרה למשחקים");
+    back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>';
+    back.addEventListener("click", () => { if (group) openGroup(state.groupId); else setAppView("games"); });
+    box.appendChild(back);
+    // The group name is user data — always a text node, never interpolated into innerHTML.
+    box.appendChild(el("span", "table-header-name", group ? group.name : "משחק ללא קבוצה"));
+    box.appendChild(el("span", "table-header-label", appView === "settle" ? "סגירה" : "שולחן"));
+  }
+
   function render() {
     const anim = animNext; animNext = null;
     const inGames = appView === "games" || appView === "game" || appView === "settle" || appView === "group";
@@ -3359,6 +3629,7 @@
     document.getElementById("modeGames").classList.toggle("on", inGames);
     document.getElementById("modeProfile").classList.toggle("on", appView === "profile");
     document.getElementById("addrow").hidden = appView !== "game";
+    renderTableHeader();
     renderAddRowChips();
     document.getElementById("settingsBtn").hidden = appView !== "profile";
     document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games" || appView === "group";
@@ -3610,8 +3881,8 @@
         cashInp.step = "1";
         cashInp.inputMode = "decimal";
         cashInp.className = "exit-cashout-input";
-        cashInp.placeholder = "צ'יפים ביציאה";
-        cashInp.setAttribute("aria-label", "צ'יפים ביציאה של " + p.name);
+        cashInp.placeholder = "כמה יצא איתו";
+        cashInp.setAttribute("aria-label", "כמה יצא איתו — " + p.name);
         if (isExited(p)) cashInp.value = String(p.cashout);
         const confirmExit = () => {
           const raw = cashInp.value;
@@ -3629,8 +3900,17 @@
         const exitConfirmBtn = el("button", "chip exit-confirm", "אשר יציאה");
         exitConfirmBtn.type = "button";
         exitConfirmBtn.addEventListener("click", confirmExit);
-        exitRow.appendChild(cashInp);
+        // Row 16: the currency sits with the field instead of the number arriving bare, and
+        // "ביטול" closes the panel through the same collapse animation that opened it.
+        const exitCancelBtn = el("button", "exit-cancel", "ביטול");
+        exitCancelBtn.type = "button";
+        exitCancelBtn.addEventListener("click", () => openExitPanel(p.name));
+        const exitField = el("div", "exit-field");
+        exitField.appendChild(el("span", "exit-currency", "₪"));
+        exitField.appendChild(cashInp);
+        exitRow.appendChild(exitField);
         exitRow.appendChild(exitConfirmBtn);
+        exitRow.appendChild(exitCancelBtn);
         exitInner.appendChild(exitRow);
         exitPanel.appendChild(exitInner);
         row.appendChild(exitPanel);
@@ -3706,19 +3986,14 @@
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
         formatPlayerCount(state.players.length) + exitedLabel +
         (state.example ? '<span class="sep">·</span><span class="example-tag">נתוני דוגמה — כל עריכה מאפסת אותם</span>' : "");
-      // The group name comes from user data — built with DOM nodes (el/textContent), never
-      // interpolated into the innerHTML string above, so it can't inject markup.
-      const statGroup = state.groups.find(g => g && g.id === state.groupId);
-      if (statGroup) {
-        stat.appendChild(el("span", "sep", "·"));
-        stat.appendChild(document.createTextNode("קבוצה: "));
-        stat.appendChild(el("b", null, statGroup.name));
-      }
+      // D2: the group name moved to the table header at the top of the screen (renderTableHeader).
     } else if (appView === "settle") {
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
         'דווח <b>' + fmt(t.out) + '</b><span class="sep">·</span>' +
-        'הפרש <span class="' + (t.diff === 0 ? "good" : "bad") + '">' + (t.diff === 0 ? "0 ✓" : balanceDescription(t.diff)) + "</span>";
+        // Row 20: the red sentence under the stat line is the one place the gap is flagged;
+        // repeating it in red here said the same thing twice.
+        'הפרש <span class="' + (t.diff === 0 ? "good" : "neutral") + '">' + (t.diff === 0 ? "0 ✓" : balanceDescription(t.diff)) + "</span>";
     } else stat.innerHTML = "";
 
     const warn = document.getElementById("warnbox");
@@ -4056,7 +4331,7 @@
   function debtDateLabel(debt) {
     const date = new Date(debt.gameDate || debt.createdAt);
     if (Number.isNaN(date.getTime())) return "תאריך לא ידוע";
-    return date.toLocaleDateString("he-IL", { day: "numeric", month: "numeric", year: "2-digit" });
+    return date.toLocaleDateString("he-IL", { day: "numeric", month: "short" });
   }
 
   function markDebtPaid(debtId) {
@@ -4077,9 +4352,11 @@
       const row = el("div", "debt-row");
       const copy = el("div", "debt-copy");
       copy.appendChild(el("span", "debt-person", creditorView ? debt.debtorName : debt.creditorName));
-      copy.appendChild(el("span", "debt-meta", debtDateLabel(debt) + " · " + (creditorView ? "ממתין" : "ממתין לתשלום")));
+      copy.appendChild(el("span", "debt-meta", debtDateLabel(debt) + " · ממתין לתשלום"));
       row.appendChild(copy);
-      row.appendChild(el("span", "debt-amount", fmt(debt.amount)));
+      // D4: the amount alone says which way the debt runs — turquoise when it is coming to me,
+      // red when I owe it — so the row reads without leaning on the selected tab.
+      row.appendChild(el("span", "debt-amount" + (creditorView ? " pos" : " neg"), fmt(debt.amount)));
       if (creditorView) {
         const paid = el("button", "debt-paid-btn", "שולם");
         paid.type = "button";
@@ -4174,7 +4451,7 @@
     const debtSec = el("section", "psection debt-section");
     debtSec.style.animationDelay = ".03s";
     debtSec.hidden = profileTab !== "debts";
-    debtSec.appendChild(el("h2", "ptitle", "חובות"));
+    // Row 12: no "חובות"/"חברים" section title here — the selected tab above already says it.
     const debtTabs = el("div", "debt-tabs");
     debtTabs.setAttribute("role", "tablist");
     const debtTabOptions = [
@@ -4204,12 +4481,11 @@
     const friendsSec = el("section", "psection debt-section");
     friendsSec.style.animationDelay = ".09s";
     friendsSec.hidden = profileTab !== "friends";
-    friendsSec.appendChild(el("h2", "ptitle", "חברים"));
     const meRef = { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me };
     const friendData = friendRequestsFor(state.friendships || [], meRef);
     const hasFriendData = friendData.friends.length || friendData.incoming.length || friendData.outgoing.length;
     if (!hasFriendData) {
-      friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים. בקשות חברות יעבדו כשהאפליקציה תתחבר לשרת."));
+      friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים"));
     } else {
       renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
       renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך");
@@ -4221,7 +4497,7 @@
     addFriendBtn.setAttribute("aria-disabled", "true");
     addFriendBtn.style.marginTop = "14px";
     friendsSec.appendChild(addFriendBtn);
-    friendsSec.appendChild(el("p", "friend-helper", "דורש חיבור לשרת"));
+    friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
     box.appendChild(friendsSec);
 
     // total balance
@@ -4232,15 +4508,18 @@
     const big = el("div", "bignum " + (total > 0.005 ? "pos" : total < -0.005 ? "neg" : "zero"), fmtSigned(total));
     balSec.appendChild(big);
     const grid = el("div", "pgrid");
+    // Row 10: the best/worst night carry the same pos/neg/zero colouring as the same numbers
+    // in the list below them; counts stay neutral (no tone).
+    const tone = (n) => n > 0.005 ? " pos" : n < -0.005 ? " neg" : " zero";
     [
-      ["ערבים ששוחקו", String(games.length)],
-      ["ערבים ברווח", String(wins)],
-      ["הערב הטוב ביותר", fmtSigned(best)],
-      ["הערב הגרוע ביותר", fmtSigned(worst)],
-    ].forEach(([lab, val]) => {
+      ["ערבים ששוחקו", String(games.length), ""],
+      ["ערבים ברווח", String(wins), ""],
+      ["הערב הטוב ביותר", fmtSigned(best), tone(best)],
+      ["הערב הגרוע ביותר", fmtSigned(worst), tone(worst)],
+    ].forEach(([lab, val, cls]) => {
       const cell = el("div", "pcell");
       cell.appendChild(el("span", "plab", lab));
-      cell.appendChild(el("span", "pval", val));
+      cell.appendChild(el("span", "pval" + cls, val));
       grid.appendChild(cell);
     });
     balSec.appendChild(grid);
@@ -4259,7 +4538,7 @@
         row.style.animationDelay = (i * 40) + "ms";
         const d = new Date(g.at);
         row.appendChild(el("span", "hdate", d.toLocaleDateString("he-IL", { day: "numeric", month: "short" })));
-        row.appendChild(el("span", "hplayers", g.players.length + " שחקנים"));
+        row.appendChild(el("span", "hplayers", formatPlayerCount(g.players.length)));
         const net = el("span", "hnet " + (g.mine.net > 0.005 ? "pos" : g.mine.net < -0.005 ? "neg" : "zero"), fmtSigned(g.mine.net));
         row.appendChild(net);
         histSec.appendChild(row);
@@ -4373,6 +4652,20 @@
     if (!group || !summary) { closeGroupSettings(); return; }
     resetGroupLeaveArm();
     resetGroupDeleteArm();
+
+    // D1: the invite block (every active member) and the add-member panel (admins only) are
+    // rebuilt here, above the name/avatar and management actions, from the same renderers the
+    // group page used to call.
+    const inviteBox = document.getElementById("groupSetInvite");
+    inviteBox.innerHTML = "";
+    const inviteSection = renderGroupInvite(summary, activeInvite(state.invites, currentGroupId), summary.isAdmin);
+    if (inviteSection) inviteBox.appendChild(inviteSection);
+    inviteBox.hidden = !inviteSection;
+
+    const addMemberBox = document.getElementById("groupSetAddMember");
+    addMemberBox.innerHTML = "";
+    addMemberBox.hidden = !summary.isAdmin;
+    if (summary.isAdmin) addMemberBox.appendChild(renderAddMemberPanel());
 
     const avatarBtn = document.getElementById("groupSetAvatarBtn");
     avatarBtn.innerHTML = "";
@@ -4586,11 +4879,23 @@
     // needs a backend (see the invite section's note); if the user isn't signed in yet, the
     // normal login screen still follows once they dismiss the notice.
     document.getElementById("joinNoticeCode").textContent = formatInviteCode(joinToken);
+    document.getElementById("joinNoticeNote").textContent = SERVER_NOTE;
+    // Row 21: name the group when this device already knows the token (an invite it created or
+    // synced). Unknown tokens simply stay nameless — nothing is fabricated and nothing is joined.
+    const localInvite = (state.invites || []).find(i => i && i.token === joinToken && !i.revokedAt);
+    const invitedGroup = localInvite && (state.groups || []).find(g => g && g.id === localInvite.groupId);
+    const groupLine = document.getElementById("joinNoticeGroup");
+    groupLine.textContent = invitedGroup ? invitedGroup.name : "";
+    groupLine.hidden = !invitedGroup;
     const notice = document.getElementById("joinNotice");
     notice.hidden = false;
     document.getElementById("joinNoticeContinueBtn").addEventListener("click", () => {
       notice.hidden = true;
       if (!me) showLogin();
+    }, { once: true });
+    // "לא עכשיו" dismisses without pushing the login screen — the app is usable without a name.
+    document.getElementById("joinNoticeLaterBtn").addEventListener("click", () => {
+      notice.hidden = true;
     }, { once: true });
     history.replaceState(null, "", location.pathname);
   } else if (!me) {
