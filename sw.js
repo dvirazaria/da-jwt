@@ -1,4 +1,4 @@
-const CACHE = "kupa-v44";
+const CACHE = "kupa-v45";
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["./"])));
