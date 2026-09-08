@@ -135,10 +135,13 @@ test('startGroupGame refuses when the current user has no active membership in t
   assert.match(section, /if \(!findMyMembership\(state\.groupMembers, groupId, me\)\) return false;/);
 });
 
-test('renderGroupPrimaryAction gates the start action on summary.isMember and shows "עזבת את הקבוצה" for a left member', () => {
+test('renderGroupPrimaryAction gates the start action on summary.isMember and shows the honest left-group reason for a non-member', () => {
   const section = sourceBetween('function renderGroupPrimaryAction(', '  function renderStartGamePanel(');
   assert.match(section, /const canStart = !summary\.hasActiveGame && summary\.isMember && gate && gate\.ok;/);
-  assert.match(section, /if \(!summary\.isMember\) \{\s*\n\s*reason = "עזבת את הקבוצה";/);
+  // The reason line is derived from my own former membership (leftGroupReason: "עזבת"/"הוסרת"/
+  // "אתה לא חבר בקבוצה הזו") — never a hard-coded "עזבת את הקבוצה" for someone who was never a member.
+  assert.match(section, /if \(!summary\.isMember\) \{\s*\n\s*reason = leftGroupReason\(\);/);
+  assert.match(section, /former\.status === "removed" \? "הוסרת מהקבוצה" : "עזבת את הקבוצה"/);
 });
 
 test('getGroupSummary sets isMember=false for a user who left the group (findMyMembership finds no active row)', () => {

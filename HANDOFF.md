@@ -175,6 +175,11 @@ project's "keep one source of truth" rule; nothing here is a second store.
   but nothing downstream uses the session yet: `ParticipantRef.userId` is always `null`. `resolveGuestId()` gives the same name the same `guestId`
   across groups/history on one device, but two different people can collide if they type the same
   name. This is a pre-backend simplification the group model was built around, not an oversight.
+  Corollary: when `me` matches no membership row of a group (e.g. sign-in set a display name that
+  differs from the name on the rows), the group page shows "אתה לא חבר בקבוצה הזו — מחובר בשם X"
+  and offers no hide/delete action — `findMyFormerMembership` gates `.games-hide-group-btn`, and
+  `hideGroupForMember` is refused for exactly the same cases. The real fix is `userId`-based
+  membership resolution on the backend.
 - **Leaderboard eligibility rule** — since nobody is a linked account yet, "eligible for the
   leaderboard" is defined as "matches a `GroupMember` record of this group, in any status" rather
   than the spec's `userId != null`. Ad-hoc game guests who never joined the group are excluded. This

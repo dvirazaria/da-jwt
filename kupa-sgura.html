@@ -1953,12 +1953,18 @@
   // nothing else, so the group, its history and every other member stay exactly as they were.
   // Refused (false, no mutation) while I am still an active member, or when I was never one.
   function hideGroupForMember(members, groupId, meName, at) {
-    const list = Array.isArray(members) ? members : [];
-    const membership = list.find(m => m && m.groupId === groupId && m.displayName === meName);
+    const membership = findMyFormerMembership(members, groupId, meName);
     if (!membership) return false;
-    if (membership.status !== "left" && membership.status !== "removed") return false;
     membership.hiddenAt = at;
     return true;
+  }
+  // My own left/removed membership in a group (null when I am active there, or was never a
+  // member at all — e.g. this device's name matches no membership row). The group page renders
+  // the hide-from-device action only when this is non-null, so its confirm tap can always
+  // succeed; hideGroupForMember is refused in exactly the cases this returns null.
+  function findMyFormerMembership(members, groupId, meName) {
+    return (Array.isArray(members) ? members : [])
+      .find(m => m && m.groupId === groupId && m.displayName === meName && (m.status === "left" || m.status === "removed")) || null;
   }
   // The dashboard-side reader for the flag above: true only for a group I am no longer a member
   // of AND have hidden. Opening such a group directly still works (getGroupSummary is unfiltered).
@@ -2958,7 +2964,7 @@
       btn.disabled = true;
       btn.setAttribute("aria-disabled", "true");
       if (!summary.isMember) {
-        reason = "עזבת את הקבוצה";
+        reason = leftGroupReason();
       } else if (gate && gate.ok === false) {
         const reasons = {
           "group-has-open-game": "יש כבר משחק פתוח בקבוצה",
@@ -2970,16 +2976,30 @@
     }
     wrap.appendChild(btn);
     if (reason) wrap.appendChild(el("p", "games-primary-reason", reason));
-    if (!summary.isMember) wrap.appendChild(renderHideGroupAction());
+    const hideAction = !summary.isMember && renderHideGroupAction();
+    if (hideAction) wrap.appendChild(hideAction);
     if (canStart) wrap.appendChild(renderStartGamePanel());
     return wrap;
+  }
+
+  // The reason line under the blocked primary button when I have no active membership here:
+  // "עזבת"/"הוסרת" when a left/removed row of mine exists, and — when no row of mine exists at
+  // all (this device's name matches none of the membership names) — an honest "לא חבר" line
+  // that names the identity I am using, instead of a false "עזבת" over a dead-end action.
+  function leftGroupReason() {
+    const former = findMyFormerMembership(state.groupMembers, currentGroupId, me);
+    if (former) return former.status === "removed" ? "הוסרת מהקבוצה" : "עזבת את הקבוצה";
+    return "אתה לא חבר בקבוצה הזו — מחובר בשם " + me;
   }
 
   // D8, step two of leaving: once I am out of a group, the page offers to drop it from this
   // device. Same two-step armed pattern as every other destructive action here (no confirm()),
   // auto-disarming after 4s. hideGroupForMember only stamps my own membership — the group and
-  // everybody else's history are untouched, which is what the helper line promises.
+  // everybody else's history are untouched, which is what the helper line promises. Returns
+  // null (nothing destructive to offer) when I have no left/removed membership to stamp — the
+  // confirm tap must never be a silent no-op.
   function renderHideGroupAction() {
+    if (!findMyFormerMembership(state.groupMembers, currentGroupId, me)) return null;
     const wrap = el("div", "games-hide-group");
     const btn = el("button", "set-flat danger games-hide-group-btn" + (hideGroupArmed ? " armed" : ""),
       hideGroupArmed ? "בטוח? הקבוצה תוסר מהמכשיר" : "מחק קבוצה");
@@ -2993,7 +3013,9 @@
       }
       clearTimeout(hideGroupArmedTimeout);
       hideGroupArmed = false;
-      if (!hideGroupForMember(state.groupMembers, currentGroupId, me, new Date().toISOString())) return;
+      // Refused (membership changed under us): re-render to the page's honest state — the
+      // armed label must not linger over a no-op.
+      if (!hideGroupForMember(state.groupMembers, currentGroupId, me, new Date().toISOString())) { renderGroupPage(); return; }
       save();
       setAppView("games");
     });
@@ -3638,7 +3660,8 @@
     if (isArchived) {
       const note = el("div", "games-primary-action");
       note.appendChild(el("p", "games-primary-reason", "הקבוצה בארכיון"));
-      if (!summary.isMember) note.appendChild(renderHideGroupAction());
+      const hideAction = !summary.isMember && renderHideGroupAction();
+      if (hideAction) note.appendChild(hideAction);
       inner.appendChild(note);
     } else {
       inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
@@ -5078,7 +5101,9 @@
       return;
     }
     resetGroupDeleteArm();
-    if (!deleteGroup(state.groups, currentGroupId, new Date().toISOString())) return;
+    // Refused only when the group is gone/already deleted: close the overlay and let the page
+    // bounce to the dashboard instead of leaving the tap a silent no-op.
+    if (!deleteGroup(state.groups, currentGroupId, new Date().toISOString())) { closeGroupSettings(); renderGroupPage(); return; }
     save();
     closeGroupSettings();
     setAppView("games");
