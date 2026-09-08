@@ -735,7 +735,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">גרסה 42</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 43</p>
   </div>
 </div>
 
@@ -883,6 +883,9 @@
   let animName = null;        // the player to animate when animNext === "one"
   let groupPageEnterNext = false; // group page sections should stagger in on the next renderGroupPage() —
                                    // set only by openGroup()/setAppView(), never by an in-place re-render
+  let gamesPageEnterNext = false; // dashboard cards should stagger in on the next renderGamesDashboard() —
+                                   // set only by setAppView(), never by an in-place re-render (Task 15, same
+                                   // pattern as groupPageEnterNext above)
   let cardDetailsJustOpenedId = null; // gameId/groupId/historyGameId whose .games-card-details should
                                        // animate its grid-collapse open on the next render (Task 18 motion)
   let me = loadMe();
@@ -1976,6 +1979,7 @@
     resetStartGamePanel();
     animNext = "all";
     groupPageEnterNext = nextView === "group";
+    gamesPageEnterNext = nextView === "games";
     render();
     flashViewEnter(nextView);
   }
@@ -2219,13 +2223,6 @@
     return date.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
   }
 
-  function formatGameDate(timestamp) {
-    if (!timestamp) return "";
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
-  }
-
   // Short form for group last-game/history rows: day + short month name, no year.
   function formatShortGameDate(timestamp) {
     if (!timestamp) return "";
@@ -2266,16 +2263,16 @@
     section.appendChild(el("h3", "games-section-title", "פעולות מהירות"));
     const actions = el("div", "games-quick-actions");
 
-    const start = el("button", "games-quick-action primary", "משחק ללא קבוצה");
-    start.type = "button";
-    start.addEventListener("click", startUngroupedGame);
-
-    const createGroupBtn = el("button", "games-quick-action", "+ צור קבוצה");
+    const createGroupBtn = el("button", "games-quick-action primary", "+ צור קבוצה");
     createGroupBtn.type = "button";
     createGroupBtn.setAttribute("aria-expanded", String(createGroupOpen));
     createGroupBtn.addEventListener("click", toggleCreateGroupPanel);
 
-    actions.append(start, createGroupBtn);
+    const start = el("button", "games-quick-action", "משחק ללא קבוצה");
+    start.type = "button";
+    start.addEventListener("click", startUngroupedGame);
+
+    actions.append(createGroupBtn, start);
     section.appendChild(actions);
     renderCreateGroupPanel(section);
     parent.appendChild(section);
@@ -2361,7 +2358,8 @@
   }
 
   function renderActiveGameCard(summary, actions) {
-    const card = el("article", "games-active-card");
+    const card = el("article", "games-active-card" + (actions.anim ? " anim" : ""));
+    if (actions.anim) card.style.animationDelay = (actions.animDelay || 0) + "ms";
     const status = el("span", "games-card-status" + (summary.phase === "settlement" ? " settlement" : ""), summary.phase === "settlement" ? "בסגירה" : "משחק פעיל");
     card.appendChild(status);
     if (summary.title) card.appendChild(el("span", "games-card-title", summary.title));
@@ -2403,15 +2401,17 @@
     return card;
   }
 
-  function renderActiveGamesSection(parent, summaries) {
+  function renderActiveGamesSection(parent, summaries, enterStagger) {
     const section = el("section", "games-section");
     section.appendChild(el("h3", "games-section-title", "משחקים פעילים"));
     if (!summaries.length) {
       section.appendChild(el("p", "games-empty", "אין משחקים פעילים כרגע"));
     } else {
-      summaries.forEach(summary => {
+      summaries.forEach((summary, idx) => {
         section.appendChild(renderActiveGameCard(summary, {
           expanded: expandedGameCards.has(summary.gameId),
+          anim: enterStagger,
+          animDelay: idx * 50,
           onEnter: () => enterActiveGame(summary.gameId),
           onToggle: () => {
             expandedGameCards.has(summary.gameId) ? expandedGameCards.delete(summary.gameId) : expandedGameCards.add(summary.gameId);
@@ -2424,7 +2424,8 @@
   }
 
   function renderGroupCard(group, actions) {
-    const card = el("article", "games-group-card");
+    const card = el("article", "games-group-card" + (actions.anim ? " anim" : ""));
+    if (actions.anim) card.style.animationDelay = (actions.animDelay || 0) + "ms";
     const head = el("div", "games-group-head");
     head.setAttribute("role", "button");
     head.setAttribute("tabindex", "0");
@@ -2445,13 +2446,20 @@
     const titleSpan = el("span", "games-card-title", String(group.name || ""));
     if (actions.archived) titleSpan.appendChild(el("span", "games-member-tag", "בארכיון"));
     copy.appendChild(titleSpan);
-    copy.appendChild(el("span", "games-card-meta", formatMemberCount(Number(group.memberCount || 0)) + (group.hasActiveGame ? " · משחק פעיל" : "")));
+    const meta = el("span", "games-card-meta", formatMemberCount(Number(group.memberCount || 0)));
+    if (group.hasActiveGame) {
+      const isSettlement = group.activeGamePhase === "settlement";
+      meta.appendChild(document.createTextNode(" · "));
+      meta.appendChild(el("span", "games-card-status" + (isSettlement ? " settlement" : ""), isSettlement ? "בסגירה" : "משחק פעיל"));
+    }
+    copy.appendChild(meta);
     head.appendChild(copy);
     card.appendChild(head);
 
-    const lastGameLabel = group.lastGameAt ? formatGameDate(group.lastGameAt) : "";
+    const memberNames = Array.isArray(group.members) ? group.members : [];
+    const lastGameLabel = group.lastGameAt ? formatShortGameDate(group.lastGameAt) : "";
     const leaderNames = Array.isArray(group.leaderNames) ? group.leaderNames : [];
-    const hasDetails = (Array.isArray(group.members) && group.members.length) || lastGameLabel || Number.isFinite(group.gameCount) || leaderNames.length;
+    const hasDetails = memberNames.length || lastGameLabel || Number.isFinite(group.gameCount) || leaderNames.length;
     if (hasDetails) {
       const toggle = el("button", "games-card-toggle", "הרחב");
       toggle.type = "button";
@@ -2462,14 +2470,14 @@
       const details = el("div", "games-card-details");
       const detailsIn = el("div", "games-card-details-in");
       const content = el("div", "games-card-details-content");
-      if (Array.isArray(group.members) && group.members.length) content.appendChild(el("p", "games-detail-totals", "חברים · " + group.members.join(", ")));
-      if (lastGameLabel) content.appendChild(el("p", "games-detail-totals", "משחק אחרון · " + lastGameLabel));
+      if (memberNames.length) content.appendChild(el("p", "games-detail-totals", "חברים · " + formatPlayerNames(memberNames)));
       if (Number.isFinite(group.gameCount)) content.appendChild(el("p", "games-detail-totals", "משחקים · " + group.gameCount));
-      if (leaderNames.length) content.appendChild(el("p", "games-detail-totals", "מוביל · " + leaderNames.join(", ")));
+      if (lastGameLabel) content.appendChild(el("p", "games-detail-totals", "משחק אחרון · " + lastGameLabel));
+      if (leaderNames.length) content.appendChild(el("p", "games-detail-totals", "מוביל · " + leaderNames[0]));
       detailsIn.appendChild(content);
       details.appendChild(detailsIn);
       // First expand of this card plays the grid-collapse open transition (see cardDetailsJustOpenedId).
-      const groupIdForAnim = String(group.groupId || group.id || "");
+      const groupIdForAnim = String(group.groupId || "");
       if (actions.expanded && cardDetailsJustOpenedId === groupIdForAnim) {
         cardDetailsJustOpenedId = null;
         requestAnimationFrame(() => requestAnimationFrame(() => details.classList.add("open")));
@@ -2481,16 +2489,18 @@
     return card;
   }
 
-  function renderGroupsSection(parent, groups) {
+  function renderGroupsSection(parent, groups, enterStagger) {
     const section = el("section", "games-section");
     section.appendChild(el("h3", "games-section-title", "הקבוצות שלי"));
     if (!groups.length) {
       section.appendChild(el("p", "games-empty", "אין לך קבוצות עדיין"));
     } else {
-      groups.forEach(group => {
-        const groupId = String(group.groupId || group.id || "");
+      groups.forEach((group, idx) => {
+        const groupId = String(group.groupId || "");
         section.appendChild(renderGroupCard(group, {
           expanded: expandedGroupCards.has(groupId),
+          anim: enterStagger,
+          animDelay: idx * 50,
           onToggle: () => {
             if (expandedGroupCards.has(groupId)) expandedGroupCards.delete(groupId);
             else { expandedGroupCards.add(groupId); cardDetailsJustOpenedId = groupId; }
@@ -2527,7 +2537,7 @@
     const detailsIn = el("div", "games-card-details-in");
     const content = el("div", "games-card-details-content");
     list.forEach(group => {
-      const groupId = String(group.groupId || group.id || "");
+      const groupId = String(group.groupId || "");
       content.appendChild(renderGroupCard(group, {
         expanded: expandedGroupCards.has(groupId),
         archived: true,
@@ -2566,14 +2576,19 @@
   }
 
   function renderGamesDashboard() {
+    // Only a fresh navigation into the dashboard (setAppView) stagger-animates the cards below;
+    // an in-place re-render after e.g. toggling a card's expand state must not replay it (Task 15,
+    // same pattern as renderGroupPage's enterStagger).
+    const enterStagger = gamesPageEnterNext;
+    gamesPageEnterNext = false;
     const box = document.getElementById("gamesHome");
     box.innerHTML = "";
     const inner = el("div", "games-home-in");
     inner.appendChild(el("h2", "games-home-title", "משחקים"));
     inner.appendChild(el("p", "games-home-lead", "המשחקים הפעילים והקבוצות שלך במקום אחד."));
     renderQuickActions(inner);
-    renderActiveGamesSection(inner, getActiveGameSummaries(state, state.groups));
-    renderGroupsSection(inner, getGroupSummaries(collectionsOf(state), me));
+    renderActiveGamesSection(inner, getActiveGameSummaries(state, state.groups), enterStagger);
+    renderGroupsSection(inner, getGroupSummaries(collectionsOf(state), me), enterStagger);
     renderArchivedGroupsSection(inner, getArchivedGroupSummaries(collectionsOf(state), me));
     box.appendChild(inner);
   }
