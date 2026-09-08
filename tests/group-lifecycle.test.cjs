@@ -225,7 +225,7 @@ test('leave UI is two-step armed and refused inline for the last admin', () => {
   assert.match(source, /groupLeaveArmedTimeout/);
   assert.match(source, /isLastActiveAdmin\(state\.groupMembers, membership\.id\)/);
   assert.match(source, /leaveGroup\(state\.groupMembers, currentGroupId, me, new Date\(\)\.toISOString\(\)\)/);
-  assert.match(html, /"מנה מנהל אחר קודם"/);
+  assert.match(html, /"העבר ניהול לחבר אחר קודם"/);
 });
 
 test('deleting a group with an open game is refused with an inline reason, not silently', () => {

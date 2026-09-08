@@ -1002,7 +1002,7 @@
       groupMembers: Array.isArray(s.groupMembers) ? s.groupMembers.map(normalizeGroupMember).filter(Boolean) : [],
       invites: Array.isArray(s.invites) ? s.invites.map(normalizeInvite).filter(Boolean) : [],
       friendships: Array.isArray(s.friendships) ? s.friendships.map(normalizeFriendship).filter(Boolean) : [],
-      leaderRef: s.leaderRef || null,
+      leaderRef: s.leaderRef ? normalizeParticipantRef(s.leaderRef) : null,
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
     };
   }
@@ -1096,8 +1096,8 @@
       friendships: Array.isArray(data.friendships) ? data.friendships : [],
       updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
     })));
-    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses, a: incoming.startedAt, gr: incoming.groups, gm: incoming.groupMembers, iv: incoming.invites, fr: incoming.friendships }) ===
-        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses, a: state.startedAt, gr: state.groups, gm: state.groupMembers, iv: state.invites, fr: state.friendships })) return;
+    if (JSON.stringify({ g: incoming.gameId, q: incoming.phase, e: incoming.example, p: incoming.players, h: incoming.history, d: incoming.debts, s: incoming.settlementStatuses, a: incoming.startedAt, gr: incoming.groups, gm: incoming.groupMembers, iv: incoming.invites, fr: incoming.friendships, gi: incoming.groupId, lr: incoming.leaderRef }) ===
+        JSON.stringify({ g: state.gameId, q: state.phase, e: state.example, p: state.players, h: state.history, d: state.debts, s: state.settlementStatuses, a: state.startedAt, gr: state.groups, gm: state.groupMembers, iv: state.invites, fr: state.friendships, gi: state.groupId, lr: state.leaderRef })) return;
     // Don't yank the UI out from under an active edit — apply on blur.
     const ae = document.activeElement;
     if (ae && (ae.tagName === "INPUT")) { pendingRemote = incoming; return; }
@@ -1796,6 +1796,21 @@
       guestId: guestId || null, memberId: memberId || null, userId: null,
     };
   }
+  // De-duplicates a startGroupGame participants list by trimmed name, keeping the first
+  // occurrence. Members are always listed before guests in the caller's participants array
+  // (renderStartGamePanel), so a member entry wins over a guest entry with the same name —
+  // the second guard against the identity bug fixed in audit gap #1 (the first guard is the
+  // duplicate-name check in renderStartGameAddGuest).
+  function dedupeParticipants(participants) {
+    const list = Array.isArray(participants) ? participants : [];
+    const seen = new Set();
+    return list.filter(p => {
+      const name = String((p && p.name) || "").trim();
+      if (seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
+  }
 
   // ---------- invites (pure) ----------
   // One invite token model, three presentations (large code / link / QR placeholder). Joining
@@ -1993,8 +2008,9 @@
   // and needing at least one participant. Each participant becomes a Player via the shared
   // createPlayer helper plus an immediate first buy-in (same product rule as addPlayer).
   function startGroupGame(groupId, participants) {
-    const list = Array.isArray(participants) ? participants : [];
+    const list = dedupeParticipants(participants);
     if (!canStartGroupGame(collectionsOf(state), groupId).ok || list.length < 1) return false;
+    if (!findMyMembership(state.groupMembers, groupId, me)) return false;
     state = newCurrentGame(state, {
       phase: "active",
       groupId,
@@ -2609,16 +2625,17 @@
   }
 
   // The group's own game has an active table → jump straight into it / its settlement, with a
-  // status line ("משחק פעיל · N שחקנים · התחיל ב־HH:mm") and player names above the CTA (Task 9).
-  // Otherwise "התחל משחק" renders disabled: Task 8 wires the actual start-game handler here.
-  // canStartGroupGame()'s reason (when not ok) gets a quiet line under the button; when it IS
-  // ok the button is still disabled for this task, with no reason line to explain that away.
+  // status line ("משחק פעיל · N שחקנים · התחיל ב־HH:mm") and player names above the CTA. Otherwise
+  // "התחל משחק" opens the inline start-game panel (toggleStartGamePanel/renderStartGamePanel)
+  // when canStartGroupGame().ok and the current user is an active member; it renders disabled
+  // with a quiet reason line under the button otherwise — a left-group reason ("עזבת את הקבוצה")
+  // takes priority over canStartGroupGame()'s own reason (group archived / a game already open).
   function renderGroupPrimaryAction(summary, gate) {
     const wrap = el("div", "games-primary-action");
     const btn = el("button", "btn-primary");
     btn.type = "button";
     let reason = null;
-    const canStart = !summary.hasActiveGame && gate && gate.ok;
+    const canStart = !summary.hasActiveGame && summary.isMember && gate && gate.ok;
     if (summary.hasActiveGame) {
       const activeSummary = getActiveGameSummaries(state, state.groups)[0];
       if (activeSummary) {
@@ -2638,7 +2655,9 @@
       btn.textContent = "התחל משחק";
       btn.disabled = true;
       btn.setAttribute("aria-disabled", "true");
-      if (gate && gate.ok === false) {
+      if (!summary.isMember) {
+        reason = "עזבת את הקבוצה";
+      } else if (gate && gate.ok === false) {
         const reasons = {
           "group-has-open-game": "יש כבר משחק פתוח בקבוצה",
           "another-game-open": "יש משחק פעיל אחר — סגור אותו קודם",
@@ -2756,8 +2775,10 @@
   }
 
   // Inline "+ הוסף אורח" name input, same resolveGuestId reuse as addMemberByName. A duplicate
-  // of an already-selected member or already-added guest name shakes the input instead of
-  // silently failing (guests never become group members, so there is no addGroupMember guard).
+  // of ANY active group member (selected or not — a name that matches an unselected member can
+  // still collide with them once selected) or an already-added guest name shakes the input
+  // instead of silently failing (guests never become group members, so there is no
+  // addGroupMember guard; startGroupGame's dedupeParticipants is the second guard, audit gap #1).
   function renderStartGameAddGuest() {
     const wrap = el("div", "group-start-add");
     wrap.appendChild(el("p", "group-start-add-label", "+ הוסף אורח"));
@@ -2773,9 +2794,9 @@
       const name = nameInput.value.trim();
       if (!name) { shakeEl(nameInput); return; }
       const members = activeMembers(state.groupMembers, currentGroupId);
-      const selectedNames = members.filter(m => startGameSelection.has(m.id)).map(m => m.displayName);
+      const memberNames = members.map(m => m.displayName);
       const guestNames = startGameGuests.map(g => g.name);
-      if (selectedNames.includes(name) || guestNames.includes(name)) { shakeEl(nameInput); return; }
+      if (memberNames.includes(name) || guestNames.includes(name)) { shakeEl(nameInput); return; }
       startGameGuests.push({ name, guestId: resolveGuestId(collectionsOf(state), name) });
       renderGroupPage();
     };
@@ -3123,6 +3144,8 @@
     const copyBtn = el("button", "games-invite-action", "העתק קישור");
     copyBtn.type = "button";
     const copiedNote = el("span", "games-invite-copied", "הועתק ✓");
+    copiedNote.setAttribute("role", "status");
+    copiedNote.setAttribute("aria-live", "polite");
     copiedNote.hidden = true;
     copyBtn.addEventListener("click", () => {
       const link = inviteLink(invite.token, location.origin, location.pathname);
@@ -3311,6 +3334,8 @@
           const exitToggle = el("button", "exit-toggle", "יציאה");
           exitToggle.type = "button";
           exitToggle.setAttribute("aria-label", "יציאת " + p.name + " מהמשחק");
+          exitToggle.setAttribute("aria-expanded", String(exitOpen === p.name));
+          exitToggle.setAttribute("aria-controls", "exit-panel-" + idx);
           exitToggle.addEventListener("click", () => openExitPanel(p.name));
           heading.appendChild(exitToggle);
         }
@@ -3494,6 +3519,7 @@
         // shown for an active player exiting, or an exited player editing their cashout.
         const exitPanelOpen = exitOpen === p.name;
         const exitPanel = el("div", "pmenu exit-panel");
+        exitPanel.id = "exit-panel-" + idx;
         if (exitPanelOpen && exitJustOpened === p.name) {
           exitJustOpened = null;
           requestAnimationFrame(() => requestAnimationFrame(() => exitPanel.classList.add("open")));
@@ -3599,7 +3625,7 @@
         '<span class="sep">·</span>' + (exitedCount === 1 ? "יצא אחד" : exitedCount + " יצאו");
       stat.innerHTML =
         'בקופה <b>' + fmt(t.buy) + '</b><span class="sep">·</span>' +
-        state.players.length + " שחקנים" + exitedLabel +
+        formatPlayerCount(state.players.length) + exitedLabel +
         (state.example ? '<span class="sep">·</span><span class="example-tag">נתוני דוגמה — כל עריכה מאפסת אותם</span>' : "");
       // The group name comes from user data — built with DOM nodes (el/textContent), never
       // interpolated into the innerHTML string above, so it can't inject markup.
@@ -4143,7 +4169,7 @@
     histSec.hidden = profileTab !== "balance";
     histSec.appendChild(el("h2", "ptitle", "ערבים אחרונים"));
     if (games.length === 0) {
-      histSec.appendChild(el("p", "empty-note", "עוד אין ערבים ברקורד. אחרי שסוגרים שולחן בטאב “חישוב”, הערב יופיע כאן."));
+      histSec.appendChild(el("p", "empty-note", "עוד אין ערבים ברקורד. אחרי סגירת שולחן הערב יופיע כאן."));
     } else {
       games.slice(0, 12).forEach((g, i) => {
         const row = el("div", "hgame");
@@ -4299,7 +4325,7 @@
     leaveBtn.disabled = isLastAdmin;
     const leaveReason = document.getElementById("groupSetLeaveReason");
     leaveReason.hidden = !isLastAdmin;
-    leaveReason.textContent = isLastAdmin ? "מנה מנהל אחר קודם" : "";
+    leaveReason.textContent = isLastAdmin ? "העבר ניהול לחבר אחר קודם" : "";
   }
   function openGroupSettings() {
     refreshGroupSettings();
