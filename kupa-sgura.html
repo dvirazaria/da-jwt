@@ -10,6 +10,7 @@
     --accent: #35E0DC;
     --accent-press: #8FF0EC;
     --bad: #FF6D6D;
+    --bad-press: #FF8A8A;
     --close-hold-fill: #EAF4F4;
     color-scheme: dark;
   }
@@ -22,6 +23,7 @@
     --accent: #089E98;
     --accent-press: #0CC2BB;
     --bad: #D4403E;
+    --bad-press: #B92F2C;
     --close-hold-fill: #05070A;
     color-scheme: light;
   }
@@ -241,11 +243,11 @@
   }
   .entry-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
   .exit-toggle {
-    display: flex; align-items: center; padding: 10px 0;
-    color: var(--dim); font-size: 12px; font-weight: 400;
+    display: flex; align-items: center; min-height: 44px; padding: 10px 0;
+    color: var(--bad); font-size: 12px; font-weight: 400;
     margin-inline-start: 10px; transition: color .2s;
   }
-  .exit-toggle:hover { color: var(--bad); }
+  .exit-toggle:hover { color: var(--bad-press); }
   .exit-tag { color: var(--dim); font-size: 12px; animation: fadeIn .25s ease; }
   /* Row 17: "עריכה" is an action, not another piece of meta — a 12px gap and a hairline
      separate it from the "יצא · ₪X" tag instead of one more middot in the same run. */
@@ -274,10 +276,10 @@
   .exit-field input.exit-cashout-input { border-bottom: none; }
   .exit-confirm {
     flex: 0 0 auto; min-height: 44px;
-    border-color: var(--accent); color: var(--accent); font-weight: 700;
+    border-color: var(--bad); color: var(--bad); font-weight: 700;
     white-space: nowrap;
   }
-  .exit-confirm:hover { background: var(--accent); color: var(--bg); }
+  .exit-confirm:hover, .exit-confirm:active { background: var(--bad-press); border-color: var(--bad-press); color: var(--bg); }
   .exit-cancel {
     flex: 0 0 auto; min-height: 44px; padding: 10px 6px;
     color: var(--dim); font-size: 13px; font-weight: 400; transition: color .2s;
@@ -6283,7 +6285,7 @@
   }
 
   // Shared tail of "add a player to the open table": builds the Player, gives it its first
-  // buy-in, opens its buy-in menu, and saves/re-renders. Used by both addPlayer() (typed name)
+  // buy-in, clears any buy-in-menu draft, and saves/re-renders. Used by both addPlayer() (typed name)
   // and the group member chips in renderAddRowChips() (tapped member, memberId/guestId known).
   function addPlayerToTable(name, opts) {
     const o = opts || {};
@@ -6292,7 +6294,7 @@
     state.players.push(player);
     state.phase = "active";
     appView = "game";
-    openMenu = name;
+    openMenu = null;
     customOpen = null;
     pendingAmount = null;
     animNext = "one"; animName = name;

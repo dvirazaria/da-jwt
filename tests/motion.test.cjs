@@ -66,6 +66,20 @@ test('.games-create-panel uses the shared grid-collapse pattern', () => {
   assert.match(rule, /grid-template-rows/, '.games-create-panel should collapse via grid-template-rows');
 });
 
+test('exit controls use the destructive red treatment and keep 44px touch targets', () => {
+  const toggleIdx = styleBlock.indexOf('.exit-toggle {');
+  assert.ok(toggleIdx >= 0, '.exit-toggle base rule not found');
+  const toggleRule = styleBlock.slice(toggleIdx, styleBlock.indexOf('}', toggleIdx));
+  assert.match(toggleRule, /min-height:\s*44px/, 'exit toggle keeps a 44px touch target');
+  assert.match(toggleRule, /color:\s*var\(--bad\)/, 'exit toggle is visibly destructive before hover');
+
+  const confirmIdx = styleBlock.indexOf('.exit-confirm {');
+  assert.ok(confirmIdx >= 0, '.exit-confirm base rule not found');
+  const confirmRule = styleBlock.slice(confirmIdx, styleBlock.indexOf('}', confirmIdx));
+  assert.match(confirmRule, /min-height:\s*44px/, 'exit confirmation keeps a 44px touch target');
+  assert.match(confirmRule, /border-color:\s*var\(--bad\).*color:\s*var\(--bad\)/, 'exit confirmation matches the destructive action');
+});
+
 test('the start-game participant panel reuses .games-create-panel for its collapse animation', () => {
   const source = sourceBetween('  function renderStartGamePanel', '  function renderStartGameMemberRow');
   assert.match(source, /"games-create-panel"/, 'renderStartGamePanel should build a .games-create-panel element');

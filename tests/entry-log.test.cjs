@@ -189,3 +189,30 @@ test('a player with no entries remains empty on reload', () => {
   const result=normalize({gameId:'g',players:[{id:'p',name:'א',buyins:[],entryLog:[]}],history:[]});
   assert.equal(result.players[0].entryLog.length,0);
 });
+test('adding a player records the first entry but leaves every rebuy menu closed', () => {
+  const source = html.slice(html.indexOf('  function addPlayerToTable('), html.indexOf('  function addPlayer() {'));
+  assert.ok(source.includes('function addPlayerToTable'), 'shared player-add tail exists');
+  const context = vm.createContext({
+    MIN_BUYIN: 50,
+    state: { players: [], phase: 'settlement' },
+    appView: 'settle', openMenu: 'שחקן אחר', customOpen: 'שחקן אחר', pendingAmount: 100,
+    animNext: null, animName: null, saves: 0, renders: 0,
+  });
+  vm.runInContext(`
+    function createPlayer({name, guestId, memberId}) { return {name, guestId, memberId, buyins: [], entryLog: []}; }
+    function addEntry(player, amount) { player.buyins.push(amount); player.entryLog.push({amount}); }
+    function save() { saves += 1; }
+    function render() { renders += 1; }
+    ${source}
+    addPlayerToTable('רותם', {guestId: 'guest-rotem', memberId: 'member-rotem'});
+  `, context);
+  assert.equal(vm.runInContext('openMenu', context), null);
+  assert.equal(vm.runInContext('customOpen', context), null);
+  assert.equal(vm.runInContext('pendingAmount', context), null);
+  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(state.players[0].buyins)', context)), [50]);
+  assert.equal(vm.runInContext('state.phase', context), 'active');
+  assert.equal(vm.runInContext('appView', context), 'game');
+  assert.equal(vm.runInContext('animNext', context), 'one');
+  assert.equal(vm.runInContext('saves', context), 1);
+  assert.equal(vm.runInContext('renders', context), 1);
+});

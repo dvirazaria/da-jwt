@@ -398,3 +398,10 @@ test('Scenario C/D: initialAppView routes open games to their phase and otherwis
   assert.equal(vm.runInContext(`initialAppView({ phase: 'active', example: false, players: [] })`, context), 'profile');
   assert.equal(vm.runInContext(`initialAppView({ phase: 'closed', example: false, players: [] })`, context), 'profile');
 });
+
+test('adding a player never opens a rebuy picker as an implicit side effect', () => {
+  const source = sourceBetween('  function addPlayerToTable(', '  function addPlayer() {');
+  assert.match(source, /openMenu\s*=\s*null;/, 'the shared typed-name and member-chip tail clears menus');
+  assert.doesNotMatch(source, /openMenu\s*=\s*name;/, 'a new player must not open a rebuy picker');
+  assert.match(source, /customOpen\s*=\s*null;\s*pendingAmount\s*=\s*null;/, 'amount-selection drafts are cleared with the menu');
+});
