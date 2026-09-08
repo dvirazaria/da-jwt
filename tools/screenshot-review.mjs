@@ -59,7 +59,7 @@ const openGroup = `${W} document.getElementById('modeGames').click(); await wait
 for (const theme of ["dark", "light"]) {
   const t = theme === "dark" ? "d" : "l";
   await prep(theme, { noMe: true }); await shot(`01-login-${t}`, false);
-  await prep(theme); await shot(`02-dashboard-${t}`);
+  await prep(theme); await evaluate(`${W} document.getElementById('modeGames').click(); await wait(200); 'ok'`); await shot(`02-dashboard-${t}`);
   await evaluate(`${W} [...home().querySelectorAll('.games-quick-action')].find(b=>b.textContent.includes('צור קבוצה')).click(); await wait(200); const i=home().querySelector('.games-create-panel input[type=text]'); i.value='ערב פוקר'; i.dispatchEvent(new Event('input',{bubbles:true})); await wait(100); 'ok'`);
   await shot(`03-dashboard-create-panel-${t}`);
   await evaluate(`${W} has(home(),'ארכיון')?.click(); await wait(200); [...home().querySelectorAll('.games-card-toggle')].forEach(b=>b.click()); await wait(200); 'ok'`);
@@ -95,8 +95,8 @@ for (const theme of ["dark", "light"]) {
   await shot(`17-profile-debts-${t}`);
   await evaluate(`${W} [...document.querySelectorAll('.debt-tab')].find(x=>x.textContent.includes('חייבים לי')).click(); await wait(200); 'ok'`);
   await shot(`18-profile-debts-owed-to-me-${t}`);
-  await evaluate(`${W} [...document.querySelectorAll('.profile-tab')].find(x=>x.textContent.includes('חברים')).click(); await wait(200); 'ok'`);
-  await shot(`19-profile-friends-${t}`);
+  await evaluate(`${W} document.getElementById('modeFriends').click(); await wait(200); 'ok'`);
+  await shot(`19-friends-${t}`);
   await evaluate(`${W} document.getElementById('settingsBtn').click(); await wait(200); 'ok'`);
   await shot(`20-settings-${t}`, false);
   await prep(theme, { query: "?join=VGL4EFH7" }); await shot(`21-join-notice-${t}`, false);

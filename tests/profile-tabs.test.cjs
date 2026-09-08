@@ -17,7 +17,9 @@ function helperContext() {
 
 test('profile tabs default to balance and place balance before debts', () => {
   assert.match(html, /let profileTab = "balance";/);
-  assert.match(html, /\[\s*\["balance", "מאזן"\],\s*\["debts", "חובות"\]/s);
+  assert.match(html, /\[\s*\["balance", "מאזן"\],\s*\["debts", "חובות"\],?\s*\]/s);
+  assert.doesNotMatch(html.slice(html.indexOf('  function renderProfile()'), html.indexOf('  // Shared tail of "add a player')), /\["friends", "חברים"\]/);
+  assert.match(html, /if \(profileTab !== "balance" && profileTab !== "debts"\) profileTab = "balance";/);
 });
 
 test('open debts expose unseen notifications only for the signed-in user', () => {

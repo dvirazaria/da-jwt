@@ -56,10 +56,11 @@ project's "keep one source of truth" rule; nothing here is a second store.
 - `phase` is persisted as `active`, `settlement`, or `closed`. Legacy real snapshots
   that contain players migrate to `active`; legacy demo/empty snapshots migrate to
   `closed` and open the Games dashboard.
-- `appView` is UI-only routing with `games`, `game`, `settle`, `profile`, and `group` (a group's own
-  page, `currentGroupId` selects which one). Games is the primary dashboard; `game`, `settle`, and
-  `group` are contextual screens. Refresh derives the initial view from `state.phase` only —
-  opening a group page is never the boot destination.
+- `appView` is UI-only routing with `friends`, `games`, `game`, `settle`, `profile`, and `group` (a
+  group's own page, `currentGroupId` selects which one). Friends, Games, and Profile are primary
+  bottom-nav screens; `game`, `settle`, and `group` are contextual screens. Refresh resumes a real
+  open game in its active/settlement phase and otherwise opens Profile — a group page is never the
+  boot destination.
 - Each entryLog item is {id, timestamp, amount, playerId, gameId}; timestamp is ISO UTC,
   displayed as local HH:mm. Legacy entries use null time (shown as —), never invented times.
   Numeric buyins stay unchanged for calculation compatibility. Add/undo must update both arrays.
@@ -145,9 +146,10 @@ project's "keep one source of truth" rule; nothing here is a second store.
   "שתף" (when `navigator.share` exists), and a QR tile that is a deliberate placeholder ("QR יופיע עם
   חיבור לשרת" — rendering is deferred, not broken). Admins can revoke/regenerate. Opening `?join=CODE`
   shows a full-screen notice and does **not** join anything yet; the query string is stripped.
-- **Friends tab** — a third profile tab ("חברים") shows three adapter-driven lists (friends, incoming,
-  outgoing), always empty today because nothing in the UI calls `createFriendRequest()` — the pure
-  functions exist and are tested, but there is deliberately no path to fabricate a local friendship.
+- **Friends screen** (`appView === "friends"`) — a primary bottom-nav destination with three
+  adapter-driven lists (friends, incoming, outgoing), always empty today because nothing in the UI
+  calls `createFriendRequest()` — the pure functions exist and are tested, but there is deliberately
+  no path to fabricate a local friendship. Profile now contains only Balance and Debts.
 - **Group games** — a group's "התחל משחק" opens a participant picker (checkbox rows for active
   members + "+ הוסף אורח"); `startGroupGame()` builds the current-game slot via `newCurrentGame()`
   and reuses the existing table/settlement/close flow unchanged. Closing a group game writes

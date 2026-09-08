@@ -388,11 +388,13 @@ test('Scenario B: an ungrouped game (groupId null) settles the same way and neve
 
 // ---------- Scenario C/D: initial view routing follows the persisted phase ----------
 
-test('Scenario C/D: initialAppView routes active/settlement/closed to game/settle/games', () => {
+test('Scenario C/D: initialAppView routes open games to their phase and otherwise opens profile', () => {
   const source = sourceBetween('  function normalizePhase', '  function normalizeDebt');
+  const openGameSource = sourceBetween('  function hasOpenPhase(currentGame) {', '  // The engine has one current-game slot');
   const context = vm.createContext({});
-  vm.runInContext(source, context);
+  vm.runInContext(openGameSource + source, context);
   assert.equal(vm.runInContext(`initialAppView({ phase: 'active', example: false, players: [{}] })`, context), 'game');
   assert.equal(vm.runInContext(`initialAppView({ phase: 'settlement', example: false, players: [{}] })`, context), 'settle');
-  assert.equal(vm.runInContext(`initialAppView({ phase: 'closed', example: false, players: [] })`, context), 'games');
+  assert.equal(vm.runInContext(`initialAppView({ phase: 'active', example: false, players: [] })`, context), 'profile');
+  assert.equal(vm.runInContext(`initialAppView({ phase: 'closed', example: false, players: [] })`, context), 'profile');
 });

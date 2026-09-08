@@ -115,7 +115,7 @@
   .tab {
     flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
     color: var(--dim); font-size: 14px; font-weight: 700;
-    border-radius: 999px; padding: 10px; min-height: 43px;
+    border-radius: 999px; padding: 10px; min-height: 44px;
     transition: background-color .25s ease, color .25s ease, flex-grow .25s ease, transform .12s ease;
   }
   .tab svg { width: 22px; height: 22px; flex: 0 0 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -929,6 +929,10 @@
 
   <nav class="tabbar load-in" style="animation-delay:.15s" aria-label="ניווט ראשי">
     <div class="tabbar-in">
+    <button type="button" class="tab" id="modeFriends" aria-label="חברים">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14.5" cy="8" r="3.5"></circle><path d="M7 19.5c1.2-3.7 4-5.3 7.5-5.3s6.3 1.6 7.5 5.3"></path><path d="M8.5 11.3a3 3 0 1 1 1.1-5.8M2 19.5c.8-2.8 2.7-4.2 5.2-4.6"></path></svg>
+      <span class="tlabel">חברים</span>
+    </button>
     <button type="button" class="tab on" id="modeGames" aria-label="משחקים">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="3.6"></circle><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3"></path></svg>
       <span class="tlabel">משחקים</span>
@@ -964,6 +968,7 @@
   </section>
 
   <section class="profile" id="profile" hidden></section>
+  <section class="profile friends-page" id="friendsPage" hidden></section>
 
 </div>
 
@@ -1025,7 +1030,7 @@
   const expandedGroupCards = new Set();
   const expandedGroupGames = new Set();
   let state = load();
-  let appView = "games";         // "games" | "game" | "settle" | "profile" | "group"
+  let appView = "games";         // "friends" | "games" | "game" | "settle" | "profile" | "group"
   let currentGroupId = null;  // UI-only: which group's page is open when appView === "group"
   let openMenu = null;        // player name whose buy-in menu is open
   let menuJustOpened = null;  // menu that should animate open on the next render
@@ -1092,10 +1097,9 @@
     return "closed";
   }
   function initialAppView(gameState) {
-    if (!gameState || gameState.example) return "games";
-    if (gameState.phase === "active") return "game";
-    if (gameState.phase === "settlement") return "settle";
-    return "games";
+    if (isGameOpen(gameState) && gameState.phase === "active") return "game";
+    if (isGameOpen(gameState) && gameState.phase === "settlement") return "settle";
+    return "profile";
   }
 
   function profileDebtIds(debts, userName) {
@@ -3604,10 +3608,10 @@
   }
 
   // Short fade+rise on the container that just became visible after a view switch (games/group
-  // share #gamesHome; game/settle share #rows; profile is #profile). Adds the shared .load-in
+  // share #gamesHome; game/settle share #rows; profile/friends use their own sections). Adds the shared .load-in
   // class and removes it once its animation finishes so the next switch can replay it.
   function flashViewEnter(nextView) {
-    const id = nextView === "profile" ? "profile" : (nextView === "game" || nextView === "settle") ? "rows" : "gamesHome";
+    const id = nextView === "profile" ? "profile" : nextView === "friends" ? "friendsPage" : (nextView === "game" || nextView === "settle") ? "rows" : "gamesHome";
     const container = document.getElementById(id);
     if (!container) return;
     container.classList.remove("load-in");
@@ -5105,16 +5109,19 @@
     if (appView === "group") document.body.classList.add("games-view"); // group page reuses the dashboard shell
     document.body.classList.toggle("game-view", appView === "game");
     document.body.classList.toggle("settle-view", appView === "settle");
+    document.body.classList.toggle("friends-view", appView === "friends");
+    document.getElementById("modeFriends").classList.toggle("on", appView === "friends");
     document.getElementById("modeGames").classList.toggle("on", inGames);
     document.getElementById("modeProfile").classList.toggle("on", appView === "profile");
     document.getElementById("addrow").hidden = appView !== "game";
     renderTableHeader();
     renderAddRowChips();
-    // Settings gear: profile and the games dashboard only. The group page has its own "הגדרות" (group
+    // Settings gear: profile, friends and the games dashboard. The group page has its own "הגדרות" (group
     // settings) in its header, and game/settle keep the reset control in that corner.
-    document.getElementById("settingsBtn").hidden = appView !== "profile" && appView !== "games";
-    document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games" || appView === "group";
+    document.getElementById("settingsBtn").hidden = appView !== "profile" && appView !== "games" && appView !== "friends";
+    document.getElementById("resetBtn").hidden = appView === "profile" || appView === "friends" || appView === "games" || appView === "group";
     document.getElementById("gamesHome").hidden = appView !== "games" && appView !== "group";
+    document.getElementById("friendsPage").hidden = appView !== "friends";
 
     const rows = document.getElementById("rows");
     rows.innerHTML = "";
@@ -5428,6 +5435,7 @@
 
     renderDerived();
     renderProfile();
+    renderFriendsPage();
     if (appView === "games") renderGamesDashboard();
     else if (appView === "group") renderGroupPage();
     // A remote sync (applyRemote -> render) can change group data while the settings overlay is
@@ -5458,7 +5466,7 @@
     }
 
     const stat = document.getElementById("statline");
-    stat.hidden = appView === "profile" || appView === "games" || appView === "group";
+    stat.hidden = appView === "profile" || appView === "friends" || appView === "games" || appView === "group";
     if (appView === "game") {
       const exitedCount = exitedPlayers(state.players).length;
       const exitedLabel = exitedCount === 0 ? "" :
@@ -6081,11 +6089,45 @@
     parent.appendChild(group);
   }
 
+  function renderFriendsPage() {
+    const box = document.getElementById("friendsPage");
+    box.hidden = appView !== "friends";
+    if (appView !== "friends") return;
+    box.innerHTML = "";
+
+    const friendsSec = el("section", "psection debt-section");
+    friendsSec.style.animationDelay = ".03s";
+    const friendData = me
+      ? friendRequestsFor(state.friendships || [], {
+          userId: null,
+          guestId: resolveGuestId(collectionsOf(state), me),
+          displayName: me,
+        })
+      : { friends: [], incoming: [], outgoing: [] };
+    const hasFriendData = friendData.friends.length || friendData.incoming.length || friendData.outgoing.length;
+    if (!hasFriendData) {
+      friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים"));
+    } else {
+      renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
+      renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך");
+      renderFriendGroup(friendsSec, "בקשות שנשלחו", friendData.outgoing.map(f => f.addressee), "ממתין לאישור");
+    }
+    const addFriendBtn = el("button", "btn-primary", "הוסף חבר");
+    addFriendBtn.type = "button";
+    addFriendBtn.disabled = true;
+    addFriendBtn.setAttribute("aria-disabled", "true");
+    addFriendBtn.style.marginTop = "14px";
+    friendsSec.appendChild(addFriendBtn);
+    friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
+    box.appendChild(friendsSec);
+  }
+
   function renderProfile() {
     const box = document.getElementById("profile");
     box.hidden = appView !== "profile";
     if (appView !== "profile") return;
     box.innerHTML = "";
+    if (profileTab !== "balance" && profileTab !== "debts") profileTab = "balance";
 
     if (!me) {
       const sec = el("section", "psection");
@@ -6120,7 +6162,6 @@
     [
       ["balance", "מאזן"],
       ["debts", "חובות"],
-      ["friends", "חברים"],
     ].forEach(([key, label]) => {
       const tab = el("button", "profile-tab" + (profileTab === key ? " active" : ""), label);
       tab.type = "button";
@@ -6171,29 +6212,6 @@
     renderDebtGroup(debtPane, selectedDebtTab[1], selectedDebtTab[2], selectedDebtTab[3], false);
     debtSec.appendChild(debtPane);
     box.appendChild(debtSec);
-
-    // friends
-    const friendsSec = el("section", "psection debt-section");
-    friendsSec.style.animationDelay = ".09s";
-    friendsSec.hidden = profileTab !== "friends";
-    const meRef = { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me };
-    const friendData = friendRequestsFor(state.friendships || [], meRef);
-    const hasFriendData = friendData.friends.length || friendData.incoming.length || friendData.outgoing.length;
-    if (!hasFriendData) {
-      friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים"));
-    } else {
-      renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
-      renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך");
-      renderFriendGroup(friendsSec, "בקשות שנשלחו", friendData.outgoing.map(f => f.addressee), "ממתין לאישור");
-    }
-    const addFriendBtn = el("button", "btn-primary", "הוסף חבר");
-    addFriendBtn.type = "button";
-    addFriendBtn.disabled = true;
-    addFriendBtn.setAttribute("aria-disabled", "true");
-    addFriendBtn.style.marginTop = "14px";
-    friendsSec.appendChild(addFriendBtn);
-    friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
-    box.appendChild(friendsSec);
 
     // total balance
     const balSec = el("section", "psection");
@@ -6287,6 +6305,7 @@
   });
 
   document.getElementById("modeGames").addEventListener("click", () => setAppView("games"));
+  document.getElementById("modeFriends").addEventListener("click", () => setAppView("friends"));
   document.getElementById("modeProfile").addEventListener("click", () => setAppView("profile"));
 
   // confirm() is blocked in the artifact sandbox; the two-step arm/confirm

@@ -13,6 +13,8 @@ function sourceBetween(startMarker, endMarker) {
   return html.slice(start, end);
 }
 
+const openGameSource = sourceBetween('  function hasOpenPhase(currentGame) {', '  // The engine has one current-game slot');
+
 test('legacy and explicit game phases normalize to active, settlement, or closed', () => {
   const source = sourceBetween('  function normalizePhase', '  function normalizeDebt');
   const context = vm.createContext({});
@@ -28,11 +30,11 @@ test('legacy and explicit game phases normalize to active, settlement, or closed
 test('initial app view follows the persisted phase and does not open an empty table', () => {
   const source = sourceBetween('  function initialAppView', '  function normalizeDebt');
   const context = vm.createContext({});
-  vm.runInContext(source, context);
-  assert.equal(vm.runInContext(`initialAppView({phase:'active', example:false, players:[]})`, context), 'game');
+  vm.runInContext(openGameSource + source, context);
+  assert.equal(vm.runInContext(`initialAppView({phase:'active', example:false, players:[]})`, context), 'profile');
   assert.equal(vm.runInContext(`initialAppView({phase:'settlement', example:false, players:[{}]})`, context), 'settle');
-  assert.equal(vm.runInContext(`initialAppView({phase:'closed', example:false, players:[]})`, context), 'games');
-  assert.equal(vm.runInContext(`initialAppView({phase:'active', example:true, players:[{}]})`, context), 'games');
+  assert.equal(vm.runInContext(`initialAppView({phase:'closed', example:false, players:[]})`, context), 'profile');
+  assert.equal(vm.runInContext(`initialAppView({phase:'active', example:true, players:[{}]})`, context), 'profile');
 });
 
 test('the persisted state carries an explicit phase', () => {
@@ -41,8 +43,9 @@ test('the persisted state carries an explicit phase', () => {
   assert.match(html, /phase:\s*data\.phase/);
 });
 
-test('primary navigation exposes Games and Profile, while table and settlement remain internal screens', () => {
+test('primary navigation exposes Friends, Games and Profile, while table and settlement remain internal screens', () => {
   assert.match(html, /id="gamesHome"/);
+  assert.match(html, /id="modeFriends"/);
   assert.match(html, /id="modeGames"/);
   assert.doesNotMatch(html, /id="modeGame"/);
   assert.doesNotMatch(html, /id="modeSettle"/);
@@ -61,8 +64,6 @@ test('dashboard creation and resume actions have dedicated handlers', () => {
 
 // getActiveGameSummaries delegates "is there an open game" to isGameOpen (pure section):
 // an empty table is not a game, so the adapter's slice is loaded together with that predicate.
-const openGameSource = sourceBetween('  function hasOpenPhase(currentGame) {', '  // The engine has one current-game slot');
-
 test('active game UI data is produced through ActiveGameSummary', () => {
   const source = sourceBetween('  function getActiveGameSummaries', '  function formatGameTime');
   const context = vm.createContext({});

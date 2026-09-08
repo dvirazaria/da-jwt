@@ -175,9 +175,16 @@ test('respondToFriendRequest can reject a pending request', () => {
 
 // ---------- UI wiring ----------
 
-test('profile has a third "חברים" tab wired to profileTab === "friends"', () => {
-  assert.match(html, /\[\s*\["balance", "מאזן"\],\s*\["debts", "חובות"\],\s*\["friends", "חברים"\]/s);
-  assert.match(html, /friendsSec\.hidden = profileTab !== "friends";/);
+test('friends are a primary screen and are no longer rendered inside profile', () => {
+  const nav = html.slice(html.indexOf('<nav class="tabbar'), html.indexOf('</nav>'));
+  assert.ok(nav.indexOf('id="modeFriends"') < nav.indexOf('id="modeGames"'));
+  assert.ok(nav.indexOf('id="modeGames"') < nav.indexOf('id="modeProfile"'));
+  assert.match(html, /id="friendsPage"/);
+  assert.match(html, /function renderFriendsPage\(\)/);
+  assert.match(html, /box\.hidden = appView !== "friends";/);
+  const profileSource = html.slice(html.indexOf('  function renderProfile()'), html.indexOf('  // Shared tail of "add a player'));
+  assert.doesNotMatch(profileSource, /renderFriendGroup\(/);
+  assert.doesNotMatch(profileSource, /friendRequestsFor\(/);
   // Design round (row 22): the empty state states the fact, and the single shared SERVER_NOTE
   // constant under the disabled button carries the "needs a backend" wording for all five places.
   assert.match(html, /עוד אין חברים/);
@@ -185,6 +192,14 @@ test('profile has a third "חברים" tab wired to profileTab === "friends"', (
   assert.match(html, /addFriendBtn\.disabled = true;/);
   assert.match(html, /addFriendBtn\.setAttribute\("aria-disabled", "true"\);/);
   assert.match(html, /el\("p", "friend-helper", SERVER_NOTE\)/);
+});
+
+test('render routes and controls the standalone friends screen', () => {
+  assert.match(html, /document\.body\.classList\.toggle\("friends-view", appView === "friends"\)/);
+  assert.match(html, /document\.getElementById\("modeFriends"\)\.classList\.toggle\("on", appView === "friends"\)/);
+  assert.match(html, /document\.getElementById\("friendsPage"\)\.hidden = appView !== "friends"/);
+  assert.match(html, /document\.getElementById\("settingsBtn"\)\.hidden = appView !== "profile" && appView !== "games" && appView !== "friends"/);
+  assert.match(html, /document\.getElementById\("modeFriends"\)\.addEventListener\("click", \(\) => setAppView\("friends"\)\)/);
 });
 
 test('no UI handler calls createFriendRequest or respondToFriendRequest (guards against fake local friendships)', () => {

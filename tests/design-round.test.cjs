@@ -373,9 +373,9 @@ test('the sync dot is never centered on the dashboard/group shell — same corne
   assert.match(html, /<div class="eyebrow"><span class="dot" id="syncDot"/);
 });
 
-test('the settings gear shows on the profile and on the games dashboard, not on the group page or the table', () => {
-  assert.match(html, /document\.getElementById\("settingsBtn"\)\.hidden = appView !== "profile" && appView !== "games";/);
-  assert.match(html, /document\.getElementById\("resetBtn"\)\.hidden = appView === "profile" \|\| appView === "games" \|\| appView === "group";/);
+test('the settings gear shows on primary non-game views, not on the group page or the table', () => {
+  assert.match(html, /document\.getElementById\("settingsBtn"\)\.hidden = appView !== "profile" && appView !== "games" && appView !== "friends";/);
+  assert.match(html, /document\.getElementById\("resetBtn"\)\.hidden = appView === "profile" \|\| appView === "friends" \|\| appView === "games" \|\| appView === "group";/);
   assert.match(html, /document\.getElementById\("settingsBtn"\)\.addEventListener\("click"/);
   // the group page keeps its own group-settings control in the page header
   const groupHeader = sourceBetween('  function renderGroupHeader(summary) {', '  // The group\'s own game has an active table');

@@ -112,7 +112,7 @@ test('createGroup pushes a Group and an admin GroupMember, then saves and opens 
 // ---------- navigation: appView === "group" ----------
 
 test('appView accepts "group" as a navigable view, opened via openGroup', () => {
-  assert.match(html, /let appView = "games";\s*\/\/ "games" \| "game" \| "settle" \| "profile" \| "group"/);
+  assert.match(html, /let appView = "games";\s*\/\/ "friends" \| "games" \| "game" \| "settle" \| "profile" \| "group"/);
   assert.match(html, /function openGroup\(groupId\) \{/);
   assert.match(html, /setAppView\("group"\)/);
   assert.match(html, /function renderGroupPage\(\)/);
