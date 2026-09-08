@@ -848,9 +848,11 @@
       <button type="button" class="switch" id="setThemeSwitch" role="switch" aria-label="החלף בין מצב כהה למצב בהיר"></button>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13.5A8 8 0 0 1 10.5 4a8 8 0 1 0 9.5 9.5Z"></path></svg>
     </div>
+    <p class="games-primary-reason" id="setSignInNote" hidden>המשחקים שלך נשמרים רק במכשיר הזה.</p>
+    <button type="button" class="set-flat" id="setSignInBtn" hidden>התחבר עם חשבון</button>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">גרסה 49</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 50</p>
   </div>
 </div>
 
@@ -6445,6 +6447,12 @@
     const account = document.getElementById("setAccount");
     account.textContent = (authUser && authUser.email) || "";
     account.hidden = !account.textContent;
+    // No session but a client is reachable: offer a way back in without wiping the local name/
+    // history, and relabel the button below — it now swaps the local name, not a real sign-out.
+    const canSignIn = !authUser && !!supabase;
+    document.getElementById("setSignInNote").hidden = !canSignIn;
+    document.getElementById("setSignInBtn").hidden = !canSignIn;
+    document.getElementById("setSwapBtn").textContent = canSignIn ? "החלף שם" : "התנתקות";
     const c = loadContact();
     document.getElementById("setPhone").value = c.phone || "";
     document.getElementById("setEmail").value = c.email || "";
@@ -6473,6 +6481,12 @@
   document.getElementById("setThemeSwitch").addEventListener("click", () => {
     toggleTheme();
     refreshSettings();
+  });
+  document.getElementById("setSignInBtn").addEventListener("click", () => {
+    // Keeps `me` and local history untouched — this is a path back into an account, not a
+    // sign-out. showLogin() itself never clears `me`.
+    document.getElementById("settings").hidden = true;
+    showLogin();
   });
   document.getElementById("setSwapBtn").addEventListener("click", () => {
     signOutAccount(); // ends the Supabase session first when there is one; no-op in local mode
