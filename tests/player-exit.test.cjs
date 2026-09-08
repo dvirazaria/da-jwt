@@ -15,8 +15,14 @@ function loadExit() {
 }
 
 const normalizeSource = html.slice(html.indexOf('  function normalizePhase'), html.indexOf('  function load()'));
+// normalize() leans on the groups-domain normalizers (and, since phase 2b, on keptUserId), so the
+// slice pair is the same one tests/gap-fixes.test.cjs and tests/e2e-state.test.cjs already use.
+const groupsPureSource = html.slice(
+  html.indexOf('  // ---------- groups domain (pure) ----------'),
+  html.indexOf('  function el(')
+);
 function normalize(s) {
-  return vm.runInNewContext(normalizeSource + '\nnormalize(input)', {input: s, crypto: require('node:crypto').webcrypto});
+  return vm.runInNewContext(normalizeSource + '\n' + groupsPureSource + '\nnormalize(input)', {input: s, crypto: require('node:crypto').webcrypto, newId: () => 'stub-new-id'});
 }
 
 test('exitPlayer sets status, exitedAt and cashout on a first call', () => {
@@ -77,7 +83,9 @@ test('normalize defaults status to active and exitedAt to null for legacy player
   assert.equal(result.players[0].exitedAt, null);
 });
 
-test('normalize forces userId null on every player (pre-backend, same as the other normalizers)', () => {
+// Phase 2b identity rule: local code still never mints a userId, but a profiles.id that came back
+// from the server (always a uuid) survives a reload instead of demoting the player to a guest.
+test('normalize keeps a uuid userId and drops anything that is not one', () => {
   const result = normalize({
     gameId: 'g3',
     players: [{ name: 'א', buyins: [50], cashout: 0, userId: 'bogus-user-id' }],
@@ -86,6 +94,13 @@ test('normalize forces userId null on every player (pre-backend, same as the oth
   assert.equal(result.players[0].userId, null);
   assert.equal(result.players[0].guestId, null);
   assert.equal(result.players[0].memberId, null);
+
+  const fromServer = normalize({
+    gameId: 'g4',
+    players: [{ name: 'א', buyins: [50], cashout: 0, userId: '11111111-1111-4111-8111-111111111111' }],
+    history: [],
+  });
+  assert.equal(fromServer.players[0].userId, '11111111-1111-4111-8111-111111111111');
 });
 
 test('normalize preserves a saved exited status and exitedAt across reload', () => {

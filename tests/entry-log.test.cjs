@@ -39,6 +39,8 @@ test('each added amount has a distinct identity, timestamp, player and game; sav
     let stored, scheduled=0;
     const localStorage={setItem(k,v){ stored=v; }};
     function scheduleRemoteSave(){scheduled++;}
+    function cloudMode(){return false;} // no Supabase session in this slice: the local path
+    function scheduleCloudPush(){throw new Error('the cloud push must not run without a session');}
     const player={id:'player-one',name:'א',buyins:[],entryLog:[]};
     state.players.push(player);
     addEntry(player,50); addEntry(player,100); addEntry(player,100);

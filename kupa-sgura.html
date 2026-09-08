@@ -837,7 +837,7 @@
     </div>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">גרסה 47</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 49</p>
   </div>
 </div>
 
@@ -1168,7 +1168,7 @@
         return { ...p, id, buyins,
           status: p.status === "exited" ? "exited" : "active",
           exitedAt: typeof p.exitedAt === "string" ? p.exitedAt : null,
-          userId: null, // pre-backend: forced like every other normalizer (no accounts yet)
+          userId: keptUserId(p.userId), // never minted locally; kept when the server sent one
           guestId: typeof p.guestId === "string" ? p.guestId : null,
           memberId: typeof p.memberId === "string" ? p.memberId : null,
           entryLog: buyins.map((amount, i) => {
@@ -1218,7 +1218,10 @@
     pendingRemote = null; // a local edit supersedes any remote state parked for later
     state.updatedAt = new Date().toISOString();
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
-    scheduleRemoteSave();
+    // With a session Supabase owns the cloud-backed collections; without one the app keeps using
+    // the shared Claude document exactly as before. Never both.
+    if (cloudMode()) scheduleCloudPush();
+    else scheduleRemoteSave();
   }
 
   // --- server sync (shared document, survives devices and reloads) ---
@@ -1295,21 +1298,45 @@
   }
 
   document.addEventListener("visibilitychange", () => {
-    // Flush a pending debounced write immediately when the tab is hidden/closed.
-    if (document.visibilityState === "hidden" && saveTimer && gameDoc) {
-      clearTimeout(saveTimer);
-      saveTimer = null;
-      gameDoc.set(remoteBody()).catch(() => {});
+    if (document.visibilityState === "hidden") {
+      // Flush a pending debounced write immediately when the tab is hidden/closed.
+      if (saveTimer && gameDoc) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+        gameDoc.set(remoteBody()).catch(() => {});
+      }
+      if (cloudPushTimer) { clearTimeout(cloudPushTimer); cloudPushTimer = null; pushCloud(); }
+      return;
     }
+    // Groups, members, invites, the open table and history all refresh when the tab comes back;
+    // between visits the realtime channel keeps the open table current on its own.
+    if (cloudMode()) pullCloud();
   });
 
   // Applies a parked remote snapshot once it is safe: not during an active
   // edit and not while a local write is pending — retries instead of dropping,
   // so an update from another device is never silently lost.
   function tryApplyParked() {
-    if (!pendingRemote) return;
     const ae = document.activeElement;
     if (ae && ae.tagName === "INPUT") return; // will retry on the next focusout
+    // A realtime table update parks the same way a document snapshot does.
+    if (pendingCloudGame) {
+      if (cloudPushTimer || Date.now() < dirtyUntil) {
+        setTimeout(tryApplyParked, 600);
+        return;
+      }
+      const game = pendingCloudGame;
+      pendingCloudGame = null;
+      if (shouldApplyIncomingGame(state, game, false)) {
+        const mergedGame = normalize(mergeCloudIntoState(state, { game }, {}));
+        if (mergedGame) {
+          state = mergedGame;
+          try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+          render();
+        }
+      }
+    }
+    if (!pendingRemote) return;
     if (saveTimer || Date.now() < dirtyUntil) {
       setTimeout(tryApplyParked, 600);
       return;
@@ -1323,9 +1350,10 @@
   });
 
   function initSync() {
+    if (cloudMode()) return; // a Supabase session owns the data — never two writers at once
     if (!window.claude || typeof window.claude.use !== "function") return;
     window.claude.use("db").then((db) => {
-      if (!db) return; // no server storage in this view — stay on localStorage
+      if (!db || cloudMode()) return; // no server storage in this view — stay on localStorage
       gameDoc = db.doc("games/current");
       gameDoc.onSnapshot((snap) => {
         setSync(true, "מסונכרן");
@@ -1351,7 +1379,481 @@
       }, () => setSync(false, "שמירה מקומית"));
     }).catch(() => {});
   }
-  initSync();
+
+  // ---------- cloud store (Supabase) ----------
+  // Phase 2a. With a session, Supabase owns groups / group_members / invites / friendships and
+  // the local state document stays the working copy every renderer and adapter already reads —
+  // so nothing above this line had to learn about the server. Without a session every function
+  // here returns immediately and the app is exactly the local app it has always been.
+  //
+  // Phase 2b adds the table itself: games, game_participants, entries and — at close — transfers
+  // and debts, plus a postgres_changes channel on the open game so two phones stay in step.
+  //
+  // Write order is FK order, and the CLOSE is deliberately the last write of the game: RLS
+  // (app_can_write_game) and the immutability triggers refuse every child write once phase is
+  // 'closed', so participants/entries/transfers must land while the row is still open.
+  //   "upsert" — full-row upsert on the primary key.
+  //   "insert" — INSERT ... ON CONFLICT DO NOTHING. entries and transfers have no UPDATE policy
+  //              (entries are append-only; transfers only grant UPDATE (status)), so a re-send
+  //              after a failed push must never turn into an UPDATE.
+  const CLOUD_TABLES = [
+    ["guests", "guests"],
+    ["groups", "groups"],
+    ["groupMembers", "group_members"],
+    ["invites", "invites"],
+    ["friendships", "friendships"],
+    ["games", "games"],
+    ["gameParticipants", "game_participants"],
+    ["entries", "entries"],
+    ["transfers", "transfers"],
+    ["gamesClosed", "games"],
+    ["debts", "debts"],
+  ];
+  const CLOUD_INSERT_ONLY = { entries: true, transfers: true, debts: true };
+  const EMPTY_CLOUD_ROWS = {
+    guests: [], groups: [], groupMembers: [], invites: [], friendships: [],
+    games: [], gameParticipants: [], entries: [], transfers: [], gamesClosed: [], debts: [], debtPayments: [],
+  };
+  // How many closed games a pull brings back. HISTORY_MAX (400) is the local cap; the server can
+  // hold more than one device ever needs on screen.
+  const CLOUD_HISTORY_LIMIT = 120;
+  let cloudPushTimer = null;
+  let cloudPullTimer = null;
+  let cloudPulling = false;
+  let lastPushedRows = null; // the diff baseline: what the server is known to hold
+  let cloudProfileIds = [];  // every profile id seen in a pulled row (see CloudCtx)
+  let cloudGameCreators = {}; // gameId -> games.created_by, so a second device never rewrites it
+  let cloudGameChannel = null;   // the postgres_changes subscription for the open table
+  let cloudGameChannelId = "";   // which game it is for ("" = none)
+  let cloudGameEventTimer = null;
+  let pendingCloudGame = null;   // a realtime update parked until the active input loses focus
+
+  // `authUser` is declared further down, in the auth section; every caller here runs after boot.
+  function cloudMode() { return !!(supabase && authUser); }
+
+  // Games the server is already known to hold. A closed game only goes up when the server saw it
+  // open first: games_insert_member has WITH CHECK (phase <> 'closed'), so old local history can
+  // never be bulk-uploaded, and games_one_open_per_group_uk would fight it if it could.
+  function cloudKnownGameIds() {
+    const ids = new Set(Object.keys(cloudGameCreators));
+    const pushed = lastPushedRows || EMPTY_CLOUD_ROWS;
+    (pushed.games || []).forEach(row => ids.add(String(row.id)));
+    (pushed.gamesClosed || []).forEach(row => ids.add(String(row.id)));
+    return ids;
+  }
+  function cloudCollections() {
+    const games = [];
+    const open = gameSnapshotFromState(state);
+    if (open) games.push(open);
+    const known = cloudKnownGameIds();
+    (state.history || []).forEach(entry => {
+      if (entry && known.has(String(entry.gameId))) games.push(gameSnapshotFromHistory(entry));
+    });
+    return {
+      groups: state.groups || [],
+      groupMembers: state.groupMembers || [],
+      invites: state.invites || [],
+      friendships: state.friendships || [],
+      games,
+      debts: state.debts || [],
+    };
+  }
+  function cloudContext() {
+    const myMember = (state.groupMembers || []).find(m => m && m.displayName === me && m.guestId);
+    return {
+      profileId: authUser ? authUser.id : null,
+      guestId: myMember ? myMember.guestId : null,
+      displayName: me || (authUser && authUser.displayName) || "",
+      profileIds: cloudProfileIds,
+      groupMembers: state.groupMembers || [],
+      gameCreators: cloudGameCreators,
+    };
+  }
+  // Ids the server cannot possibly hold yet: a legacy record, or one created since the last
+  // confirmed push. mergeCloudIntoState keeps them, so a pull never eats an unsynced group.
+  function cloudUnconfirmedIds() {
+    const confirmed = new Set();
+    const pushed = lastPushedRows || EMPTY_CLOUD_ROWS;
+    const collections = cloudCollections();
+    const keys = ["groups", "groupMembers", "invites", "friendships"];
+    keys.forEach(key => (pushed[key] || []).forEach(row => confirmed.add(String(row.id))));
+    const ids = [];
+    keys.forEach(key => (collections[key] || []).forEach(record => {
+      if (record && record.id && !confirmed.has(String(record.id))) ids.push(String(record.id));
+    }));
+    return ids;
+  }
+
+  function scheduleCloudPush() {
+    if (!supabase || !authUser) return;
+    dirtyUntil = Date.now() + 6000; // a fresh local edit outranks an incoming pull, as before
+    syncCloudGameChannel(); // starting or closing a table changes which game we listen to
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = setTimeout(() => { cloudPushTimer = null; pushCloud(); }, 400);
+  }
+  function scheduleCloudPull(delay) {
+    if (!supabase || !authUser) return;
+    clearTimeout(cloudPullTimer);
+    cloudPullTimer = setTimeout(() => { cloudPullTimer = null; pullCloud(); }, delay || 1500);
+  }
+
+  async function pushCloud() {
+    if (!supabase || !authUser) return;
+    const ctx = cloudContext();
+    const next = buildCloudRows(cloudCollections(), ctx);
+    const previous = lastPushedRows || EMPTY_CLOUD_ROWS;
+    const confirmed = { ...previous };
+    // A game the server already holds as CLOSED is frozen: RLS refuses it and the immutability
+    // triggers raise on any UPDATE or DELETE of it or its children. Never write to one again.
+    const frozen = new Set((previous.gamesClosed || []).map(row => String(row.id)));
+    const notFrozen = row => !frozen.has(String(row.game_id || row.id || ""));
+    // A real DELETE is only ever the current open table's own undo. A game that merely dropped
+    // out of the payload (a local reset, a closed game aged out of history) must never take the
+    // server's rows with it.
+    const editable = new Set((next.games || []).map(row => String(row.id)));
+    const isEditable = row => editable.has(String(row.game_id || ""));
+    setSync(true, "מסנכרן…");
+    try {
+      for (const pair of CLOUD_TABLES) {
+        // gamesClosed IS the frozen set, so it keeps its rows; everything else drops the rows of
+        // a game the server already closed, and never deletes them either.
+        const rows = pair[0] === "gamesClosed" ? (next[pair[0]] || []) : (next[pair[0]] || []).filter(notFrozen);
+        const diff = diffCollections(previous[pair[0]] || [], rows, "id");
+        // diff.deletes is deliberately not applied here: none of the group tables has a DELETE
+        // policy — removal is a soft column (deleted_at / status), which the upsert carries.
+        // Entry undo and player removal ARE real deletes and run in pushCloudGameDeletes below.
+        let upserts = diff.upserts;
+        if (pair[0] === "games") {
+          // A game that is already closed locally but is not on the server yet has to arrive
+          // open before it can be closed (games_insert_member forbids inserting a closed game).
+          const known = new Set((previous.games || []).map(row => String(row.id))
+            .concat((previous.gamesClosed || []).map(row => String(row.id))));
+          const shells = (next.gamesClosed || [])
+            .filter(row => !known.has(String(row.id)))
+            .map(cloudGameOpenShell);
+          upserts = upserts.concat(shells);
+        }
+        if (pair[0] === "gamesClosed") {
+          // Write-once: a closed game already on the server is immutable (games_immutable_when_
+          // closed), so re-sending it would be a hard error, not a no-op.
+          upserts = upserts.filter(row => !frozen.has(String(row.id)));
+        }
+        if (upserts.length) {
+          const result = CLOUD_INSERT_ONLY[pair[0]]
+            ? await supabase.from(pair[1]).upsert(upserts, { onConflict: "id", ignoreDuplicates: true })
+            : await supabase.from(pair[1]).upsert(upserts, { onConflict: "id" });
+          if (result && result.error) throw result.error;
+        }
+        confirmed[pair[0]] = rows;
+        if (pair[0] === "gameParticipants" || pair[0] === "entries") {
+          await pushCloudGameDeletes(pair[1], diff.deletes.filter(row => notFrozen(row) && isEditable(row)));
+        }
+      }
+      // The one thing a closed game still allows: the creditor marking a debt paid
+      // (GRANT UPDATE (status, paid_at, paid_by_profile_id), debts_update_creditor).
+      const payments = diffCollections(previous.debtPayments || [], next.debtPayments, "id");
+      for (const payment of payments.upserts) {
+        const result = await supabase.from("debts")
+          .update({ status: payment.status, paid_at: payment.paid_at, paid_by_profile_id: payment.paid_by_profile_id })
+          .eq("id", payment.id);
+        if (result && result.error) throw result.error;
+      }
+      confirmed.debtPayments = next.debtPayments;
+      (next.games || []).concat(next.gamesClosed || []).forEach(row => {
+        if (row.created_by) cloudGameCreators[String(row.id)] = row.created_by;
+      });
+    } catch (e) {
+      // An RLS refusal (editing a group I no longer administer, or a close the server rejects) is
+      // not a retry: the server is right and the next pull brings its version back — the local
+      // history entry stays exactly where it is. A network failure retries on the next save.
+      lastPushedRows = confirmed;
+      setSync(false, "שגיאת שמירה — נשמר מקומית");
+      scheduleCloudPull(1200);
+      return;
+    }
+    lastPushedRows = confirmed;
+    dirtyUntil = 0;
+    setSync(true, "מסונכרן לחשבון");
+    syncCloudGameChannel();
+  }
+
+  // "בטל אחרונה" really removes an entry, and undoing a player's last buy-in removes the player.
+  // entries_delete_open_game / game_participants_delete allow exactly that, and only while the
+  // game is open — a row whose game has since closed is simply left alone.
+  async function pushCloudGameDeletes(table, deletes) {
+    if (!supabase || !authUser) return;
+    const ids = (deletes || []).map(row => String(row.id)).filter(isCloudId);
+    if (!ids.length) return;
+    const result = await supabase.from(table).delete().in("id", ids);
+    if (result && result.error) throw result.error;
+  }
+
+  async function pullCloud() {
+    if (!supabase || !authUser) return;
+    if (cloudPulling) return;
+    cloudPulling = true;
+    try {
+      // RLS already narrows this to the groups I am an active member of (or created), so there
+      // is nothing to filter here — group_members/invites then follow those ids.
+      const groupsResult = await supabase.from("groups").select("*");
+      if (groupsResult.error) { setSync(false, "שגיאת סנכרון — נשמר מקומית"); return; }
+      const groupRows = groupsResult.data || [];
+      const groupIds = groupRows.map(row => row.id).filter(Boolean);
+      let memberRows = [];
+      let inviteRows = [];
+      if (groupIds.length) {
+        const membersResult = await supabase.from("group_members").select("*").in("group_id", groupIds);
+        if (membersResult.error) { setSync(false, "שגיאת סנכרון — נשמר מקומית"); return; }
+        memberRows = membersResult.data || [];
+        const invitesResult = await supabase.from("invites").select("*").in("group_id", groupIds);
+        if (!invitesResult.error) inviteRows = invitesResult.data || [];
+      }
+      const friendsResult = await supabase.from("friendships").select("*");
+      // games_select is app_can_read_game(): my groups' games plus any ad-hoc game I created or
+      // played in. Only the most recent closed games are worth carrying to the device.
+      const gamesResult = await supabase.from("games").select("*");
+      if (gamesResult.error) { setSync(false, "שגיאת סנכרון — נשמר מקומית"); return; }
+      const allGames = gamesResult.data || [];
+      const openGames = allGames.filter(row => row && row.phase !== "closed");
+      const closedGames = allGames.filter(row => row && row.phase === "closed")
+        .sort((a, b) => String(b.closed_at || "").localeCompare(String(a.closed_at || "")))
+        .slice(0, CLOUD_HISTORY_LIMIT);
+      const gameIds = openGames.concat(closedGames).map(row => row.id).filter(Boolean);
+      const children = await fetchCloudGameChildren(gameIds);
+      const debtsResult = await supabase.from("debts").select("*");
+      applyCloudPull({
+        groups: groupRows,
+        members: memberRows,
+        invites: inviteRows,
+        friendships: friendsResult.error ? [] : (friendsResult.data || []),
+        openGames,
+        closedGames,
+        participants: children.participants,
+        entries: children.entries,
+        transfers: children.transfers,
+        debts: debtsResult.error ? [] : (debtsResult.data || []),
+      });
+    } catch (e) {
+      setSync(false, "שגיאת סנכרון — נשמר מקומית");
+    } finally {
+      cloudPulling = false;
+    }
+  }
+
+  // The three child tables of a set of games, in the order the local model wants them: entries by
+  // server insert time (recorded_at is always present; created_at can be NULL on a legacy row),
+  // participants by seating order, transfers by the settlement's own sort_order.
+  async function fetchCloudGameChildren(gameIds) {
+    const empty = { participants: [], entries: [], transfers: [] };
+    if (!supabase || !authUser) return empty;
+    if (!gameIds || !gameIds.length) return empty;
+    const participants = await supabase.from("game_participants").select("*")
+      .in("game_id", gameIds).order("created_at", { ascending: true });
+    if (participants.error) return empty;
+    const entries = await supabase.from("entries").select("*")
+      .in("game_id", gameIds).order("recorded_at", { ascending: true });
+    const transfers = await supabase.from("transfers").select("*")
+      .in("game_id", gameIds).order("sort_order", { ascending: true });
+    return {
+      participants: participants.data || [],
+      entries: entries.error ? [] : (entries.data || []),
+      transfers: transfers.error ? [] : (transfers.data || []),
+    };
+  }
+  // Groups the child rows of one game together, so the mappers get exactly their own game.
+  function cloudChildrenOf(gameId, payload) {
+    const id = String(gameId);
+    const of = list => (Array.isArray(list) ? list : []).filter(row => row && String(row.game_id) === id);
+    return { participants: of(payload.participants), entries: of(payload.entries), transfers: of(payload.transfers) };
+  }
+
+  function applyCloudPull(payload) {
+    if (!authUser) return;
+    const groupRows = payload.groups || [];
+    const memberRows = payload.members || [];
+    const inviteRows = payload.invites || [];
+    const friendshipRows = payload.friendships || [];
+    // Learn every profile id the server showed us before mapping: a row belonging to another
+    // account then maps to a stable local identity and back to the same row on the next push.
+    const seen = new Set(cloudProfileIds);
+    seen.add(authUser.id);
+    groupRows.forEach(row => { if (row && row.created_by_profile_id) seen.add(row.created_by_profile_id); });
+    memberRows.forEach(row => { if (row && row.profile_id) seen.add(row.profile_id); });
+    inviteRows.forEach(row => { if (row && row.created_by_profile_id) seen.add(row.created_by_profile_id); });
+    friendshipRows.forEach(row => {
+      if (!row) return;
+      if (row.requester_profile_id) seen.add(row.requester_profile_id);
+      if (row.addressee_profile_id) seen.add(row.addressee_profile_id);
+    });
+    cloudProfileIds = Array.from(seen);
+    // Never yank a field out from under an active edit, and never let the server undo an edit
+    // that has not been pushed yet — the same rule the document sync has always used.
+    const active = document.activeElement;
+    if ((active && active.tagName === "INPUT") || cloudPushTimer || Date.now() < dirtyUntil) {
+      scheduleCloudPull(800);
+      return;
+    }
+    (payload.openGames || []).concat(payload.closedGames || []).forEach(row => {
+      if (row && row.id && row.created_by) cloudGameCreators[String(row.id)] = row.created_by;
+    });
+    const ctx = cloudContext();
+    // Members first: rowsToPlayers resolves memberId against them, so the context has to know the
+    // membership the server just sent, not the one this device had a moment ago.
+    const pulledMembers = memberRows.map(row => rowToGroupMember(row, ctx));
+    const gameCtx = { ...ctx, groupMembers: pulledMembers };
+    const history = (payload.closedGames || []).map(row => {
+      const kids = cloudChildrenOf(row.id, payload);
+      return buildHistoryEntryFromCloud(row, kids.participants, kids.entries, kids.transfers, gameCtx);
+    });
+    // A game this device already closed is never reopened by a pull: the close may simply not
+    // have reached the server yet (a failed push retries it), and history is the local truth.
+    const closedHere = new Set((state.history || []).map(entry => String(entry && entry.gameId)));
+    const openCandidates = (payload.openGames || [])
+      .filter(row => row && !closedHere.has(String(row.id)))
+      .map(row => {
+        const kids = cloudChildrenOf(row.id, payload);
+        return buildOpenGameFromCloud(row, kids.participants, kids.entries, kids.transfers, gameCtx);
+      });
+    const picked = pickCloudOpenGame(state, openCandidates);
+    if (picked.action === "keep" && openCandidates.length) {
+      // The single-slot limitation, out loud: this device is at a different table, so the server's
+      // open game waits until that one is closed.
+      console.warn("cloud: another open game is waiting on the server", openCandidates.map(g => g.gameId));
+    }
+    const transfersByGame = {};
+    (payload.transfers || []).forEach(row => {
+      if (row && row.id) transfersByGame[String(row.id)] = String(row.settlement_key || "");
+    });
+    const pulled = {
+      groups: groupRows.map(row => rowToGroup(row, ctx)),
+      groupMembers: pulledMembers,
+      invites: inviteRows.map(row => rowToInvite(row, ctx)),
+      friendships: friendshipRows.map(row => rowToFriendship(row, ctx)),
+      history,
+      debts: (payload.debts || []).map(row => rowToDebt(row, ctx, transfersByGame)),
+      game: picked.action === "load" ? picked.game : null,
+    };
+    const merged = normalize(mergeCloudIntoState(state, pulled, { keepLocalIds: cloudUnconfirmedIds() }));
+    if (merged) state = merged;
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    // The baseline is what the SERVER holds, not what we now hold: a record the merge kept is
+    // absent from it and goes up on the next push (that is the first-device seeding rule).
+    lastPushedRows = buildCloudRows({
+      ...pulled,
+      games: (picked.action === "load" && picked.game ? [gameSnapshotFromState({ ...picked.game, example: false })] : [])
+        .concat(history.map(gameSnapshotFromHistory)),
+      debts: pulled.debts,
+    }, cloudContext());
+    setSync(true, "מסונכרן לחשבון");
+    render();
+    syncCloudGameChannel();
+  }
+
+  // ---- realtime: the open table ----
+  // postgres_changes respects RLS, so a member only ever receives rows they could have SELECTed.
+  // The channel is per game and torn down the moment the slot changes or the game closes.
+  function syncCloudGameChannel() {
+    if (!supabase || !authUser) return leaveCloudGameChannel();
+    const id = (!state.example && state.phase !== "closed" && isCloudId(state.gameId)) ? String(state.gameId) : "";
+    if (id === cloudGameChannelId) return;
+    leaveCloudGameChannel();
+    if (!id) return;
+    cloudGameChannelId = id;
+    const onChange = () => scheduleCloudGamePull();
+    try {
+      cloudGameChannel = supabase.channel("game:" + id)
+        .on("postgres_changes", { event: "*", schema: "public", table: "games", filter: "id=eq." + id }, onChange)
+        .on("postgres_changes", { event: "*", schema: "public", table: "game_participants", filter: "game_id=eq." + id }, onChange)
+        .on("postgres_changes", { event: "*", schema: "public", table: "entries", filter: "game_id=eq." + id }, onChange)
+        .subscribe();
+    } catch (e) {
+      cloudGameChannel = null;
+      cloudGameChannelId = "";
+    }
+  }
+  function leaveCloudGameChannel() {
+    clearTimeout(cloudGameEventTimer);
+    cloudGameEventTimer = null;
+    const channel = cloudGameChannel;
+    cloudGameChannel = null;
+    cloudGameChannelId = "";
+    if (!supabase || !channel) return;
+    try { supabase.removeChannel(channel); } catch (e) {}
+  }
+  // A buy-in on the other phone fires three events; 300ms of debounce turns them into one read.
+  function scheduleCloudGamePull() {
+    clearTimeout(cloudGameEventTimer);
+    cloudGameEventTimer = setTimeout(() => {
+      cloudGameEventTimer = null;
+      pullCloudGame(cloudGameChannelId);
+    }, 300);
+  }
+  async function pullCloudGame(gameId) {
+    if (!supabase || !authUser || !gameId) return;
+    try {
+      const gameResult = await supabase.from("games").select("*").eq("id", gameId).maybeSingle();
+      if (gameResult.error || !gameResult.data) return;
+      const row = gameResult.data;
+      // A close is more than the table: history, debts and the emptied slot all move, so it goes
+      // through the full pull rather than the game-only fast path.
+      if (row.phase === "closed") { pullCloud(); return; }
+      const children = await fetchCloudGameChildren([gameId]);
+      applyCloudGame(row, children.participants, children.entries, children.transfers);
+    } catch (e) {}
+  }
+  function applyCloudGame(gameRow, participantRows, entryRows, transferRows) {
+    if (!authUser) return;
+    // Same rule as the full pull: a game already in this device's history stays closed here.
+    if ((state.history || []).some(entry => entry && String(entry.gameId) === String(gameRow.id))) return;
+    const incoming = buildOpenGameFromCloud(gameRow, participantRows, entryRows, transferRows, cloudContext());
+    // A local edit that has not been pushed yet outranks the server, exactly like the document
+    // sync always did: park it and try again.
+    if (cloudPushTimer || Date.now() < dirtyUntil) {
+      pendingCloudGame = incoming;
+      setTimeout(tryApplyParked, 600);
+      return;
+    }
+    const active = document.activeElement;
+    const hasActiveInput = !!(active && active.tagName === "INPUT");
+    if (!shouldApplyIncomingGame(state, incoming, hasActiveInput)) {
+      if (hasActiveInput) pendingCloudGame = incoming; // retried on focusout
+      return;
+    }
+    pendingCloudGame = null;
+    const merged = normalize(mergeCloudIntoState(state, { game: incoming }, {}));
+    if (!merged) return;
+    state = merged;
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    setSync(true, "מסונכרן לחשבון");
+    render();
+  }
+
+  // A session has arrived: hand ownership over once, seed the server with whatever this device
+  // has that it does not, and stop the Claude-document sync for good.
+  function enterCloudMode() {
+    if (!supabase || !authUser) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    gameDoc = null;
+    pendingRemote = null;
+    lastPushedRows = null;
+    cloudGameCreators = {};
+    pullCloud().then(() => { if (cloudMode()) return pushCloud(); }).catch(() => {});
+  }
+  // Signed out: keep every local record exactly as it is and simply stop talking to the server.
+  function exitCloudMode() {
+    clearTimeout(cloudPushTimer);
+    clearTimeout(cloudPullTimer);
+    cloudPushTimer = null;
+    cloudPullTimer = null;
+    cloudPulling = false;
+    lastPushedRows = null;
+    cloudProfileIds = [];
+    cloudGameCreators = {};
+    pendingCloudGame = null;
+    leaveCloudGameChannel();
+    setSync(false, "שמירה מקומית");
+  }
 
   // Example data promises "any edit resets it": the first real interaction
   // wipes the demo players instead of quietly turning them into real ones.
@@ -1585,10 +2087,20 @@
   // LeaderboardEntry = { rank, identityKey, displayName, gamesPlayed, wins, isFormerMember } -- no money field
   // GroupGameSummary = { gameId, at, startedAt, playerCount, playerNames, winnerNames, potSize, totalEntries,
   //                      isBalanced } -- no per-player net; built by toGroupGameSummary(historyEntry)
+  // Identity rule (phase 2b): local code NEVER mints a userId -- it is a profiles.id and only the
+  // server can hand one out -- but a uuid that arrived on a pull (or is already stored from an
+  // earlier one) is kept, so a member who has an account does not silently become a guest again.
+  // A function declaration on purpose: normalize() runs at boot, before this line is reached.
+  function isUuidValue(value) {
+    return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  }
+  function keptUserId(value) {
+    return isUuidValue(value) ? value : null;
+  }
   function normalizeParticipantRef(ref) {
     const r = ref && typeof ref === "object" ? ref : {};
     return {
-      userId: null,
+      userId: keptUserId(r.userId),
       guestId: typeof r.guestId === "string" ? r.guestId : null,
       displayName: String(r.displayName || ""),
     };
@@ -1610,7 +2122,7 @@
     return {
       id: String(m.id),
       groupId: String(m.groupId || ""),
-      userId: null,
+      userId: keptUserId(m.userId),
       guestId: typeof m.guestId === "string" ? m.guestId : null,
       displayName: String(m.displayName || ""),
       role: m.role === "admin" ? "admin" : "member",
@@ -1648,8 +2160,14 @@
     if (r.guestId) return "g:" + r.guestId;
     return "n:" + (r.displayName || "");
   }
+  // Two refs are the same person when any id they BOTH carry matches. A member row pulled from
+  // the server now knows its profile id while the closed game on this device only ever recorded
+  // the guestId -- comparing identityKey() alone would split one player into two.
   function sameIdentity(a, b) {
-    return identityKey(a) === identityKey(b);
+    const x = a || {}, y = b || {};
+    if (x.userId && y.userId) return x.userId === y.userId;
+    if (x.guestId && y.guestId) return x.guestId === y.guestId;
+    return identityKey(x) === identityKey(y);
   }
   // Reuses the guestId already on record for this displayName (an active/former group
   // member, or a player in a closed game) so the same person keeps one id on this device.
@@ -2103,6 +2621,839 @@
     if (!match) return null;
     const token = decodeURIComponent(match[1]).toUpperCase().replace(/-/g, "");
     return new RegExp("^[" + INVITE_TOKEN_ALPHABET + "]{8}$").test(token) ? token : null;
+  }
+
+  // ---------- cloud mapping (pure) ----------
+  // Row <-> local-record mappers for the Supabase tables in docs/backend/schema.sql (groups,
+  // group_members, invites, friendships, guests). DOM-free and state-free on purpose: everything
+  // arrives as an argument, so the whole section runs from a vm slice in tests/cloud-mapping.test.cjs.
+  //
+  // CloudCtx = { profileId, guestId, displayName, profileIds }
+  //   profileId   — the signed-in auth user id, i.e. profiles.id. Null without a session, and
+  //                 then nothing at all is pushable.
+  //   guestId     — the local guestId THIS device already uses for me, so a pulled row keeps the
+  //                 identity every closed game on this device was attributed to.
+  //   displayName — the local `me`.
+  //   profileIds  — every profile id this device has seen in a pulled row. A local guestId that
+  //                 appears in it IS a profile id; that is how a row belonging to another account
+  //                 maps back and forth unchanged instead of being demoted to a guest.
+  //
+  // The local model still has no accounts (normalizeGroupMember forces `userId` to null — refs
+  // gain a real userId in phase 3), so the profile/guest split lives ONLY at the row boundary.
+  const CLOUD_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  // Fallback for a NOT NULL timestamp the local record never recorded. Deliberately not "now":
+  // this section is pure, and a made-up recent date would read as a real event.
+  const CLOUD_EPOCH_ISO = "1970-01-01T00:00:00.000Z";
+  function isCloudId(value) {
+    return typeof value === "string" && CLOUD_UUID_RE.test(value);
+  }
+  function cloudIso(value) {
+    return typeof value === "string" && value ? value : null;
+  }
+  function cloudIsoOr(value, fallback) {
+    return cloudIso(value) || fallback || CLOUD_EPOCH_ISO;
+  }
+  function cloudProfileIdSet(ctx) {
+    const c = ctx || {};
+    const ids = new Set((Array.isArray(c.profileIds) ? c.profileIds : []).filter(isCloudId));
+    if (isCloudId(c.profileId)) ids.add(c.profileId);
+    return ids;
+  }
+  // A profile row carries no name of its own on groups/invites/friendships, so the only name we
+  // can honestly restore is my own; anybody else's comes from a membership snapshot instead.
+  function cloudProfileName(profileId, ctx) {
+    const c = ctx || {};
+    return profileId && profileId === c.profileId ? String(c.displayName || "") : "";
+  }
+  // Is this local ref the signed-in person? My own guestId wins when this device knows it (so a
+  // namesake with a different guestId is not me), otherwise the display name decides — the app
+  // already forbids two active members of a group sharing one name.
+  function isMyCloudRef(ref, ctx) {
+    const c = ctx || {};
+    const r = ref || {};
+    if (!isCloudId(c.profileId)) return false;
+    if (r.userId && r.userId === c.profileId) return true;
+    if (r.guestId && r.guestId === c.profileId) return true;
+    if (c.guestId && r.guestId) return r.guestId === c.guestId;
+    return !!c.displayName && r.displayName === c.displayName;
+  }
+  // The identity pattern of schema.sql: exactly one of profile_id / guest_id is non-null. Both
+  // null means "this device cannot express who that is" and the caller drops the row.
+  function refToIdentityRow(ref, ctx) {
+    const r = ref || {};
+    if (isMyCloudRef(r, ctx)) return { profile_id: (ctx || {}).profileId, guest_id: null };
+    if (isCloudId(r.userId)) return { profile_id: r.userId, guest_id: null };
+    if (isCloudId(r.guestId) && cloudProfileIdSet(ctx).has(r.guestId)) return { profile_id: r.guestId, guest_id: null };
+    if (isCloudId(r.guestId)) return { profile_id: null, guest_id: r.guestId };
+    return { profile_id: null, guest_id: null };
+  }
+  // The way back. Phase 2b keeps the profile id on the ref (`userId`) instead of throwing it away,
+  // which is what lets a participant be pushed back as a profile rather than demoted to a guest.
+  // `guestId` still follows the phase 2a rule -- my own local guestId for me, the profile id itself
+  // for anybody else -- so identityKey() and every closed game already recorded on this device keep
+  // pointing at the same person (see sameIdentity, which matches on any shared id).
+  function identityRowToRef(row, ctx, displayName) {
+    const c = ctx || {};
+    const r = row || {};
+    const name = String(displayName || "");
+    const userId = isCloudId(r.profile_id) ? r.profile_id : null;
+    if (r.profile_id && r.profile_id === c.profileId) return { userId, guestId: c.guestId || null, displayName: name };
+    if (r.profile_id) return { userId, guestId: r.profile_id, displayName: name };
+    return { userId: null, guestId: r.guest_id || null, displayName: name };
+  }
+
+  // ----- games -----
+  // GameSnapshot is the one shape both halves of the local model funnel into before they become
+  // rows: the open slot (gameSnapshotFromState) and a closed HistoryEntry (gameSnapshotFromHistory).
+  // GameSnapshot = { gameId, groupId, phase, startedAt, closedAt, isBalanced, balanceDifference,
+  //                  leaderRef, players: [Player], transfers: [Transfer] }
+  function cloudMoney(value) {
+    const n = Math.round(Number(value));
+    return Number.isFinite(n) ? n : 0;
+  }
+  // transfers.id and debts.id are uuid columns, but the local ids are the settlement key
+  // ("<gameId>::<index>::<from>::<to>::<amount>") and "debt-" + that key. A deterministic uuid
+  // derived from the key gives both devices the same row id for the same settlement, without
+  // inventing a second id the local model would have to remember.
+  function cloudUuidFrom(text) {
+    const input = String(text == null ? "" : text);
+    const words = [0x9e3779b9, 0x85ebca6b, 0xc2b2ae35, 0x27d4eb2f];
+    for (let i = 0; i < input.length; i++) {
+      const code = input.charCodeAt(i);
+      for (let w = 0; w < 4; w++) {
+        let x = (words[w] ^ (code + i * 131 + w * 0x9e37)) >>> 0;
+        x = Math.imul(x ^ (x >>> 15), 0x2545f491) >>> 0;
+        x = (x ^ (x >>> 13)) >>> 0;
+        words[w] = Math.imul(x, 0x27220a95) >>> 0;
+      }
+    }
+    const hex = words.map(w => (w >>> 0).toString(16).padStart(8, "0")).join("");
+    // Stamped as version 4 / variant 10 so it is a syntactically valid uuid for the column.
+    return [hex.slice(0, 8), hex.slice(8, 12), "4" + hex.slice(13, 16),
+      ((parseInt(hex[16], 16) & 0x3 | 0x8).toString(16)) + hex.slice(17, 20), hex.slice(20, 32)].join("-");
+  }
+  // sameIdentity() lives in the groups-domain section; this section is loaded on its own in the
+  // tests, so it keeps its own copy of the same rule: any id both refs carry has to match.
+  function cloudSameRef(a, b) {
+    const x = a || {}, y = b || {};
+    if (x.userId && y.userId) return x.userId === y.userId;
+    if (x.guestId && y.guestId) return x.guestId === y.guestId;
+    return !!x.displayName && x.displayName === y.displayName;
+  }
+  function gameToRow(snapshot, ctx) {
+    const g = snapshot || {};
+    const c = ctx || {};
+    const closed = g.phase === "closed";
+    const leader = refToIdentityRow(g.leaderRef, ctx);
+    const creators = c.gameCreators || {};
+    const startedAt = cloudIso(g.startedAt);
+    return {
+      id: String(g.gameId || ""),
+      group_id: g.groupId || null,
+      // games_leader_identity_chk: at most one of the two, and both null is allowed.
+      leader_profile_id: leader.profile_id,
+      leader_guest_id: leader.profile_id ? null : leader.guest_id,
+      phase: closed ? "closed" : (g.phase === "settlement" ? "settlement" : "active"),
+      started_at: startedAt,
+      // games_closed_at_chk / games_closed_balance_chk: the three closing columns exist exactly
+      // when the phase is closed, and never before.
+      closed_at: closed ? cloudIsoOr(g.closedAt) : null,
+      is_balanced: closed ? !!g.isBalanced : null,
+      balance_difference: closed ? cloudMoney(g.balanceDifference) : null,
+      // Whoever actually created the row keeps it: rewriting created_by from a second device
+      // would make the two devices push each other in circles.
+      created_by: creators[String(g.gameId || "")] || c.profileId || null,
+      created_at: cloudIsoOr(startedAt, cloudIso(g.closedAt)),
+    };
+  }
+  // games_insert_member has WITH CHECK (phase <> 'closed'), so a closed game can never be
+  // INSERTed -- it is inserted open and closed by a second write. This is that first write.
+  function cloudGameOpenShell(row) {
+    return { ...(row || {}), phase: "settlement", closed_at: null, is_balanced: null, balance_difference: null };
+  }
+
+  function participantToRow(player, gameId, ctx) {
+    const p = player || {};
+    const identity = refToIdentityRow({ userId: p.userId, guestId: p.guestId, displayName: p.name }, ctx);
+    const exited = p.status === "exited";
+    const typedCashout = p.cashout !== "" && p.cashout !== null && p.cashout !== undefined;
+    return {
+      id: String(p.id || ""),
+      game_id: String(gameId || ""),
+      profile_id: identity.profile_id,
+      guest_id: identity.profile_id ? null : identity.guest_id,
+      display_name_snapshot: String(p.name || "").slice(0, 40),
+      status: exited ? "exited" : "active",
+      // game_participants_exit_chk: (status = 'exited') = (exited_at IS NOT NULL).
+      exited_at: exited ? cloudIsoOr(p.exitedAt) : null,
+      // "not entered yet" is NULL, not 0 -- 0 means "cashed out with nothing".
+      cashout: typedCashout ? cloudMoney(p.cashout) : null,
+    };
+  }
+  // Rebuilds the local Player list from participant + entry rows. Order is the server's insert
+  // order (created_at, then id) so both phones seat the table the same way.
+  function rowsToPlayers(participantRows, entryRows, groupId, ctx) {
+    const c = ctx || {};
+    const members = (Array.isArray(c.groupMembers) ? c.groupMembers : [])
+      .filter(m => m && (!groupId || m.groupId === groupId));
+    const entriesByParticipant = new Map();
+    (Array.isArray(entryRows) ? entryRows : []).forEach(row => {
+      if (!row || !row.participant_id) return;
+      const list = entriesByParticipant.get(String(row.participant_id)) || [];
+      list.push(row);
+      entriesByParticipant.set(String(row.participant_id), list);
+    });
+    return (Array.isArray(participantRows) ? participantRows : []).map(row => {
+      const name = String((row && row.display_name_snapshot) || "");
+      const ref = identityRowToRef(row, ctx, name);
+      const rows = entriesByParticipant.get(String(row.id)) || [];
+      const entryLog = rows.map(entry => rowToEntry(entry));
+      // memberId has no column: it is a purely local pointer, resolved here by identity (falling
+      // back to the name, exactly like addPlayer does).
+      const member = members.find(m => cloudSameRef(m, ref)) ||
+        members.find(m => m.status === "active" && m.displayName === name) || null;
+      return {
+        id: String(row.id || ""),
+        name,
+        buyins: entryLog.map(entry => entry.amount),
+        entryLog,
+        cashout: row.cashout === null || row.cashout === undefined ? "" : cloudMoney(row.cashout),
+        status: row.status === "exited" ? "exited" : "active",
+        exitedAt: row.status === "exited" ? cloudIso(row.exited_at) : null,
+        userId: ref.userId,
+        guestId: ref.guestId,
+        memberId: member ? member.id : null,
+      };
+    });
+  }
+
+  function entryToRow(entry, gameId, participantId) {
+    const e = entry || {};
+    return {
+      id: String(e.id || ""),
+      game_id: String(gameId || ""),
+      participant_id: String(participantId || ""),
+      amount: cloudMoney(e.amount),
+      // entries.created_at COMMENT: NULL for a legacy row that never recorded a time. recorded_at
+      // (server insert time, used for ordering) is left to its DEFAULT.
+      created_at: cloudIso(e.timestamp),
+    };
+  }
+  function rowToEntry(row) {
+    const r = row || {};
+    return {
+      id: String(r.id || ""),
+      timestamp: cloudIso(r.created_at),
+      amount: cloudMoney(r.amount),
+      playerId: String(r.participant_id || ""),
+      gameId: String(r.game_id || ""),
+    };
+  }
+
+  function transferToRow(transfer, gameId, index, participantIdByName) {
+    const t = transfer || {};
+    const byName = participantIdByName || {};
+    return {
+      id: cloudUuidFrom(t.id),
+      game_id: String(gameId || ""),
+      from_participant_id: byName[t.from] || null,
+      to_participant_id: byName[t.to] || null,
+      amount: cloudMoney(t.amount),
+      status: t.status === "paid" ? "paid" : "open",
+      settlement_key: String(t.id || ""),
+      sort_order: Number(index) || 0,
+    };
+  }
+  function rowToTransfer(row, nameByParticipantId) {
+    const r = row || {};
+    const names = nameByParticipantId || {};
+    return {
+      id: String(r.settlement_key || ""),
+      from: names[r.from_participant_id] || "",
+      to: names[r.to_participant_id] || "",
+      amount: cloudMoney(r.amount),
+      status: r.status === "paid" ? "paid" : "open",
+    };
+  }
+
+  // debts_insert_on_close: WITH CHECK (status = 'open' AND paid_at IS NULL). The paid flip is a
+  // separate, column-limited UPDATE (debtPaymentRow), never part of the insert.
+  function debtToRow(debt, ctx, identityByName) {
+    const d = debt || {};
+    const byName = identityByName || {};
+    const debtor = byName[d.debtorName] || { profile_id: null, guest_id: null };
+    const creditor = byName[d.creditorName] || { profile_id: null, guest_id: null };
+    const localId = String(d.id || "");
+    const transferKey = localId.indexOf("debt-") === 0 ? localId.slice(5) : "";
+    return {
+      id: cloudUuidFrom(localId),
+      game_id: String(d.gameId || ""),
+      group_id: d.groupId || null,
+      transfer_id: transferKey ? cloudUuidFrom(transferKey) : null,
+      debtor_profile_id: debtor.profile_id || null,
+      debtor_guest_id: debtor.profile_id ? null : (debtor.guest_id || null),
+      creditor_profile_id: creditor.profile_id || null,
+      creditor_guest_id: creditor.profile_id ? null : (creditor.guest_id || null),
+      debtor_name: String(d.debtorName || ""),
+      creditor_name: String(d.creditorName || ""),
+      amount: cloudMoney(d.amount),
+      status: "open",
+      created_at: cloudIsoOr(d.createdAt),
+      game_date: cloudIso(d.gameDate),
+      paid_at: null,
+    };
+  }
+  // GRANT UPDATE (status, paid_at, paid_by_profile_id) ON debts -- exactly these three columns,
+  // and debts_update_creditor lets only the creditor send them.
+  function debtPaymentRow(debt, ctx, identityByName) {
+    const d = debt || {};
+    if (d.status !== "paid") return null;
+    const creditor = (identityByName || {})[d.creditorName] || {};
+    const me = (ctx || {}).profileId || null;
+    if (!me || creditor.profile_id !== me) return null;
+    return {
+      id: cloudUuidFrom(String(d.id || "")),
+      status: "paid",
+      paid_at: cloudIsoOr(d.paidAt),
+      paid_by_profile_id: me,
+    };
+  }
+  function rowToDebt(row, ctx, settlementKeyByTransferId) {
+    const r = row || {};
+    const keys = settlementKeyByTransferId || {};
+    const key = keys[r.transfer_id] || "";
+    const status = r.status === "paid" ? "paid" : "open";
+    return {
+      // The local id is "debt-" + settlement key. Without the transfer row (a debt from a game
+      // this device may no longer read) it falls back to the server id, which is stable too.
+      id: "debt-" + (key || String(r.id || "")),
+      gameId: String(r.game_id || ""),
+      groupId: r.group_id || null,
+      debtorUserId: "",
+      creditorUserId: "",
+      debtorName: String(r.debtor_name || ""),
+      creditorName: String(r.creditor_name || ""),
+      amount: cloudMoney(r.amount),
+      status,
+      createdAt: String(r.created_at || ""),
+      gameDate: String(r.game_date || r.created_at || ""),
+      paidAt: status === "paid" ? cloudIso(r.paid_at) : null,
+    };
+  }
+
+  // ----- local model -> GameSnapshot -----
+  function gameSnapshotFromState(gameState) {
+    const s = gameState || {};
+    if (s.example || s.phase === "closed") return null;
+    if (!Array.isArray(s.players) || !s.players.length) return null;
+    const statuses = s.settlementStatuses && typeof s.settlementStatuses === "object" ? s.settlementStatuses : {};
+    return {
+      gameId: String(s.gameId || ""),
+      groupId: s.groupId || null,
+      phase: s.phase === "settlement" ? "settlement" : "active",
+      startedAt: cloudIso(s.startedAt),
+      closedAt: null,
+      isBalanced: null,
+      balanceDifference: null,
+      leaderRef: s.leaderRef || null,
+      players: s.players,
+      // Transfers are written only at close; the open game's paid toggles stay a local map (they
+      // are reversible until the close and have no participant ids to point at yet).
+      transfers: [],
+      settlementStatuses: statuses,
+    };
+  }
+  function gameSnapshotFromHistory(entry) {
+    const h = entry || {};
+    const players = Array.isArray(h.players) ? h.players : [];
+    return {
+      gameId: String(h.gameId || ""),
+      groupId: h.groupId || null,
+      phase: "closed",
+      startedAt: cloudIso(h.startedAt),
+      closedAt: cloudIso(h.at),
+      isBalanced: !!h.isBalanced,
+      balanceDifference: cloudMoney(h.balanceDifference),
+      leaderRef: h.leaderRef || null,
+      players: players.map(p => ({
+        id: p.id,
+        name: p.name,
+        entryLog: Array.isArray(p.entryLog) ? p.entryLog : [],
+        buyins: (Array.isArray(p.entryLog) ? p.entryLog : []).map(e => e.amount),
+        cashout: p.cashout,
+        status: p.status === "exited" ? "exited" : "active",
+        exitedAt: p.exitedAt || null,
+        guestId: p.guestId || null,
+        memberId: p.memberId || null,
+        userId: p.userId || null,
+      })),
+      transfers: Array.isArray(h.transfers) ? h.transfers : [],
+    };
+  }
+
+  // ----- rows -> local model -----
+  // The exact HistoryEntry shape buildHistoryEntry() produces, rebuilt from the server's rows:
+  // net is cashout - SUM(entries) (game_results_v computes the same thing), and a transfer keeps
+  // its settlement key as its local id so the settlementStatuses map still lines up.
+  function buildHistoryEntryFromCloud(gameRow, participantRows, entryRows, transferRows, ctx) {
+    const g = gameRow || {};
+    const players = rowsToPlayers(participantRows, entryRows, g.group_id || null, ctx);
+    const nameById = {};
+    (Array.isArray(participantRows) ? participantRows : []).forEach(row => {
+      if (row && row.id) nameById[String(row.id)] = String(row.display_name_snapshot || "");
+    });
+    const leaderRow = { profile_id: g.leader_profile_id || null, guest_id: g.leader_guest_id || null };
+    const leaderParticipant = (Array.isArray(participantRows) ? participantRows : []).find(row => row &&
+      ((leaderRow.profile_id && row.profile_id === leaderRow.profile_id) ||
+       (leaderRow.guest_id && row.guest_id === leaderRow.guest_id))) || null;
+    return {
+      gameId: String(g.id || ""),
+      at: String(g.closed_at || ""),
+      groupId: g.group_id || null,
+      startedAt: cloudIso(g.started_at),
+      leaderRef: (leaderRow.profile_id || leaderRow.guest_id)
+        ? identityRowToRef(leaderRow, ctx, leaderParticipant ? String(leaderParticipant.display_name_snapshot || "") : "")
+        : null,
+      isBalanced: !!g.is_balanced,
+      balanceDifference: cloudMoney(g.balance_difference),
+      transfers: (Array.isArray(transferRows) ? transferRows : [])
+        .slice()
+        .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0))
+        .map(row => rowToTransfer(row, nameById)),
+      players: players.map(p => ({
+        id: p.id,
+        entryLog: p.entryLog.map(entry => ({ ...entry })),
+        name: p.name,
+        guestId: p.guestId || null,
+        memberId: p.memberId || null,
+        buyin: p.buyins.reduce((total, amount) => total + amount, 0),
+        cashout: Number(p.cashout) || 0,
+        net: (Number(p.cashout) || 0) - p.buyins.reduce((total, amount) => total + amount, 0),
+        status: p.status === "exited" ? "exited" : "active",
+        exitedAt: p.exitedAt || null,
+      })),
+    };
+  }
+  // The open table, in the shape newCurrentGame()/normalize() already understand.
+  function buildOpenGameFromCloud(gameRow, participantRows, entryRows, transferRows, ctx) {
+    const g = gameRow || {};
+    const nameById = {};
+    (Array.isArray(participantRows) ? participantRows : []).forEach(row => {
+      if (row && row.id) nameById[String(row.id)] = String(row.display_name_snapshot || "");
+    });
+    // Pre-close transfers only exist if somebody already computed the settlement on the server;
+    // when there are none the caller keeps the device's own reversible paid map (null = keep).
+    const rows = Array.isArray(transferRows) ? transferRows : [];
+    const statuses = rows.length ? {} : null;
+    rows.forEach(row => {
+      if (row && row.status === "paid" && row.settlement_key) statuses[String(row.settlement_key)] = true;
+    });
+    const leaderRow = { profile_id: g.leader_profile_id || null, guest_id: g.leader_guest_id || null };
+    const leaderParticipant = (Array.isArray(participantRows) ? participantRows : []).find(row => row &&
+      ((leaderRow.profile_id && row.profile_id === leaderRow.profile_id) ||
+       (leaderRow.guest_id && row.guest_id === leaderRow.guest_id))) || null;
+    return {
+      gameId: String(g.id || ""),
+      phase: g.phase === "settlement" ? "settlement" : "active",
+      groupId: g.group_id || null,
+      startedAt: cloudIso(g.started_at),
+      leaderRef: (leaderRow.profile_id || leaderRow.guest_id)
+        ? identityRowToRef(leaderRow, ctx, leaderParticipant ? String(leaderParticipant.display_name_snapshot || "") : "")
+        : null,
+      players: rowsToPlayers(participantRows, entryRows, g.group_id || null, ctx),
+      settlementStatuses: statuses,
+    };
+  }
+
+  // THE single-slot rule, in one place. The app holds exactly one current game; the server may
+  // legitimately hold several open ones (one per group). An empty, closed or example slot takes
+  // the server's game, the same game replaces itself, and a DIFFERENT open game on this device
+  // wins -- the local table is the one somebody is standing at. Documented limitation, not a bug:
+  // the second open game becomes reachable only once that local one is closed.
+  function pickCloudOpenGame(localGame, openGames) {
+    const games = (Array.isArray(openGames) ? openGames : []).filter(Boolean);
+    if (!games.length) return { action: "keep", game: null };
+    const local = localGame || {};
+    const localId = String(local.gameId || "");
+    const localOpen = !!localId && !local.example && local.phase !== "closed";
+    if (!localOpen) return { action: "load", game: games[0] };
+    const same = games.find(g => String(g.gameId || g.id || "") === localId);
+    if (same) return { action: "load", game: same };
+    return { action: "keep", game: null };
+  }
+  // The realtime apply guard: never overwrite a table somebody is typing into, and never let one
+  // game's events replace a different game's slot.
+  function shouldApplyIncomingGame(localState, incoming, hasActiveInput) {
+    if (!incoming) return false;
+    if (hasActiveInput) return false;
+    const local = localState || {};
+    const localId = String(local.gameId || "");
+    if (!localId || local.example || local.phase === "closed") return true;
+    return localId === String(incoming.gameId || incoming.id || "");
+  }
+
+
+  function groupToRow(group, ctx) {
+    const g = group || {};
+    const creator = refToIdentityRow(g.createdBy, ctx);
+    // groups.avatar_url is an object-storage URL; the local 96x96 avatarDataUrl has no column
+    // and stays on the device (mergeCloudIntoState carries it across a pull).
+    return {
+      id: String(g.id || ""),
+      name: String(g.name || "").trim().slice(0, 40),
+      created_by_profile_id: creator.profile_id || (ctx || {}).profileId || null,
+      created_at: cloudIsoOr(g.createdAt),
+      archived_at: cloudIso(g.archivedAt),
+      deleted_at: cloudIso(g.deletedAt),
+    };
+  }
+  function rowToGroup(row, ctx) {
+    const r = row || {};
+    return {
+      id: String(r.id || ""),
+      name: String(r.name || ""),
+      avatarDataUrl: null,
+      createdBy: identityRowToRef({ profile_id: r.created_by_profile_id, guest_id: null }, ctx,
+        cloudProfileName(r.created_by_profile_id, ctx)),
+      createdAt: String(r.created_at || ""),
+      archivedAt: cloudIso(r.archived_at),
+      deletedAt: cloudIso(r.deleted_at),
+    };
+  }
+
+  function groupMemberToRow(member, ctx) {
+    const m = member || {};
+    const identity = refToIdentityRow({ userId: m.userId, guestId: m.guestId, displayName: m.displayName }, ctx);
+    const status = m.status === "left" || m.status === "removed" ? m.status : "active";
+    const joinedAt = cloudIsoOr(m.joinedAt);
+    // hiddenAt has no column (see the schema follow-ups in the phase 2a report): it is a purely
+    // device-local "drop this group from my dashboard" flag and must never reach another device.
+    return {
+      id: String(m.id || ""),
+      group_id: String(m.groupId || ""),
+      profile_id: identity.profile_id,
+      guest_id: identity.guest_id,
+      display_name_snapshot: String(m.displayName || ""),
+      role: m.role === "admin" ? "admin" : "member",
+      status,
+      joined_at: joinedAt,
+      // group_members_left_at_chk / group_members_active_chk: a former member must have a
+      // left_at and an active one must not.
+      left_at: status === "active" ? null : cloudIsoOr(m.leftAt, joinedAt),
+    };
+  }
+  function rowToGroupMember(row, ctx) {
+    const r = row || {};
+    const name = String(r.display_name_snapshot || "");
+    const status = r.status === "left" || r.status === "removed" ? r.status : "active";
+    const ref = identityRowToRef(r, ctx, name);
+    return {
+      id: String(r.id || ""),
+      groupId: String(r.group_id || ""),
+      userId: ref.userId,
+      guestId: ref.guestId,
+      displayName: name,
+      role: r.role === "admin" ? "admin" : "member",
+      status,
+      joinedAt: String(r.joined_at || ""),
+      leftAt: status === "active" ? null : cloudIso(r.left_at),
+      hiddenAt: null,
+    };
+  }
+
+  function inviteToRow(invite, ctx) {
+    const i = invite || {};
+    const creator = refToIdentityRow(i.createdBy, ctx);
+    // expires_at is deliberately not written: the local Invite has no expiry field, and sending
+    // the column would wipe an expiry set anywhere else.
+    return {
+      id: String(i.id || ""),
+      group_id: String(i.groupId || ""),
+      token: String(i.token || ""),
+      created_by_profile_id: creator.profile_id || (ctx || {}).profileId || null,
+      created_at: cloudIsoOr(i.createdAt),
+      revoked_at: cloudIso(i.revokedAt),
+    };
+  }
+  function rowToInvite(row, ctx) {
+    const r = row || {};
+    return {
+      id: String(r.id || ""),
+      groupId: String(r.group_id || ""),
+      token: String(r.token || ""),
+      createdBy: identityRowToRef({ profile_id: r.created_by_profile_id, guest_id: null }, ctx,
+        cloudProfileName(r.created_by_profile_id, ctx)),
+      createdAt: String(r.created_at || ""),
+      revokedAt: cloudIso(r.revoked_at),
+    };
+  }
+
+  function friendshipToRow(friendship, ctx) {
+    const f = friendship || {};
+    const status = f.status === "accepted" || f.status === "rejected" ? f.status : "pending";
+    const createdAt = cloudIsoOr(f.createdAt);
+    return {
+      id: String(f.id || ""),
+      requester_profile_id: refToIdentityRow(f.requester, ctx).profile_id,
+      addressee_profile_id: refToIdentityRow(f.addressee, ctx).profile_id,
+      status,
+      created_at: createdAt,
+      // friendships_responded_chk: pending means no responded_at, answered means one.
+      responded_at: status === "pending" ? null : cloudIsoOr(f.respondedAt, createdAt),
+    };
+  }
+  function rowToFriendship(row, ctx) {
+    const r = row || {};
+    const status = r.status === "accepted" || r.status === "rejected" ? r.status : "pending";
+    return {
+      id: String(r.id || ""),
+      requester: identityRowToRef({ profile_id: r.requester_profile_id, guest_id: null }, ctx,
+        cloudProfileName(r.requester_profile_id, ctx)),
+      addressee: identityRowToRef({ profile_id: r.addressee_profile_id, guest_id: null }, ctx,
+        cloudProfileName(r.addressee_profile_id, ctx)),
+      status,
+      createdAt: String(r.created_at || ""),
+      respondedAt: status === "pending" ? null : cloudIso(r.responded_at),
+    };
+  }
+
+  // guests.display_name is CHECK (length(btrim(...)) BETWEEN 1 AND 40) and created_by must be the
+  // pusher (guests_insert), so a guest row is only ever minted for a member this device knows.
+  function guestToRow(guestId, displayName, createdBy) {
+    const name = String(displayName || "").trim().slice(0, 40);
+    return { id: String(guestId || ""), display_name: name || "אורח", created_by: String(createdBy || "") };
+  }
+
+  // What each table will accept. A row that fails here is dropped before the request rather than
+  // sent and rejected — legacy "legacy-…" ids, a member with no identity, a token below the
+  // schema's 8-character floor.
+  const CLOUD_PUSHABLE = {
+    guests: row => isCloudId(row.id) && !!row.display_name && isCloudId(row.created_by),
+    groups: row => isCloudId(row.id) && !!row.name && isCloudId(row.created_by_profile_id),
+    groupMembers: row => isCloudId(row.id) && isCloudId(row.group_id)
+      && (isCloudId(row.profile_id) ? !row.guest_id : isCloudId(row.guest_id)),
+    invites: row => isCloudId(row.id) && isCloudId(row.group_id)
+      && String(row.token || "").length >= 8 && isCloudId(row.created_by_profile_id),
+    friendships: row => isCloudId(row.id) && isCloudId(row.requester_profile_id)
+      && isCloudId(row.addressee_profile_id) && row.requester_profile_id !== row.addressee_profile_id,
+    games: row => isCloudId(row.id) && isCloudId(row.created_by)
+      && (row.group_id === null || isCloudId(row.group_id))
+      && !(row.leader_profile_id && row.leader_guest_id)
+      && (row.phase === "closed"
+        ? (!!row.closed_at && row.is_balanced !== null && row.balance_difference !== null)
+        : !row.closed_at),
+    gameParticipants: row => isCloudId(row.id) && isCloudId(row.game_id)
+      && !!String(row.display_name_snapshot || "").trim()
+      && (isCloudId(row.profile_id) ? !row.guest_id : isCloudId(row.guest_id))
+      && (row.status === "exited" ? !!row.exited_at : !row.exited_at)
+      && (row.cashout === null || (Number.isInteger(row.cashout) && row.cashout >= 0)),
+    entries: row => isCloudId(row.id) && isCloudId(row.game_id) && isCloudId(row.participant_id)
+      && Number.isInteger(row.amount) && row.amount > 0,
+    transfers: row => isCloudId(row.id) && isCloudId(row.game_id)
+      && isCloudId(row.from_participant_id) && isCloudId(row.to_participant_id)
+      && row.from_participant_id !== row.to_participant_id
+      && Number.isInteger(row.amount) && row.amount > 0 && !!row.settlement_key,
+    debts: row => isCloudId(row.id) && isCloudId(row.game_id)
+      && Number.isInteger(row.amount) && row.amount > 0
+      && !!row.debtor_name && !!row.creditor_name
+      && (isCloudId(row.debtor_profile_id) ? !row.debtor_guest_id : isCloudId(row.debtor_guest_id))
+      && (isCloudId(row.creditor_profile_id) ? !row.creditor_guest_id : isCloudId(row.creditor_guest_id)),
+  };
+
+  // The whole push payload for one device, keyed in FK order (guests before the members that
+  // reference them, groups before their children).
+  function buildCloudRows(collections, ctx) {
+    const c = collections || {};
+    const myProfileId = (ctx || {}).profileId || null;
+    const groups = (Array.isArray(c.groups) ? c.groups : [])
+      .map(g => groupToRow(g, ctx)).filter(CLOUD_PUSHABLE.groups);
+    const groupIds = new Set(groups.map(g => g.id));
+    const groupMembers = (Array.isArray(c.groupMembers) ? c.groupMembers : [])
+      .map(m => groupMemberToRow(m, ctx))
+      .filter(m => CLOUD_PUSHABLE.groupMembers(m) && groupIds.has(m.group_id));
+    const invites = (Array.isArray(c.invites) ? c.invites : [])
+      .map(i => inviteToRow(i, ctx))
+      .filter(i => CLOUD_PUSHABLE.invites(i) && groupIds.has(i.group_id));
+    // RLS lets the requester create a pending request and only the addressee answer one, so a
+    // row this device may not legally write is never attempted.
+    const friendships = (Array.isArray(c.friendships) ? c.friendships : [])
+      .map(f => friendshipToRow(f, ctx))
+      .filter(f => CLOUD_PUSHABLE.friendships(f) && (f.status === "pending"
+        ? f.requester_profile_id === myProfileId
+        : f.addressee_profile_id === myProfileId));
+    // Games. A game is all-or-nothing: if any of its participants has no identity the schema
+    // could store (a legacy player, an ad-hoc guest this device never gave a guestId), the whole
+    // game stays home rather than arriving on the server half-recorded.
+    const games = [];
+    const gamesClosed = [];
+    const gameParticipants = [];
+    const entries = [];
+    const transfers = [];
+    const pushedGameIds = new Set();
+    const identityByGameName = new Map();
+    (Array.isArray(c.games) ? c.games : []).forEach(snapshot => {
+      if (!snapshot) return;
+      const gameRow = gameToRow(snapshot, ctx);
+      if (!CLOUD_PUSHABLE.games(gameRow)) return;
+      const players = Array.isArray(snapshot.players) ? snapshot.players : [];
+      if (!players.length) return;
+      const participantRows = players.map(p => participantToRow(p, gameRow.id, ctx));
+      if (!participantRows.every(CLOUD_PUSHABLE.gameParticipants)) return;
+      const idByName = {};
+      const identityByName = {};
+      participantRows.forEach(row => {
+        idByName[row.display_name_snapshot] = row.id;
+        identityByName[row.display_name_snapshot] = { profile_id: row.profile_id, guest_id: row.guest_id };
+      });
+      const entryRows = [];
+      let entriesOk = true;
+      players.forEach(p => (Array.isArray(p.entryLog) ? p.entryLog : []).forEach(entry => {
+        const row = entryToRow(entry, gameRow.id, p.id);
+        if (!CLOUD_PUSHABLE.entries(row)) entriesOk = false;
+        entryRows.push(row);
+      }));
+      if (!entriesOk) return;
+      const transferRows = (Array.isArray(snapshot.transfers) ? snapshot.transfers : [])
+        .map((transfer, index) => transferToRow(transfer, gameRow.id, index, idByName))
+        .filter(CLOUD_PUSHABLE.transfers);
+      (gameRow.phase === "closed" ? gamesClosed : games).push(gameRow);
+      pushedGameIds.add(gameRow.id);
+      identityByGameName.set(gameRow.id, identityByName);
+      participantRows.forEach(row => gameParticipants.push(row));
+      entryRows.forEach(row => entries.push(row));
+      transferRows.forEach(row => transfers.push(row));
+    });
+    // Debts ride along with their game: without the participants there is no identity to write.
+    const debts = [];
+    const debtPayments = [];
+    (Array.isArray(c.debts) ? c.debts : []).forEach(debt => {
+      if (!debt || !pushedGameIds.has(String(debt.gameId || ""))) return;
+      const identityByName = identityByGameName.get(String(debt.gameId)) || {};
+      const row = debtToRow(debt, ctx, identityByName);
+      if (!CLOUD_PUSHABLE.debts(row)) return;
+      debts.push(row);
+      const payment = debtPaymentRow(debt, ctx, identityByName);
+      if (payment) debtPayments.push(payment);
+    });
+    const guests = [];
+    const seenGuests = new Set();
+    const addGuest = (guestId, displayName) => {
+      if (!guestId || seenGuests.has(guestId)) return;
+      seenGuests.add(guestId);
+      const row = guestToRow(guestId, displayName, myProfileId);
+      if (CLOUD_PUSHABLE.guests(row)) guests.push(row);
+    };
+    groupMembers.forEach(m => addGuest(m.guest_id, m.display_name_snapshot));
+    gameParticipants.forEach(row => addGuest(row.guest_id, row.display_name_snapshot));
+    return { guests, groups, groupMembers, invites, friendships,
+      games, gameParticipants, entries, transfers, gamesClosed, debts, debtPayments };
+  }
+
+  // What changed since the baseline (the rows the last pull/push confirmed the server holds).
+  // Deep-equal by JSON: both sides come out of the same mapper, so key order matches.
+  function diffCollections(prevRows, nextRows, key) {
+    const k = key || "id";
+    const before = new Map();
+    (Array.isArray(prevRows) ? prevRows : []).forEach(row => {
+      if (row && row[k] != null) before.set(String(row[k]), row);
+    });
+    const upserts = [];
+    const seen = new Set();
+    (Array.isArray(nextRows) ? nextRows : []).forEach(row => {
+      if (!row || row[k] == null) return;
+      const id = String(row[k]);
+      seen.add(id);
+      const previous = before.get(id);
+      if (!previous || JSON.stringify(previous) !== JSON.stringify(row)) upserts.push(row);
+    });
+    const deletes = [];
+    before.forEach((row, id) => { if (!seen.has(id)) deletes.push(row); });
+    return { upserts, deletes };
+  }
+
+  // The server owns groups / groupMembers / invites / friendships; every other collection on the
+  // state document (players, history, debts, settlementStatuses, …) is passed through untouched.
+  // Three things still have to survive a pull:
+  //   * local-only fields with no column — a group's avatarDataUrl and my own hiddenAt;
+  //   * records the server could not have returned — a legacy non-uuid id or one this device has
+  //     not confirmed pushing yet (options.keepLocalIds), which is what makes first-device
+  //     seeding safe;
+  //   * everything under a group this device soft-deleted, because RLS hides a deleted group
+  //     from SELECT and the local tombstone still titles that group's closed games.
+  function mergeCloudIntoState(state, pulled, options) {
+    const s = state || {};
+    const p = pulled || {};
+    const keep = new Set(((options || {}).keepLocalIds || []).map(String));
+    const byId = list => {
+      const map = new Map();
+      (Array.isArray(list) ? list : []).forEach(record => {
+        if (record && record.id) map.set(String(record.id), record);
+      });
+      return map;
+    };
+    const localGroups = Array.isArray(s.groups) ? s.groups : [];
+    const pulledGroups = Array.isArray(p.groups) ? p.groups : [];
+    const serverGroupIds = new Set(pulledGroups.map(g => String(g.id)));
+    const prevGroups = byId(localGroups);
+    const prevMembers = byId(s.groupMembers);
+    const keptGroups = localGroups.filter(g => g && g.id && !serverGroupIds.has(String(g.id))
+      && (keep.has(String(g.id)) || !!g.deletedAt));
+    const keptGroupIds = new Set(keptGroups.map(g => String(g.id)));
+    const isKeptChild = record => !!record && !!record.id
+      && (keep.has(String(record.id)) || keptGroupIds.has(String(record.groupId)));
+    const mergeKept = (pulledList, localList, mergeOne) => {
+      const merged = (Array.isArray(pulledList) ? pulledList : []).map(mergeOne);
+      const mergedIds = new Set(merged.map(record => String(record.id)));
+      return merged.concat((Array.isArray(localList) ? localList : [])
+        .filter(record => isKeptChild(record) && !mergedIds.has(String(record.id))));
+    };
+    return {
+      ...s,
+      // The four group collections move together, and only when the caller actually fetched them:
+      // a realtime update that carries nothing but the open game must not blank them.
+      ...(Array.isArray(p.groups) ? {
+        groups: pulledGroups.map(g => {
+          const before = prevGroups.get(String(g.id));
+          return before ? { ...g, avatarDataUrl: before.avatarDataUrl } : g;
+        }).concat(keptGroups),
+        groupMembers: mergeKept(p.groupMembers, s.groupMembers, m => {
+          const before = prevMembers.get(String(m.id));
+          return before ? { ...m, hiddenAt: before.hiddenAt } : m;
+        }),
+        invites: mergeKept(p.invites, s.invites, i => i),
+        friendships: mergeKept(p.friendships, s.friendships, f => f),
+      } : {}),
+      // The server owns a closed game once it holds one; a local-only entry (legacy, or closed
+      // before this device ever had a session) simply stays. Newest first, like unshift() leaves it.
+      ...(Array.isArray(p.history) ? { history: mergeCloudHistory(s.history, p.history) } : {}),
+      // A debt is server-owned by id too, so a "paid" flipped on another device lands here.
+      ...(Array.isArray(p.debts) ? { debts: mergeCloudDebts(s.debts, p.debts) } : {}),
+      // The current-game slot: only ever replaced by pickCloudOpenGame's decision.
+      ...(p.game ? {
+        example: false,
+        gameId: p.game.gameId,
+        phase: p.game.phase,
+        groupId: p.game.groupId || null,
+        startedAt: p.game.startedAt || null,
+        leaderRef: p.game.leaderRef || null,
+        players: p.game.players || [],
+        settlementStatuses: p.game.settlementStatuses
+          || (s.settlementStatuses && typeof s.settlementStatuses === "object" ? s.settlementStatuses : {}),
+      } : {}),
+    };
+  }
+  function mergeCloudHistory(localHistory, pulledHistory) {
+    const local = Array.isArray(localHistory) ? localHistory : [];
+    const pulled = Array.isArray(pulledHistory) ? pulledHistory : [];
+    const serverIds = new Set(pulled.map(entry => String(entry && entry.gameId)));
+    const merged = pulled.concat(local.filter(entry => entry && !serverIds.has(String(entry.gameId))));
+    return merged.sort((a, b) => String((b && b.at) || "").localeCompare(String((a && a.at) || "")));
+  }
+  function mergeCloudDebts(localDebts, pulledDebts) {
+    const local = Array.isArray(localDebts) ? localDebts : [];
+    const pulled = Array.isArray(pulledDebts) ? pulledDebts : [];
+    const serverIds = new Set(pulled.map(debt => String(debt && debt.id)));
+    return pulled.concat(local.filter(debt => debt && !serverIds.has(String(debt.id))));
   }
 
   function el(tag, cls, text) {
@@ -4459,6 +5810,7 @@
       if (!authUser && authAppliedUserId === null) return; // no session before, no session now
       authUser = null;
       authAppliedUserId = null;
+      exitCloudMode(); // local records stay put; we simply stop pushing them
       render(); // `me` deliberately stays: local play continues after a sign-out
       return;
     }
@@ -4470,6 +5822,7 @@
     stripAuthParamsFromUrl();
     document.getElementById("login").hidden = true;
     render();
+    enterCloudMode(); // phase 2a: groups/members/invites/friendships now live on the server
   }
 
   function initAuth() {
@@ -4482,6 +5835,7 @@
     if (!supabase || !authUser) return;
     authUser = null;
     authAppliedUserId = null;
+    exitCloudMode(); // applySession(null) short-circuits after this, so stop the pushes here
     supabase.auth.signOut().catch(() => {});
   }
 
@@ -4913,9 +6267,12 @@
       shakeEl(inp); // duplicate names would merge menus, records and transfers
       return;
     }
-    let guestId = null, memberId = null;
+    // Every player gets the stable per-person guestId this device already uses for that name --
+    // an ad-hoc table too, because game_participants_identity_chk needs an identity per row and a
+    // player with neither profile nor guest simply cannot be stored.
+    const guestId = resolveGuestId(collectionsOf(state), name);
+    let memberId = null;
     if (state.groupId) {
-      guestId = resolveGuestId(collectionsOf(state), name);
       const member = activeMembers(state.groupMembers, state.groupId).find(m => m.displayName === name);
       memberId = member ? member.id : null;
     }
@@ -5231,6 +6588,9 @@
   }
   if (supabase) bootBackend();
   else document.addEventListener("DOMContentLoaded", bootBackend, { once: true });
+  // After the auth section, so initSync() can ask cloudMode() whether a session already owns the
+  // data. A restored session arrives asynchronously and tears this down again (enterCloudMode).
+  initSync();
   const joinToken = parseJoinToken(location.search);
   if (joinToken) {
     // Nothing is joined here — this only shows the code and strips the query. Real redemption
