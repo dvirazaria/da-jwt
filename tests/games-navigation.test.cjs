@@ -59,10 +59,14 @@ test('dashboard creation and resume actions have dedicated handlers', () => {
   assert.match(html, /setAppView\("game"\)/);
 });
 
+// getActiveGameSummaries delegates "is there an open game" to isGameOpen (pure section):
+// an empty table is not a game, so the adapter's slice is loaded together with that predicate.
+const openGameSource = sourceBetween('  function hasOpenPhase(currentGame) {', '  // The engine has one current-game slot');
+
 test('active game UI data is produced through ActiveGameSummary', () => {
   const source = sourceBetween('  function getActiveGameSummaries', '  function formatGameTime');
   const context = vm.createContext({});
-  vm.runInContext(source, context);
+  vm.runInContext(openGameSource + source, context);
   const summary = vm.runInContext(`getActiveGameSummaries({
     example:false, phase:'active', gameId:'g1', groupId:null,
     startedAt:'2026-09-07T16:00:00.000Z', updatedAt:'2026-09-07T17:00:00.000Z',
@@ -83,14 +87,16 @@ test('active game UI data is produced through ActiveGameSummary', () => {
   });
 });
 
-test('active game adapter hides demo, closed, and invalid optional times', () => {
+test('active game adapter hides demo, closed, empty, and invalid optional times', () => {
   const source = sourceBetween('  function getActiveGameSummaries', '  function formatGameTime');
   const context = vm.createContext({});
-  vm.runInContext(source, context);
-  assert.equal(vm.runInContext(`getActiveGameSummaries({example:true, phase:'active', players:[]}).length`, context), 0);
-  assert.equal(vm.runInContext(`getActiveGameSummaries({example:false, phase:'closed', players:[]}).length`, context), 0);
-  assert.equal(vm.runInContext(`getActiveGameSummaries({example:false, phase:'active', gameId:'g1', players:[]})[0].startedAt`, context), null);
-  assert.equal(vm.runInContext(`getActiveGameSummaries({example:false, phase:'active', gameId:'g1', updatedAt:'invalid', players:[]})[0].updatedAt`, context), null);
+  vm.runInContext(openGameSource + source, context);
+  assert.equal(vm.runInContext(`getActiveGameSummaries({example:true, phase:'active', players:[{id:'p1', name:'א', buyins:[50]}]}).length`, context), 0);
+  assert.equal(vm.runInContext(`getActiveGameSummaries({example:false, phase:'closed', players:[{id:'p1', name:'א', buyins:[50]}]}).length`, context), 0);
+  // an empty table is not a game — the dashboard must not show it
+  assert.equal(vm.runInContext(`getActiveGameSummaries({example:false, phase:'active', gameId:'g1', players:[]}).length`, context), 0);
+  assert.equal(vm.runInContext(`getActiveGameSummaries({example:false, phase:'active', gameId:'g1', players:[{id:'p1', name:'א', buyins:[50]}]})[0].startedAt`, context), null);
+  assert.equal(vm.runInContext(`getActiveGameSummaries({example:false, phase:'active', gameId:'g1', updatedAt:'invalid', players:[{id:'p1', name:'א', buyins:[50]}]})[0].updatedAt`, context), null);
 });
 
 test('startedAt travels through normalization and remote persistence without legacy fabrication', () => {
@@ -195,7 +201,7 @@ test('finish and return actions preserve the current game data', () => {
     saved: 0,
     view: null,
   });
-  vm.runInContext('function save() { saved += 1; } function setAppView(next) { view = next; }' + html.slice(start, end), context);
+  vm.runInContext('function save() { saved += 1; } function setAppView(next) { view = next; }' + openGameSource + html.slice(start, end), context);
   vm.runInContext('finishGame()', context);
   assert.equal(vm.runInContext('state.phase', context), 'settlement');
   assert.equal(vm.runInContext('view', context), 'settle');

@@ -346,11 +346,13 @@
 
   /* ---------- Games dashboard ---------- */
   .games-view header { text-align: center; }
-  .games-view header .eyebrow { justify-content: center; }
+  /* The sync dot stays at the inline-start corner (same spot as on the profile) — the eyebrow is never centered. */
   .games-home { margin-top: 26px; animation: rise .4s ease both; text-align: center; }
   .games-home-in { width: 100%; max-width: 380px; margin: 0 auto; }
-  .games-home-title { margin: 0; font-size: 24px; font-weight: 800; }
-  .games-home-lead { color: var(--dim); font-size: 14px; font-weight: 300; margin: 6px 0 26px; }
+  /* No big title on the dashboard: the column starts below the corner stack (theme + settings, ~86px)
+     so the lead line and the quick actions never sit beside the gear. */
+  .games-home-dash { padding-top: 52px; }
+  .games-home-lead { color: var(--dim); font-size: 14px; font-weight: 300; margin: 0 0 26px; }
   .games-section { margin-top: 24px; text-align: center; }
   .games-section:first-of-type { margin-top: 0; }
   .games-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -363,6 +365,7 @@
   }
   .games-quick-action.primary { border-color: var(--accent); color: var(--accent); }
   .games-quick-action.primary:hover { background: var(--accent); color: var(--bg); }
+  .games-quick-action:disabled { opacity: .45; cursor: default; color: var(--faint); }
   .games-active-card, .games-group-card { padding: 15px 0; border-bottom: 1px solid var(--line); text-align: center; }
   .games-card-status { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; font-weight: 400; }
   .games-card-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
@@ -2310,8 +2313,7 @@
     const active = activeMembers(members, groupId);
     const games = groupClosedGames(history, groupId);
     const currentGame = c.currentGame || {};
-    const hasActiveGame = !currentGame.example && currentGame.groupId === groupId &&
-      (currentGame.phase === "active" || currentGame.phase === "settlement");
+    const hasActiveGame = isGameOpen(currentGame) && currentGame.groupId === groupId;
     const leaderboard = buildLeaderboard(history, members, groupId);
     const topRank = leaderboard.length ? leaderboard[0].rank : null;
     const leaderNames = topRank === null ? [] : leaderboard.filter(l => l.rank === topRank).map(l => l.displayName);
@@ -2348,15 +2350,33 @@
       .map(g => getGroupSummary(c, g.id, meName))
       .filter(Boolean);
   }
+  // "An empty table is not a game": the current-game slot counts as an open game only when it is
+  // real (not example), its phase is active/settlement AND it has at least one player. A table
+  // opened from "משחק ללא קבוצה" with nobody added yet is an empty slot — it is not shown on the
+  // dashboard, does not block starting a group game, and is discarded when the user leaves it
+  // (setAppView). A one-player table already holds buy-in money, so it stays a real open game.
+  function hasOpenPhase(currentGame) {
+    const g = currentGame || {};
+    return !g.example && (g.phase === "active" || g.phase === "settlement");
+  }
+  function isGameOpen(currentGame) {
+    const g = currentGame || {};
+    return hasOpenPhase(g) && Array.isArray(g.players) && g.players.length > 0;
+  }
+  function isEmptyOpenGame(currentGame) {
+    const g = currentGame || {};
+    return hasOpenPhase(g) && (!Array.isArray(g.players) || g.players.length === 0);
+  }
   // The engine has one current-game slot: a group can have at most one open game, and the
   // whole device can have only one open game at a time (documented limitation, see plan).
+  // An empty open slot (isEmptyOpenGame) does not block — starting a group game simply replaces it.
   function canStartGroupGame(collections, groupId) {
     const c = collections || {};
     const groups = Array.isArray(c.groups) ? c.groups : [];
     const group = groups.find(g => g && g.id === groupId);
     if (group && (group.archivedAt || group.deletedAt)) return { ok: false, reason: "group-archived" };
     const currentGame = c.currentGame || {};
-    const isOpen = !currentGame.example && (currentGame.phase === "active" || currentGame.phase === "settlement");
+    const isOpen = isGameOpen(currentGame);
     if (isOpen && currentGame.groupId === groupId) return { ok: false, reason: "group-has-open-game" };
     if (isOpen) return { ok: false, reason: "another-game-open" };
     return { ok: true, reason: null };
@@ -2453,12 +2473,18 @@
   // nothing else, so the group, its history and every other member stay exactly as they were.
   // Refused (false, no mutation) while I am still an active member, or when I was never one.
   function hideGroupForMember(members, groupId, meName, at) {
-    const list = Array.isArray(members) ? members : [];
-    const membership = list.find(m => m && m.groupId === groupId && m.displayName === meName);
+    const membership = findMyFormerMembership(members, groupId, meName);
     if (!membership) return false;
-    if (membership.status !== "left" && membership.status !== "removed") return false;
     membership.hiddenAt = at;
     return true;
+  }
+  // My own left/removed membership in a group (null when I am active there, or was never a
+  // member at all — e.g. this device's name matches no membership row). The group page renders
+  // the hide-from-device action only when this is non-null, so its confirm tap can always
+  // succeed; hideGroupForMember is refused in exactly the cases this returns null.
+  function findMyFormerMembership(members, groupId, meName) {
+    return (Array.isArray(members) ? members : [])
+      .find(m => m && m.groupId === groupId && m.displayName === meName && (m.status === "left" || m.status === "removed")) || null;
   }
   // The dashboard-side reader for the flag above: true only for a group I am no longer a member
   // of AND have hidden. Opening such a group directly still works (getGroupSummary is unfiltered).
@@ -3537,6 +3563,15 @@
   }
 
   function setAppView(nextView) {
+    // Leaving the table (game/settle) with nobody seated: the game never existed — reset the slot
+    // to a closed empty game (newCurrentGame keeps groups/history/debts) with no history entry.
+    // Strict guard: only a real (non-example) open phase with zero players is ever discarded.
+    const leavingTable = (appView === "game" || appView === "settle") && nextView !== "game" && nextView !== "settle";
+    if (leavingTable && isEmptyOpenGame(state)) {
+      state = newCurrentGame(state, { phase: "closed" });
+      expandedEntries.clear();
+      save();
+    }
     appView = nextView;
     if (nextView !== "game") { openMenu = null; customOpen = null; exitOpen = null; exitJustOpened = null; }
     if (nextView !== "settle") {
@@ -3588,7 +3623,10 @@
     setTimeout(() => container.classList.remove("load-in"), 600);
   }
 
+  // Refused while a real game (with players) is open — newCurrentGame would silently replace it.
+  // The dashboard renders the quick action disabled in that state; this guard is the backstop.
   function startUngroupedGame() {
+    if (isGameOpen(state)) return;
     state = newCurrentGame(state, { phase: "active", startedAt: new Date().toISOString(), groupId: null });
     expandedEntries.clear();
     openMenu = null; customOpen = null; pendingAmount = null; exitOpen = null; exitJustOpened = null;
@@ -3623,7 +3661,7 @@
   }
 
   function continueCurrentGame() {
-    if (state.example || state.phase === "closed") return;
+    if (!isGameOpen(state)) return;
     setAppView(state.phase === "settlement" ? "settle" : "game");
   }
 
@@ -3794,7 +3832,7 @@
   // when gameState.groupId doesn't match a group in it, title falls back to "משחק ללא קבוצה". A
   // match resolves the group's name even when the group is archived.
   function getActiveGameSummaries(gameState, groups) {
-    if (!gameState || gameState.example || (gameState.phase !== "active" && gameState.phase !== "settlement")) return [];
+    if (!isGameOpen(gameState)) return []; // an empty table is not a game (see isGameOpen)
     const validTime = value => typeof value === "string" && !Number.isNaN(Date.parse(value)) ? value : null;
     const players = (Array.isArray(gameState.players) ? gameState.players : []).map(player => {
       const buyins = Array.isArray(player.buyins) ? player.buyins : [];
@@ -3875,10 +3913,18 @@
 
     const start = el("button", "games-quick-action", "משחק ללא קבוצה");
     start.type = "button";
-    start.addEventListener("click", startUngroupedGame);
+    // Data-loss guard: while a game with players is open the slot is taken — the active card's
+    // "כנס לשולחן"/"המשך סגירה" is the way in. Same disabled + quiet reason pattern as the group
+    // page's "התחל משחק" (renderGroupPrimaryAction), same wording.
+    const gameOpen = isGameOpen(state);
+    if (gameOpen) {
+      start.disabled = true;
+      start.setAttribute("aria-disabled", "true");
+    } else start.addEventListener("click", startUngroupedGame);
 
     actions.append(createGroupBtn, start);
     section.appendChild(actions);
+    if (gameOpen) section.appendChild(el("p", "games-primary-reason", "יש משחק פעיל אחר — סגור אותו קודם"));
     renderCreateGroupPanel(section);
     parent.appendChild(section);
   }
@@ -4193,8 +4239,7 @@
     gamesPageEnterNext = false;
     const box = document.getElementById("gamesHome");
     box.innerHTML = "";
-    const inner = el("div", "games-home-in");
-    inner.appendChild(el("h2", "games-home-title", "משחקים"));
+    const inner = el("div", "games-home-in games-home-dash");
     inner.appendChild(el("p", "games-home-lead", "המשחקים הפעילים והקבוצות שלך במקום אחד."));
     renderQuickActions(inner);
     renderActiveGamesSection(inner, getActiveGameSummaries(state, state.groups), enterStagger);
@@ -4272,7 +4317,7 @@
       btn.disabled = true;
       btn.setAttribute("aria-disabled", "true");
       if (!summary.isMember) {
-        reason = "עזבת את הקבוצה";
+        reason = leftGroupReason();
       } else if (gate && gate.ok === false) {
         const reasons = {
           "group-has-open-game": "יש כבר משחק פתוח בקבוצה",
@@ -4284,16 +4329,30 @@
     }
     wrap.appendChild(btn);
     if (reason) wrap.appendChild(el("p", "games-primary-reason", reason));
-    if (!summary.isMember) wrap.appendChild(renderHideGroupAction());
+    const hideAction = !summary.isMember && renderHideGroupAction();
+    if (hideAction) wrap.appendChild(hideAction);
     if (canStart) wrap.appendChild(renderStartGamePanel());
     return wrap;
+  }
+
+  // The reason line under the blocked primary button when I have no active membership here:
+  // "עזבת"/"הוסרת" when a left/removed row of mine exists, and — when no row of mine exists at
+  // all (this device's name matches none of the membership names) — an honest "לא חבר" line
+  // that names the identity I am using, instead of a false "עזבת" over a dead-end action.
+  function leftGroupReason() {
+    const former = findMyFormerMembership(state.groupMembers, currentGroupId, me);
+    if (former) return former.status === "removed" ? "הוסרת מהקבוצה" : "עזבת את הקבוצה";
+    return "אתה לא חבר בקבוצה הזו — מחובר בשם " + me;
   }
 
   // D8, step two of leaving: once I am out of a group, the page offers to drop it from this
   // device. Same two-step armed pattern as every other destructive action here (no confirm()),
   // auto-disarming after 4s. hideGroupForMember only stamps my own membership — the group and
-  // everybody else's history are untouched, which is what the helper line promises.
+  // everybody else's history are untouched, which is what the helper line promises. Returns
+  // null (nothing destructive to offer) when I have no left/removed membership to stamp — the
+  // confirm tap must never be a silent no-op.
   function renderHideGroupAction() {
+    if (!findMyFormerMembership(state.groupMembers, currentGroupId, me)) return null;
     const wrap = el("div", "games-hide-group");
     const btn = el("button", "set-flat danger games-hide-group-btn" + (hideGroupArmed ? " armed" : ""),
       hideGroupArmed ? "בטוח? הקבוצה תוסר מהמכשיר" : "מחק קבוצה");
@@ -4307,7 +4366,9 @@
       }
       clearTimeout(hideGroupArmedTimeout);
       hideGroupArmed = false;
-      if (!hideGroupForMember(state.groupMembers, currentGroupId, me, new Date().toISOString())) return;
+      // Refused (membership changed under us): re-render to the page's honest state — the
+      // armed label must not linger over a no-op.
+      if (!hideGroupForMember(state.groupMembers, currentGroupId, me, new Date().toISOString())) { renderGroupPage(); return; }
       save();
       setAppView("games");
     });
@@ -4952,7 +5013,8 @@
     if (isArchived) {
       const note = el("div", "games-primary-action");
       note.appendChild(el("p", "games-primary-reason", "הקבוצה בארכיון"));
-      if (!summary.isMember) note.appendChild(renderHideGroupAction());
+      const hideAction = !summary.isMember && renderHideGroupAction();
+      if (hideAction) note.appendChild(hideAction);
       inner.appendChild(note);
     } else {
       inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
@@ -5048,7 +5110,9 @@
     document.getElementById("addrow").hidden = appView !== "game";
     renderTableHeader();
     renderAddRowChips();
-    document.getElementById("settingsBtn").hidden = appView !== "profile";
+    // Settings gear: profile and the games dashboard only. The group page has its own "הגדרות" (group
+    // settings) in its header, and game/settle keep the reset control in that corner.
+    document.getElementById("settingsBtn").hidden = appView !== "profile" && appView !== "games";
     document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games" || appView === "group";
     document.getElementById("gamesHome").hidden = appView !== "games" && appView !== "group";
 
@@ -5377,7 +5441,7 @@
     const finishBtn = document.getElementById("finishGameBtn");
     const finishHint = document.getElementById("finishGameHint");
     const returnBtn = document.getElementById("returnToGameBtn");
-    const canFinishGame = appView === "game" && state.phase === "active" && !state.example;
+    const canFinishGame = appView === "game" && state.phase === "active" && isGameOpen(state);
     finishBtn.hidden = !canFinishGame;
     returnBtn.hidden = appView !== "settle" || state.example;
     if (!canFinishGame && finishGameHoldTimer) clearFinishGameHold();
@@ -5541,7 +5605,7 @@
   }
 
   function beginFinishGameHold(e) {
-    if (appView !== "game" || state.phase !== "active" || state.example) return;
+    if (appView !== "game" || state.phase !== "active" || !isGameOpen(state)) return;
     if (e.button !== undefined && e.button !== 0) return;
     clearFinishGameHold();
     const btn = e.currentTarget;
@@ -5566,7 +5630,7 @@
   }
 
   function finishGame() {
-    if (state.example || state.phase !== "active") return;
+    if (state.phase !== "active" || !isGameOpen(state)) return;
     state.phase = "settlement";
     save();
     setAppView("settle");
@@ -6396,7 +6460,9 @@
       return;
     }
     resetGroupDeleteArm();
-    if (!deleteGroup(state.groups, currentGroupId, new Date().toISOString())) return;
+    // Refused only when the group is gone/already deleted: close the overlay and let the page
+    // bounce to the dashboard instead of leaving the tap a silent no-op.
+    if (!deleteGroup(state.groups, currentGroupId, new Date().toISOString())) { closeGroupSettings(); renderGroupPage(); return; }
     save();
     closeGroupSettings();
     setAppView("games");

@@ -71,7 +71,9 @@ test('buildGroupCreation carries an avatar data URL when provided, and trims the
 test('the create-group quick action is enabled, not a coming-soon placeholder', () => {
   const source = sourceBetween('  function renderQuickActions(parent) {', '  function renderCreateGroupPanel(');
   assert.doesNotMatch(source, /coming-soon/);
-  assert.doesNotMatch(source, /disabled/);
+  // only the ungrouped-game capsule is ever disabled (open-game guard); create-group never is
+  assert.doesNotMatch(source, /createGroupBtn\.disabled/);
+  assert.doesNotMatch(source, /createGroupBtn\.setAttribute\("aria-disabled"/);
   assert.doesNotMatch(source, /בקרוב/);
   assert.match(source, /\+ צור קבוצה/);
   assert.match(source, /toggleCreateGroupPanel/);
