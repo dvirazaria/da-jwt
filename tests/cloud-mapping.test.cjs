@@ -56,12 +56,16 @@ const CTX = { profileId: P1, guestId: G1, displayName: 'דביר', profileIds: [
 const ctxLiteral = JSON.stringify(CTX);
 
 // ---------- round trips ----------
+// Phase 2b note: a ROW that carries a profile_id comes back with that id on the ref (`userId`),
+// because losing it would demote an account holder to a guest on the next push. `guestId` still
+// follows the phase 2a rule, so identityKey() and every closed game on this device keep pointing
+// at the same person. The fixtures below are therefore written the way a pulled record looks.
 
 test('a group round-trips local -> row -> local, nulls included', () => {
   const context = load();
   const group = {
     id: GR1, name: 'ערב פוקר', avatarDataUrl: null,
-    createdBy: { userId: null, guestId: G1, displayName: 'דביר' },
+    createdBy: { userId: P1, guestId: G1, displayName: 'דביר' },
     createdAt: '2026-09-01T20:00:00.000Z', archivedAt: null, deletedAt: null,
   };
   const row = runJSON(`groupToRow(${JSON.stringify(group)}, ${ctxLiteral})`, context);
@@ -76,7 +80,7 @@ test('an archived + soft-deleted group keeps both timestamps through the round t
   const context = load();
   const group = {
     id: GR1, name: 'ישן', avatarDataUrl: null,
-    createdBy: { userId: null, guestId: G1, displayName: 'דביר' },
+    createdBy: { userId: P1, guestId: G1, displayName: 'דביר' },
     createdAt: '2026-01-01T00:00:00.000Z',
     archivedAt: '2026-02-01T00:00:00.000Z', deletedAt: '2026-03-01T00:00:00.000Z',
   };
@@ -125,14 +129,18 @@ test('my own membership becomes a profile row and comes back as the same local r
   const row = runJSON(`groupMemberToRow(${JSON.stringify(member)}, ${ctxLiteral})`, context);
   assert.equal(row.profile_id, P1);
   assert.equal(row.guest_id, null);
-  assert.deepEqual(runJSON(`rowToGroupMember(${JSON.stringify(row)}, ${ctxLiteral})`, context), member);
+  // Phase 2b: the record comes back with the profile id it earned; everything else is untouched,
+  // and the next push maps it to exactly the same row.
+  const back = runJSON(`rowToGroupMember(${JSON.stringify(row)}, ${ctxLiteral})`, context);
+  assert.deepEqual(back, Object.assign({}, member, { userId: P1 }));
+  assert.deepEqual(runJSON(`groupMemberToRow(${JSON.stringify(back)}, ${ctxLiteral})`, context), row);
 });
 
 test('an invite round-trips, and its creator is the signed-in profile', () => {
   const context = load();
   const invite = {
     id: IV1, groupId: GR1, token: 'ABCD2345',
-    createdBy: { userId: null, guestId: G1, displayName: 'דביר' },
+    createdBy: { userId: P1, guestId: G1, displayName: 'דביר' },
     createdAt: '2026-09-03T09:00:00.000Z', revokedAt: null,
   };
   const row = runJSON(`inviteToRow(${JSON.stringify(invite)}, ${ctxLiteral})`, context);
@@ -147,8 +155,8 @@ test('a friendship round-trips between two profiles and keeps respondedAt null w
   const context = load();
   const friendship = {
     id: F1,
-    requester: { userId: null, guestId: G1, displayName: 'דביר' },
-    addressee: { userId: null, guestId: P2, displayName: '' },
+    requester: { userId: P1, guestId: G1, displayName: 'דביר' },
+    addressee: { userId: P2, guestId: P2, displayName: '' },
     status: 'pending', createdAt: '2026-09-04T12:00:00.000Z', respondedAt: null,
   };
   const row = runJSON(`friendshipToRow(${JSON.stringify(friendship)}, ${ctxLiteral})`, context);
@@ -269,10 +277,13 @@ const COLLECTIONS = {
   friendships: [],
 };
 
-test('buildCloudRows returns the five tables in FK order and drops legacy non-uuid ids', () => {
+test('buildCloudRows returns every table in FK order and drops legacy non-uuid ids', () => {
   const context = load();
   const rows = runJSON(`buildCloudRows(${JSON.stringify(COLLECTIONS)}, ${ctxLiteral})`, context);
-  assert.deepEqual(Object.keys(rows), ['guests', 'groups', 'groupMembers', 'invites', 'friendships']);
+  // The game tables (phase 2b) come after the group tables they depend on; see
+  // tests/cloud-games.test.cjs for what goes into them.
+  assert.deepEqual(Object.keys(rows), ['guests', 'groups', 'groupMembers', 'invites', 'friendships',
+    'games', 'gameParticipants', 'entries', 'transfers', 'gamesClosed', 'debts', 'debtPayments']);
   assert.deepEqual(rows.groups.map(g => g.id), [GR1]);
   assert.deepEqual(rows.invites.map(i => i.id), [IV1]);
   assert.equal(JSON.stringify(rows).includes('legacy-'), false, 'a non-uuid id must never be sent');
@@ -316,7 +327,7 @@ test('buildCloudRows sends only friendships RLS would accept from this device', 
 test('buildCloudRows sends nothing at all without a session', () => {
   const context = load();
   const rows = runJSON(`buildCloudRows(${JSON.stringify(COLLECTIONS)}, {profileId:null,guestId:null,displayName:'דביר',profileIds:[]})`, context);
-  assert.deepEqual(rows, { guests: [], groups: [], groupMembers: [], invites: [], friendships: [] });
+  Object.keys(rows).forEach(key => assert.deepEqual(rows[key], [], `${key} must be empty without a session`));
 });
 
 // ---------- diffCollections ----------
@@ -479,7 +490,9 @@ test('the push writes the five tables in FK order, upserting on the primary key'
     appScript.indexOf('  // ---------- cloud store (Supabase) ----------'),
     appScript.indexOf('  // Example data promises'));
   assert.match(store, /\["guests", "guests"\][\s\S]*?\["groups", "groups"\][\s\S]*?\["groupMembers", "group_members"\][\s\S]*?\["invites", "invites"\][\s\S]*?\["friendships", "friendships"\]/);
-  assert.match(store, /\.upsert\(diff\.upserts, \{ onConflict: "id" \}\)/);
+  assert.match(store, /\.upsert\(upserts, \{ onConflict: "id" \}\)/);
+  // entries/transfers/debts are insert-only (no UPDATE policy / column-limited grants).
+  assert.match(store, /ignoreDuplicates: true/);
 });
 
 test('a push error shows the sync dot in its error state and re-reads from the server', () => {

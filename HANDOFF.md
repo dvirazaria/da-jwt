@@ -159,9 +159,12 @@ project's "keep one source of truth" rule; nothing here is a second store.
   can only have one open game at a time, even across different groups. `canStartGroupGame()` reports
   `group-has-open-game` vs `another-game-open` accordingly. The backend removes the second
   limitation: `schema.sql`'s `games_one_open_per_group_uk` is a per-group unique index, not per-device.
-- **Name-based identity** — inside the app "who am I" is still a name (`me`). Supabase phase 1 can
-  now *fill* that name from a real session (`profiles.display_name`, see "Backend (phase 1)" below),
-  but nothing downstream uses the session yet: `ParticipantRef.userId` is always `null`. `resolveGuestId()` gives the same name the same `guestId`
+  In cloud mode this shows up as `pickCloudOpenGame()`: a second open game on the server is kept
+  waiting (and logged) rather than replacing the table somebody is standing at.
+- **Name-based identity** — inside the app "who am I" is still a name (`me`). Supabase phase 1 fills
+  that name from a real session (`profiles.display_name`), and since phase 2b a `ParticipantRef` keeps
+  a `userId` when the *server* supplied one — local code still never mints one, so on a device that
+  has never signed in `userId` is always `null`. `resolveGuestId()` gives the same name the same `guestId`
   across groups/history on one device, but two different people can collide if they type the same
   name. This is a pre-backend simplification the group model was built around, not an oversight.
 - **Leaderboard eligibility rule** — since nobody is a linked account yet, "eligible for the
@@ -241,8 +244,8 @@ function changed. Without a session the app behaves exactly as before, including
 sync. The two writers never run together: `initSync()` returns immediately in cloud mode and
 `enterCloudMode()` drops `gameDoc` if a session arrives after it started.
 
-**Still local-only in 2a:** the open game, `history`, `debts`, `settlementStatuses`, and the
-`?join=` invite redemption. Those (plus the realtime channel for the open table) are phase 2b.
+**Still local-only after 2a:** the open game, `history`, `debts`, `settlementStatuses`, and the
+`?join=` invite redemption. Everything but `?join=` landed in phase 2b (next section).
 
 **Two new sections in `kupa-sgura.html`:**
 
@@ -255,8 +258,11 @@ sync. The two writers never run together: `initSync()` returns immediately in cl
   `pullCloud()`, `pushCloud()`, `scheduleCloudPush()` (400ms debounce, same as before),
   `scheduleCloudPull()`, `applyCloudPull()`, `enterCloudMode()`, `exitCloudMode()`.
 
-**Identity at the row boundary only.** The local model still has no accounts, so `userId` on every
-ref stays `null`. A membership whose `displayName` is `me` (or whose `guestId` is the one this
+**Identity at the row boundary.** Local code never mints a `userId` — but since phase 2b a UUID that
+came back from the server is kept on the ref (`keptUserId`), so an account holder is not demoted to a
+guest on the next push. `guestId` still follows the 2a rule, and `sameIdentity()` matches on any id
+both refs carry, so a member row that knows its `profile_id` and a closed game that only ever recorded
+the `guestId` are still one person. A membership whose `displayName` is `me` (or whose `guestId` is the one this
 device uses for me) becomes `profile_id = authUser.id`; everybody else becomes a `guests` row
 (`id = guestId`, `created_by = me`) upserted before the members that reference it. `hiddenAt` (no
 column) and a group's `avatarDataUrl` (`avatar_url` is object storage, not a data URL) are
@@ -276,6 +282,57 @@ push error, `"שגיאת סנכרון — נשמר מקומית"` on a pull erro
 **First-device seeding.** `mergeCloudIntoState` keeps local records the server could not have
 returned (a legacy id, or anything created since the last confirmed push), so the pull that follows
 sign-in never eats an unsynced group; the push right after it sends them up.
+
+## Backend (phase 2b: cloud persistence for games + realtime table sync)
+
+**What syncs now.** With a session the server owns everything the poker record is made of:
+`games`, `game_participants`, `entries`, and — written at the close — `transfers` and `debts`, on
+top of the four collections phase 2a moved. Two phones signed into the same account (or two members
+of the same group) see the same open table, the same buy-ins, the same closed-game history and the
+same debts.
+
+**One new local seam, no engine change.** `settle()`, `tableBalance()`, `buildHistoryEntry()`,
+`buildDebtRecords()`, the `finishCloseTable()` flow and every hold/confirm pattern are untouched;
+the cloud write is simply what `save()` does afterwards. New pure functions live in the same
+`// ---------- cloud mapping (pure) ----------` section (all vm-tested by `tests/cloud-games.test.cjs`):
+`gameToRow` / `cloudGameOpenShell`, `participantToRow` / `rowsToPlayers`, `entryToRow` / `rowToEntry`,
+`transferToRow` / `rowToTransfer`, `debtToRow` / `debtPaymentRow` / `rowToDebt`, `cloudUuidFrom`,
+`gameSnapshotFromState` / `gameSnapshotFromHistory`, `buildHistoryEntryFromCloud`,
+`buildOpenGameFromCloud`, `pickCloudOpenGame` and `shouldApplyIncomingGame`.
+
+**Write order is the close order.** RLS (`app_can_write_game`) and the `*_immutable_when_closed`
+triggers refuse every child write once `phase = 'closed'`, and `games_insert_member` refuses to
+INSERT an already-closed game at all. So a push goes: guests → groups → group_members → invites →
+friendships → **games (open only)** → game_participants → entries → transfers → **games (the close)**
+→ debts. A closed game that the server has never seen gets an open "shell" row first
+(`cloudGameOpenShell`). Once the server confirms a game closed it is *frozen*: nothing about it or
+its children is ever written again, except the creditor's `debts` status flip, which is a
+column-limited `UPDATE (status, paid_at, paid_by_profile_id)`.
+
+**Deletes.** `entries` and `game_participants` are the only real deletes — "בטל אחרונה" removes the
+entry row, and undoing a player's last buy-in removes the participant — and only on the game that is
+currently the open slot. A game that merely dropped out of the payload (a local reset, history
+ageing out) never takes the server's rows with it.
+
+**Realtime.** While the slot holds an open game, `supabase.channel("game:" + gameId)` subscribes to
+`postgres_changes` on `games` (`id=eq.<id>`), `game_participants` and `entries` (`game_id=eq.<id>`).
+Events are debounced 300ms into one targeted re-read of that game, and applied through the same
+parking rule as the document sync: never while an `<input>` has focus, never while a local edit is
+still unpushed (`tryApplyParked` retries on `focusout`). A close arriving over the channel falls back
+to the full `pullCloud()`, because it moves history, debts and the slot together. The channel is torn
+down when the game closes, when the slot changes, and on sign-out.
+
+**Single-slot limitation (intentional).** The device has exactly one current-game slot. A pull loads
+the server's open game when the slot is empty, closed or example, or when it is the same game;
+when the slot holds a *different* open game the local one wins and the server's waits (with a
+`console.warn`). A game already in this device's `history` is never reopened by a pull, so a close
+whose push failed is retried rather than undone.
+
+**What is still not there.** `?join=` invite redemption (needs an RPC — the joiner is not a member
+yet, so no SELECT policy can see the invite), friend requests have no UI, guest→account linking
+(`guests.linked_profile_id`), more than one open game slot per device, avatar object storage, and
+bulk-uploading a device's pre-existing local history (a closed game can only reach the server by
+being opened there first).
 
 ## Next milestone (the reason for this handoff): real users
 

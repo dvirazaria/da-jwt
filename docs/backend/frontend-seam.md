@@ -84,10 +84,23 @@ last-writer-wins על מסמך שלם ידרסו זה את זה. buy-in של א�
 הסטייה המכוונת מהתכנון שלמטה: **`normalize()` לא הפכה לממפה שורות**. במקום זה נוסף סקשן טהור נפרד,
 `// ---------- cloud mapping (pure) ----------`, שמכיל את הממפים לשני הכיוונים (`groupToRow`/
 `rowToGroup` וכו'), את `buildCloudRows`, `diffCollections` ו-`mergeCloudIntoState`. `normalize()`
-נשארה השוער היחיד של המצב המקומי ורצה על התוצאה של המיזוג — כך `normalizeGroup`/`normalizeGroupMember`
-ממשיכות לאכוף את החוזה המקומי (למשל `userId: null`) גם על נתונים שהגיעו מהשרת.
+נשארה השוער היחיד של המצב המקומי ורצה על התוצאה של המיזוג.
 
-מה שעדיין מקומי בלבד אחרי 2a: המשחק הפתוח, `history`, `debts`, `settlementStatuses`, ומימוש `?join=`.
+**שלב 2b** (המסמך הזה): המשחק עצמו עבר לשרת — `games`, `game_participants`, `entries`, ובסגירה
+`transfers` ו-`debts` — יחד עם ערוץ `postgres_changes` בשם `game:<gameId>` למשחק הפתוח. הממפים
+החדשים יושבים באותו סקשן טהור ונבדקים ב-`tests/cloud-games.test.cjs`: `gameToRow`/`cloudGameOpenShell`,
+`participantToRow`/`rowsToPlayers`, `entryToRow`/`rowToEntry`, `transferToRow`/`rowToTransfer`,
+`debtToRow`/`debtPaymentRow`/`rowToDebt`, `cloudUuidFrom`, `gameSnapshotFromState`/
+`gameSnapshotFromHistory`, `buildHistoryEntryFromCloud`, `buildOpenGameFromCloud`,
+`pickCloudOpenGame`, `shouldApplyIncomingGame`.
+
+שינוי חוזה שנלווה ל-2b: `normalizeParticipantRef`/`normalizeGroupMember`/`normalize` **שומרות**
+`userId` כשהוא UUID שהגיע מהשרת (`keptUserId`), ולעולם לא ממציאות אחד. `sameIdentity` הורחבה
+להשוות לפי כל מזהה שקיים בשני הצדדים, כדי שחברות שחזרה מהשרת עם `profile_id` ומשחק סגור שנשמר
+מקומית עם `guestId` בלבד יישארו אותו אדם.
+
+מה שעדיין מקומי בלבד אחרי 2b: מימוש `?join=`, קישור אורח לחשבון, והיסטוריה מקומית ישנה שמעולם
+לא הייתה פתוחה בשרת (אי אפשר להכניס משחק סגור ב-INSERT — `games_insert_member` דורש `phase <> 'closed'`).
 
 ## מה משתנה ומה נשאר — הרשימה המדויקת
 
@@ -100,17 +113,19 @@ last-writer-wins על מסמך שלם ידרסו זה את זה. buy-in של א�
 | `gameDoc`, `CLIENT_ID`, `saveTimer` | נשארים למסלול בלי-סשן; `enterCloudMode()` מנטרל אותם. `dirtyUntil` **נשאר וגם משמש את מסלול הענן** (עריכה טרייה מנצחת pull). |
 | `save()` | **2a: השתנה חלקית** — ממשיך לכתוב localStorage, ואז `if (cloudMode()) scheduleCloudPush(); else scheduleRemoteSave();`. |
 | `// ---------- cloud mapping (pure) ----------` | **חדש ב-2a.** ממפי שורות דו-כיווניים, `refToIdentityRow`/`identityRowToRef` (דפוס הזהות `profile_id`/`guest_id`), `guestToRow`, `buildCloudRows`, `diffCollections`, `mergeCloudIntoState`. טהור לגמרי, נבדק ב-`tests/cloud-mapping.test.cjs`. |
-| `// ---------- cloud store (Supabase) ----------` | **חדש ב-2a.** `pullCloud`, `pushCloud` (upsert לפי סדר FK: guests → groups → group_members → invites → friendships), `scheduleCloudPush`/`scheduleCloudPull`, `applyCloudPull`, `enterCloudMode`/`exitCloudMode`. |
+| `// ---------- cloud store (Supabase) ----------` | **חדש ב-2a, הורחב ב-2b.** `pullCloud`, `pushCloud` (סדר FK: guests → groups → group_members → invites → friendships → games → game_participants → entries → transfers → games(סגירה) → debts), `pushCloudGameDeletes`, `fetchCloudGameChildren`, `scheduleCloudPush`/`scheduleCloudPull`, `applyCloudPull`, `syncCloudGameChannel`/`leaveCloudGameChannel`/`scheduleCloudGamePull`/`pullCloudGame`/`applyCloudGame`, `enterCloudMode`/`exitCloudMode`. |
 | `load()` | נשאר — קורא את ה-cache האופליין לפני שהשרת עונה. |
-| `normalize(s)` | **נשארת בדיוק כפי שהיא** — השוער היחיד של המצב המקומי, ורצה גם על תוצאת `mergeCloudIntoState`. מיפוי השורות עצמו **לא** נכנס אליה אלא לסקשן `cloud mapping (pure)` (ראו "מה כבר בוצע"), כדי ש-`normalizeGroupMember` תמשיך לאכוף את החוזה המקומי (`userId: null`) גם על נתוני שרת. |
-| `addEntry(player, amount)` | נשארת בזיכרון; מוסיפה קריאה ל-`queueMutation('entries.insert')`. |
-| `finishCloseTable()` | **הופכת ל-RPC אחת** (`close_game`) בטרנזקציה: `phase='closed'`, כתיבת `transfers` ו-`debts`. סגירה חייבת להיות אטומית. |
+| `normalize(s)` | **נשארת השוער היחיד** של המצב המקומי, ורצה גם על תוצאת `mergeCloudIntoState`. מיפוי השורות **לא** נכנס אליה אלא לסקשן `cloud mapping (pure)`. השינוי היחיד ב-2b: `userId` נשמר כשהוא UUID מהשרת (`keptUserId`) במקום להיכפות ל-`null`. |
+| `addEntry(player, amount)` | **ללא שינוי.** ה-`save()` שאחריה הוא שדוחף — `entries` נכתבות ב-INSERT ... ON CONFLICT DO NOTHING (אין להן policy של UPDATE). |
+| `finishCloseTable()` | **ללא שינוי בזרימה** (2b). ה-`save()` שבסופה מייצר push אחד שנושא participants+entries+transfers, ואז את מעבר ה-`phase='closed'` ואז `debts`. הסדר הזה הכרחי: `app_can_write_game` והטריגרים חוסמים כל כתיבת-ילד אחרי הסגירה. **RPC `close_game` אטומית נשארת שלב 2c** — היום דחייה של השרת מדליקה את נורית השגיאה ומריצה pull, וההיסטוריה המקומית לא הולכת לאיבוד. |
 | `buildHistoryEntry`, `buildDebtRecords`, `settlementKey` | נשארות טהורות ומשמשות כמפרט של ה-RPC. `settlement_key` בטבלה זהה לפלט של `settlementKey`. |
 | `settle()`, `tableBalance()`, `wholeMoney` | **ללא שינוי.** החישוב נשאר בקליינט; השרת מאמת. |
 | כל סקשן `groups domain (pure)` | **ללא שינוי** למעט `isLeaderboardEligible` שמתהדק ל-`userId != null`. |
 | `getActiveGameSummaries`, `getGroupSummaries`, `collectionsOf` | **ללא שינוי בחתימה.** מקבלים את אותם אוספים, רק שמקורם השרת. |
 | `render()`, `renderGamesDashboard()`, `renderGroupPage()`, `renderProfile()` | **ללא שינוי.** |
-| `state.history` | הופך ל-cache של דף אחרון בלבד; ההיסטוריה המלאה נשאלת מ-`games`+`game_results_v`. `HISTORY_MAX` מאבד משמעות. |
+| `state.history` | **2b: cache של מה שהשרת החזיר** (עד `CLOUD_HISTORY_LIMIT` = 120 משחקים סגורים אחרונים), ממוזג לפי `gameId` — השרת מנצח, ורשומה מקומית בלבד (legacy) נשארת. `HISTORY_MAX` עדיין חותך מקומית בסגירה. |
+| `state.debts` | **2b: ממוזגות לפי id** (`rowToDebt` בונה את ה-id המקומי חזרה מ-`transfers.settlement_key`). סימון "שולם" נדחף כ-UPDATE של שלוש עמודות בלבד, ורק אם אני הנושה. |
+| `sameIdentity(a, b)` | **2b: הורחבה.** מזהה משותף כלשהו (userId או guestId) מספיק; אחרת `identityKey`. |
 | `me` (`poker-settle-me`) | **משתנה**: מגיע מהסשן; המפתח נשאר cache אופליין ולא זהות. |
 | `poker-settle-theme`, `-contact`, `-profile-debts-seen` | **ללא שינוי.** מקומיים לגמרי. |
 
@@ -122,11 +137,13 @@ last-writer-wins על מסמך שלם ידרסו זה את זה. buy-in של א�
 3. ✅ **שלב 2a — קבוצות, חברים, הזמנות, אורחים:** `groups`/`group_members`/`invites`/`friendships`/
    `guests` עם pull על התחברות ועל חזרה ללשונית, ו-push מדולג (diff) בסדר FK.
    הסדר הוקדם לפני המשחק כי זה החלק שכבר קיים במלואו ב-UI ואין לו realtime.
-4. שלב 2b — משחק פתוח: `games`/`game_participants`/`entries` + ערוץ realtime. זו הנקודה שבה
-   שני טלפונים באמת עובדים על אותו שולחן.
-5. שלב 2c — סגירה: `close_game` RPC, `transfers`, `debts`.
-6. שלב 3 — מימוש `?join=` דרך `redeem_invite`, קישור אורח לחשבון, `ParticipantRef.userId` אמיתי,
-   וטבלת הדירוג דרך ה-views.
+4. ✅ **שלב 2b — המשחק:** `games`/`game_participants`/`entries` + `transfers`/`debts` בסגירה +
+   ערוץ realtime `game:<gameId>`. זו הנקודה שבה שני טלפונים באמת עובדים על אותו שולחן.
+   `ParticipantRef.userId` כבר אמיתי — כשהשרת סיפק אותו.
+5. שלב 2c — סגירה אטומית: `close_game` RPC בטרנזקציה אחת במקום רצף ה-writes של 2b, ו-
+   `entries`/`transfers` שנכתבות בתוכה. גם `hidden_at` ו-`avatar_url` (Storage) שייכים לכאן.
+6. שלב 3 — מימוש `?join=` דרך `redeem_invite`, קישור אורח לחשבון (`guests.linked_profile_id`),
+   UI לבקשות חברות, וטבלת הדירוג דרך ה-views.
 
 בכל שלב localStorage נשאר ה-fallback: אם השרת לא זמין, האפליקציה חוזרת בדיוק להתנהגות היום.
 
