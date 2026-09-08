@@ -244,10 +244,11 @@ test('canStartGroupGame reports ok, group-archived, group-has-open-game, and ano
 
   assert.deepEqual(runJSON(`canStartGroupGame(${JSON.stringify(noOpenGame)}, 'g2')`, context), { ok: false, reason: 'group-archived' });
 
-  const sameGroupOpen = { groups, currentGame: { example: false, phase: 'active', groupId: 'g1' } };
+  // an open game must seat at least one player to count (an empty table is not a game)
+  const sameGroupOpen = { groups, currentGame: { example: false, phase: 'active', groupId: 'g1', players: [{ id: 'p1' }] } };
   assert.deepEqual(runJSON(`canStartGroupGame(${JSON.stringify(sameGroupOpen)}, 'g1')`, context), { ok: false, reason: 'group-has-open-game' });
 
-  const otherGroupOpen = { groups, currentGame: { example: false, phase: 'settlement', groupId: 'g1' } };
+  const otherGroupOpen = { groups, currentGame: { example: false, phase: 'settlement', groupId: 'g1', players: [{ id: 'p1' }] } };
   assert.deepEqual(runJSON(`canStartGroupGame(${JSON.stringify(otherGroupOpen)}, 'other-group')`, context), { ok: false, reason: 'another-game-open' });
 });
 

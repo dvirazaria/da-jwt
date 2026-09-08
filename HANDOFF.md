@@ -93,6 +93,17 @@ project's "keep one source of truth" rule; nothing here is a second store.
   a stub); `collectionsOf(state)` builds its input.
 - The Games dashboard exposes active games, real groups (create/open/expand), and
   "משחק ללא קבוצה". There is intentionally no generic "התחל משחק" action outside a group's own page.
+- **An empty table is not a game.** `isGameOpen(currentGame)` (pure section, next to
+  `canStartGroupGame`) is the single "is there an open game" predicate: not example, phase
+  active/settlement, **and at least one player**. `getActiveGameSummaries` returns `[]` for an
+  empty slot, `canStartGroupGame` does not report `another-game-open` for it (a group start just
+  replaces the empty slot), `getGroupSummary.hasActiveGame`, `continueCurrentGame` and the
+  "סיים משחק" gates all go through it. Leaving the table (`setAppView` from game/settle to any
+  other view) while `isEmptyOpenGame(state)` resets the slot via `newCurrentGame(state, { phase:
+  "closed" })` + `save()` — no history entry, groups/history/debts untouched; the guard is strict
+  (zero players, not example) so a real game is never wiped. While a game with players is open the
+  "משחק ללא קבוצה" capsule renders `disabled` with the shared reason line ("יש משחק פעיל אחר — סגור
+  אותו קודם") and `startUngroupedGame()` early-returns — it used to silently replace the open game.
 - "סיים משחק" is a cancellable one-second pointer hold that changes only
   `phase` to `settlement`. "חזור לעריכת המשחק" changes it back to `active`.
   Only "סגור שולחן" finalizes the existing history/debt flow; for an ungrouped game it routes to

@@ -22,12 +22,17 @@ function runJSON(code, context) {
 
 // ---------- getActiveGameSummaries(gameState, groups) title resolution ----------
 
-const activeGameSource = sourceBetween('  function getActiveGameSummaries', '  function formatGameTime');
+// The adapter delegates "is there an open game" to isGameOpen (pure section): an empty table is
+// not a game, so every game state below seats one player and the predicate slice is loaded too.
+const activeGameSource =
+  sourceBetween('  function hasOpenPhase(currentGame) {', '  // The engine has one current-game slot') +
+  sourceBetween('  function getActiveGameSummaries', '  function formatGameTime');
+const onePlayer = [{ id: 'p1', name: 'דביר', buyins: [50] }];
 
 test('getActiveGameSummaries titles the summary with the matching group name, even when that group is archived', () => {
   const context = vm.createContext({});
   vm.runInContext(activeGameSource, context);
-  const gameState = { example: false, phase: 'active', gameId: 'g1', groupId: 'grp-1', players: [] };
+  const gameState = { example: false, phase: 'active', gameId: 'g1', groupId: 'grp-1', players: onePlayer };
 
   const activeGroups = [{ id: 'grp-1', name: 'ליל שישי', archivedAt: null, deletedAt: null }];
   assert.equal(
@@ -46,15 +51,15 @@ test('getActiveGameSummaries falls back to "משחק ללא קבוצה" without 
   const context = vm.createContext({});
   vm.runInContext(activeGameSource, context);
 
-  const ungrouped = { example: false, phase: 'active', gameId: 'g1', groupId: null, players: [] };
+  const ungrouped = { example: false, phase: 'active', gameId: 'g1', groupId: null, players: onePlayer };
   assert.equal(vm.runInContext(`getActiveGameSummaries(${JSON.stringify(ungrouped)})[0].title`, context), 'משחק ללא קבוצה');
 
   // Existing one-argument callers/tests must keep seeing this exact fallback for a grouped game too.
-  const grouped = { example: false, phase: 'active', gameId: 'g1', groupId: 'grp-1', players: [] };
+  const grouped = { example: false, phase: 'active', gameId: 'g1', groupId: 'grp-1', players: onePlayer };
   assert.equal(vm.runInContext(`getActiveGameSummaries(${JSON.stringify(grouped)})[0].title`, context), 'משחק ללא קבוצה');
   assert.equal(vm.runInContext(`getActiveGameSummaries(${JSON.stringify(grouped)}, [])[0].title`, context), 'משחק ללא קבוצה');
 
-  const noMatch = { example: false, phase: 'active', gameId: 'g1', groupId: 'grp-missing', players: [] };
+  const noMatch = { example: false, phase: 'active', gameId: 'g1', groupId: 'grp-missing', players: onePlayer };
   const otherGroups = [{ id: 'grp-1', name: 'ליל שישי', archivedAt: null, deletedAt: null }];
   assert.equal(vm.runInContext(`getActiveGameSummaries(${JSON.stringify(noMatch)}, ${JSON.stringify(otherGroups)})[0].title`, context), 'משחק ללא קבוצה');
 });
@@ -68,13 +73,13 @@ test('canStartGroupGame reports another-game-open when an ungrouped game is open
   vm.runInContext(pureSource, context);
   const groups = [{ id: 'g1', archivedAt: null, deletedAt: null }];
 
-  const ungroupedActiveGame = { groups, currentGame: { example: false, phase: 'active', groupId: null } };
+  const ungroupedActiveGame = { groups, currentGame: { example: false, phase: 'active', groupId: null, players: onePlayer } };
   assert.deepEqual(
     runJSON(`canStartGroupGame(${JSON.stringify(ungroupedActiveGame)}, 'g1')`, context),
     { ok: false, reason: 'another-game-open' }
   );
 
-  const ownGroupSettlement = { groups, currentGame: { example: false, phase: 'settlement', groupId: 'g1' } };
+  const ownGroupSettlement = { groups, currentGame: { example: false, phase: 'settlement', groupId: 'g1', players: onePlayer } };
   assert.deepEqual(
     runJSON(`canStartGroupGame(${JSON.stringify(ownGroupSettlement)}, 'g1')`, context),
     { ok: false, reason: 'group-has-open-game' }
