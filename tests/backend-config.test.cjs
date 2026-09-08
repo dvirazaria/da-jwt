@@ -142,11 +142,14 @@ test('signing out clears authUser but leaves the local name flow intact', () => 
   assert.match(appScript, /onAuthStateChange/);
 });
 
-test('phase 1 does not touch the existing document sync or invent a userId', () => {
-  // save()/initSync()/remoteBody() stay exactly as they were: no data moves to Supabase yet.
-  assert.match(appScript, /function initSync\(\) \{\n    if \(!window\.claude/);
-  assert.match(appScript, /scheduleRemoteSave\(\);\n  \}/);
-  assert.ok(!/userId: (authUser|session|user)\b/.test(appScript), 'phase 2 owns userId on refs, not this one');
+test('the document sync survives as the no-session path, and no ref invents a userId', () => {
+  // Phase 2a added a second writer, so the rule is now "exactly one of them owns the data":
+  // initSync()/remoteBody()/scheduleRemoteSave() still run verbatim without a session, and are
+  // skipped entirely with one (asserted in detail by tests/cloud-mapping.test.cjs).
+  assert.match(appScript, /function initSync\(\) \{\n    if \(cloudMode\(\)\) return;[^\n]*\n    if \(!window\.claude/);
+  assert.match(appScript, /else scheduleRemoteSave\(\);\n  \}/);
+  assert.match(appScript, /function remoteBody\(\) \{/);
+  assert.ok(!/userId: (authUser|session|user)\b/.test(appScript), 'phase 3 owns userId on refs, not this one');
 });
 
 test('the settings overlay shows the signed-in address and no new localStorage key appears', () => {

@@ -1215,7 +1215,10 @@
     pendingRemote = null; // a local edit supersedes any remote state parked for later
     state.updatedAt = new Date().toISOString();
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
-    scheduleRemoteSave();
+    // With a session Supabase owns the cloud-backed collections; without one the app keeps using
+    // the shared Claude document exactly as before. Never both.
+    if (cloudMode()) scheduleCloudPush();
+    else scheduleRemoteSave();
   }
 
   // --- server sync (shared document, survives devices and reloads) ---
@@ -1292,12 +1295,18 @@
   }
 
   document.addEventListener("visibilitychange", () => {
-    // Flush a pending debounced write immediately when the tab is hidden/closed.
-    if (document.visibilityState === "hidden" && saveTimer && gameDoc) {
-      clearTimeout(saveTimer);
-      saveTimer = null;
-      gameDoc.set(remoteBody()).catch(() => {});
+    if (document.visibilityState === "hidden") {
+      // Flush a pending debounced write immediately when the tab is hidden/closed.
+      if (saveTimer && gameDoc) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+        gameDoc.set(remoteBody()).catch(() => {});
+      }
+      if (cloudPushTimer) { clearTimeout(cloudPushTimer); cloudPushTimer = null; pushCloud(); }
+      return;
     }
+    // Groups/members/invites refresh when the tab comes back; realtime for the open game is 2b.
+    if (cloudMode()) pullCloud();
   });
 
   // Applies a parked remote snapshot once it is safe: not during an active
@@ -1320,9 +1329,10 @@
   });
 
   function initSync() {
+    if (cloudMode()) return; // a Supabase session owns the data — never two writers at once
     if (!window.claude || typeof window.claude.use !== "function") return;
     window.claude.use("db").then((db) => {
-      if (!db) return; // no server storage in this view — stay on localStorage
+      if (!db || cloudMode()) return; // no server storage in this view — stay on localStorage
       gameDoc = db.doc("games/current");
       gameDoc.onSnapshot((snap) => {
         setSync(true, "מסונכרן");
@@ -1348,7 +1358,196 @@
       }, () => setSync(false, "שמירה מקומית"));
     }).catch(() => {});
   }
-  initSync();
+
+  // ---------- cloud store (Supabase) ----------
+  // Phase 2a. With a session, Supabase owns groups / group_members / invites / friendships and
+  // the local state document stays the working copy every renderer and adapter already reads —
+  // so nothing above this line had to learn about the server. Without a session every function
+  // here returns immediately and the app is exactly the local app it has always been.
+  //
+  // Games, history and debts are still local-only; they move in phase 2b together with the
+  // realtime channel for the open table.
+  const CLOUD_TABLES = [
+    ["guests", "guests"],
+    ["groups", "groups"],
+    ["groupMembers", "group_members"],
+    ["invites", "invites"],
+    ["friendships", "friendships"],
+  ];
+  const EMPTY_CLOUD_ROWS = { guests: [], groups: [], groupMembers: [], invites: [], friendships: [] };
+  let cloudPushTimer = null;
+  let cloudPullTimer = null;
+  let cloudPulling = false;
+  let lastPushedRows = null; // the diff baseline: what the server is known to hold
+  let cloudProfileIds = [];  // every profile id seen in a pulled row (see CloudCtx)
+
+  // `authUser` is declared further down, in the auth section; every caller here runs after boot.
+  function cloudMode() { return !!(supabase && authUser); }
+
+  function cloudCollections() {
+    return {
+      groups: state.groups || [],
+      groupMembers: state.groupMembers || [],
+      invites: state.invites || [],
+      friendships: state.friendships || [],
+    };
+  }
+  function cloudContext() {
+    const myMember = (state.groupMembers || []).find(m => m && m.displayName === me && m.guestId);
+    return {
+      profileId: authUser ? authUser.id : null,
+      guestId: myMember ? myMember.guestId : null,
+      displayName: me || (authUser && authUser.displayName) || "",
+      profileIds: cloudProfileIds,
+    };
+  }
+  // Ids the server cannot possibly hold yet: a legacy record, or one created since the last
+  // confirmed push. mergeCloudIntoState keeps them, so a pull never eats an unsynced group.
+  function cloudUnconfirmedIds() {
+    const confirmed = new Set();
+    const pushed = lastPushedRows || EMPTY_CLOUD_ROWS;
+    const collections = cloudCollections();
+    const keys = ["groups", "groupMembers", "invites", "friendships"];
+    keys.forEach(key => (pushed[key] || []).forEach(row => confirmed.add(String(row.id))));
+    const ids = [];
+    keys.forEach(key => (collections[key] || []).forEach(record => {
+      if (record && record.id && !confirmed.has(String(record.id))) ids.push(String(record.id));
+    }));
+    return ids;
+  }
+
+  function scheduleCloudPush() {
+    if (!supabase || !authUser) return;
+    dirtyUntil = Date.now() + 6000; // a fresh local edit outranks an incoming pull, as before
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = setTimeout(() => { cloudPushTimer = null; pushCloud(); }, 400);
+  }
+  function scheduleCloudPull(delay) {
+    if (!supabase || !authUser) return;
+    clearTimeout(cloudPullTimer);
+    cloudPullTimer = setTimeout(() => { cloudPullTimer = null; pullCloud(); }, delay || 1500);
+  }
+
+  async function pushCloud() {
+    if (!supabase || !authUser) return;
+    const next = buildCloudRows(cloudCollections(), cloudContext());
+    const previous = lastPushedRows || EMPTY_CLOUD_ROWS;
+    const confirmed = { ...previous };
+    try {
+      for (const pair of CLOUD_TABLES) {
+        const diff = diffCollections(previous[pair[0]] || [], next[pair[0]], "id");
+        // diff.deletes is deliberately not applied: none of these tables has a DELETE policy —
+        // removal is a soft column (deleted_at / status), which the upsert carries anyway.
+        if (diff.upserts.length) {
+          const result = await supabase.from(pair[1]).upsert(diff.upserts, { onConflict: "id" });
+          if (result && result.error) throw result.error;
+        }
+        confirmed[pair[0]] = next[pair[0]];
+      }
+    } catch (e) {
+      // An RLS refusal (editing a group I no longer administer) is not a retry: the server is
+      // right and the next pull brings its version back. A network failure retries on the next
+      // save, with everything already safe in localStorage.
+      lastPushedRows = confirmed;
+      setSync(false, "שגיאת שמירה — נשמר מקומית");
+      scheduleCloudPull(1200);
+      return;
+    }
+    lastPushedRows = confirmed;
+    dirtyUntil = 0;
+    setSync(true, "מסונכרן לחשבון");
+  }
+
+  async function pullCloud() {
+    if (!supabase || !authUser) return;
+    if (cloudPulling) return;
+    cloudPulling = true;
+    try {
+      // RLS already narrows this to the groups I am an active member of (or created), so there
+      // is nothing to filter here — group_members/invites then follow those ids.
+      const groupsResult = await supabase.from("groups").select("*");
+      if (groupsResult.error) { setSync(false, "שגיאת סנכרון — נשמר מקומית"); return; }
+      const groupRows = groupsResult.data || [];
+      const groupIds = groupRows.map(row => row.id).filter(Boolean);
+      let memberRows = [];
+      let inviteRows = [];
+      if (groupIds.length) {
+        const membersResult = await supabase.from("group_members").select("*").in("group_id", groupIds);
+        if (membersResult.error) { setSync(false, "שגיאת סנכרון — נשמר מקומית"); return; }
+        memberRows = membersResult.data || [];
+        const invitesResult = await supabase.from("invites").select("*").in("group_id", groupIds);
+        if (!invitesResult.error) inviteRows = invitesResult.data || [];
+      }
+      const friendsResult = await supabase.from("friendships").select("*");
+      applyCloudPull(groupRows, memberRows, inviteRows, friendsResult.error ? [] : (friendsResult.data || []));
+    } catch (e) {
+      setSync(false, "שגיאת סנכרון — נשמר מקומית");
+    } finally {
+      cloudPulling = false;
+    }
+  }
+
+  function applyCloudPull(groupRows, memberRows, inviteRows, friendshipRows) {
+    if (!authUser) return;
+    // Learn every profile id the server showed us before mapping: a row belonging to another
+    // account then maps to a stable local identity and back to the same row on the next push.
+    const seen = new Set(cloudProfileIds);
+    seen.add(authUser.id);
+    groupRows.forEach(row => { if (row && row.created_by_profile_id) seen.add(row.created_by_profile_id); });
+    memberRows.forEach(row => { if (row && row.profile_id) seen.add(row.profile_id); });
+    inviteRows.forEach(row => { if (row && row.created_by_profile_id) seen.add(row.created_by_profile_id); });
+    friendshipRows.forEach(row => {
+      if (!row) return;
+      if (row.requester_profile_id) seen.add(row.requester_profile_id);
+      if (row.addressee_profile_id) seen.add(row.addressee_profile_id);
+    });
+    cloudProfileIds = Array.from(seen);
+    // Never yank a field out from under an active edit, and never let the server undo an edit
+    // that has not been pushed yet — the same rule the document sync has always used.
+    const active = document.activeElement;
+    if ((active && active.tagName === "INPUT") || cloudPushTimer || Date.now() < dirtyUntil) {
+      scheduleCloudPull(800);
+      return;
+    }
+    const ctx = cloudContext();
+    const pulled = {
+      groups: groupRows.map(row => rowToGroup(row, ctx)),
+      groupMembers: memberRows.map(row => rowToGroupMember(row, ctx)),
+      invites: inviteRows.map(row => rowToInvite(row, ctx)),
+      friendships: friendshipRows.map(row => rowToFriendship(row, ctx)),
+    };
+    const merged = normalize(mergeCloudIntoState(state, pulled, { keepLocalIds: cloudUnconfirmedIds() }));
+    if (merged) state = merged;
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    // The baseline is what the SERVER holds, not what we now hold: a record the merge kept is
+    // absent from it and goes up on the next push (that is the first-device seeding rule).
+    lastPushedRows = buildCloudRows(pulled, ctx);
+    setSync(true, "מסונכרן לחשבון");
+    render();
+  }
+
+  // A session has arrived: hand ownership over once, seed the server with whatever this device
+  // has that it does not, and stop the Claude-document sync for good.
+  function enterCloudMode() {
+    if (!supabase || !authUser) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    gameDoc = null;
+    pendingRemote = null;
+    lastPushedRows = null;
+    pullCloud().then(() => { if (cloudMode()) return pushCloud(); }).catch(() => {});
+  }
+  // Signed out: keep every local record exactly as it is and simply stop talking to the server.
+  function exitCloudMode() {
+    clearTimeout(cloudPushTimer);
+    clearTimeout(cloudPullTimer);
+    cloudPushTimer = null;
+    cloudPullTimer = null;
+    cloudPulling = false;
+    lastPushedRows = null;
+    cloudProfileIds = [];
+    setSync(false, "שמירה מקומית");
+  }
 
   // Example data promises "any edit resets it": the first real interaction
   // wipes the demo players instead of quietly turning them into real ones.
@@ -2077,6 +2276,331 @@
     if (!match) return null;
     const token = decodeURIComponent(match[1]).toUpperCase().replace(/-/g, "");
     return new RegExp("^[" + INVITE_TOKEN_ALPHABET + "]{8}$").test(token) ? token : null;
+  }
+
+  // ---------- cloud mapping (pure) ----------
+  // Row <-> local-record mappers for the Supabase tables in docs/backend/schema.sql (groups,
+  // group_members, invites, friendships, guests). DOM-free and state-free on purpose: everything
+  // arrives as an argument, so the whole section runs from a vm slice in tests/cloud-mapping.test.cjs.
+  //
+  // CloudCtx = { profileId, guestId, displayName, profileIds }
+  //   profileId   — the signed-in auth user id, i.e. profiles.id. Null without a session, and
+  //                 then nothing at all is pushable.
+  //   guestId     — the local guestId THIS device already uses for me, so a pulled row keeps the
+  //                 identity every closed game on this device was attributed to.
+  //   displayName — the local `me`.
+  //   profileIds  — every profile id this device has seen in a pulled row. A local guestId that
+  //                 appears in it IS a profile id; that is how a row belonging to another account
+  //                 maps back and forth unchanged instead of being demoted to a guest.
+  //
+  // The local model still has no accounts (normalizeGroupMember forces `userId` to null — refs
+  // gain a real userId in phase 3), so the profile/guest split lives ONLY at the row boundary.
+  const CLOUD_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  // Fallback for a NOT NULL timestamp the local record never recorded. Deliberately not "now":
+  // this section is pure, and a made-up recent date would read as a real event.
+  const CLOUD_EPOCH_ISO = "1970-01-01T00:00:00.000Z";
+  function isCloudId(value) {
+    return typeof value === "string" && CLOUD_UUID_RE.test(value);
+  }
+  function cloudIso(value) {
+    return typeof value === "string" && value ? value : null;
+  }
+  function cloudIsoOr(value, fallback) {
+    return cloudIso(value) || fallback || CLOUD_EPOCH_ISO;
+  }
+  function cloudProfileIdSet(ctx) {
+    const c = ctx || {};
+    const ids = new Set((Array.isArray(c.profileIds) ? c.profileIds : []).filter(isCloudId));
+    if (isCloudId(c.profileId)) ids.add(c.profileId);
+    return ids;
+  }
+  // A profile row carries no name of its own on groups/invites/friendships, so the only name we
+  // can honestly restore is my own; anybody else's comes from a membership snapshot instead.
+  function cloudProfileName(profileId, ctx) {
+    const c = ctx || {};
+    return profileId && profileId === c.profileId ? String(c.displayName || "") : "";
+  }
+  // Is this local ref the signed-in person? My own guestId wins when this device knows it (so a
+  // namesake with a different guestId is not me), otherwise the display name decides — the app
+  // already forbids two active members of a group sharing one name.
+  function isMyCloudRef(ref, ctx) {
+    const c = ctx || {};
+    const r = ref || {};
+    if (!isCloudId(c.profileId)) return false;
+    if (r.userId && r.userId === c.profileId) return true;
+    if (r.guestId && r.guestId === c.profileId) return true;
+    if (c.guestId && r.guestId) return r.guestId === c.guestId;
+    return !!c.displayName && r.displayName === c.displayName;
+  }
+  // The identity pattern of schema.sql: exactly one of profile_id / guest_id is non-null. Both
+  // null means "this device cannot express who that is" and the caller drops the row.
+  function refToIdentityRow(ref, ctx) {
+    const r = ref || {};
+    if (isMyCloudRef(r, ctx)) return { profile_id: (ctx || {}).profileId, guest_id: null };
+    if (isCloudId(r.userId)) return { profile_id: r.userId, guest_id: null };
+    if (isCloudId(r.guestId) && cloudProfileIdSet(ctx).has(r.guestId)) return { profile_id: r.guestId, guest_id: null };
+    if (isCloudId(r.guestId)) return { profile_id: null, guest_id: r.guestId };
+    return { profile_id: null, guest_id: null };
+  }
+  // The way back. `userId` deliberately stays null: a profile-backed row is represented locally
+  // by my own guestId (mine) or by the profile id itself (anybody else's), which keeps
+  // identityKey() stable across devices and round-trips to the same row on the next push.
+  function identityRowToRef(row, ctx, displayName) {
+    const c = ctx || {};
+    const r = row || {};
+    const name = String(displayName || "");
+    if (r.profile_id && r.profile_id === c.profileId) return { userId: null, guestId: c.guestId || null, displayName: name };
+    if (r.profile_id) return { userId: null, guestId: r.profile_id, displayName: name };
+    return { userId: null, guestId: r.guest_id || null, displayName: name };
+  }
+
+  function groupToRow(group, ctx) {
+    const g = group || {};
+    const creator = refToIdentityRow(g.createdBy, ctx);
+    // groups.avatar_url is an object-storage URL; the local 96x96 avatarDataUrl has no column
+    // and stays on the device (mergeCloudIntoState carries it across a pull).
+    return {
+      id: String(g.id || ""),
+      name: String(g.name || "").trim().slice(0, 40),
+      created_by_profile_id: creator.profile_id || (ctx || {}).profileId || null,
+      created_at: cloudIsoOr(g.createdAt),
+      archived_at: cloudIso(g.archivedAt),
+      deleted_at: cloudIso(g.deletedAt),
+    };
+  }
+  function rowToGroup(row, ctx) {
+    const r = row || {};
+    return {
+      id: String(r.id || ""),
+      name: String(r.name || ""),
+      avatarDataUrl: null,
+      createdBy: identityRowToRef({ profile_id: r.created_by_profile_id, guest_id: null }, ctx,
+        cloudProfileName(r.created_by_profile_id, ctx)),
+      createdAt: String(r.created_at || ""),
+      archivedAt: cloudIso(r.archived_at),
+      deletedAt: cloudIso(r.deleted_at),
+    };
+  }
+
+  function groupMemberToRow(member, ctx) {
+    const m = member || {};
+    const identity = refToIdentityRow({ userId: m.userId, guestId: m.guestId, displayName: m.displayName }, ctx);
+    const status = m.status === "left" || m.status === "removed" ? m.status : "active";
+    const joinedAt = cloudIsoOr(m.joinedAt);
+    // hiddenAt has no column (see the schema follow-ups in the phase 2a report): it is a purely
+    // device-local "drop this group from my dashboard" flag and must never reach another device.
+    return {
+      id: String(m.id || ""),
+      group_id: String(m.groupId || ""),
+      profile_id: identity.profile_id,
+      guest_id: identity.guest_id,
+      display_name_snapshot: String(m.displayName || ""),
+      role: m.role === "admin" ? "admin" : "member",
+      status,
+      joined_at: joinedAt,
+      // group_members_left_at_chk / group_members_active_chk: a former member must have a
+      // left_at and an active one must not.
+      left_at: status === "active" ? null : cloudIsoOr(m.leftAt, joinedAt),
+    };
+  }
+  function rowToGroupMember(row, ctx) {
+    const r = row || {};
+    const name = String(r.display_name_snapshot || "");
+    const status = r.status === "left" || r.status === "removed" ? r.status : "active";
+    return {
+      id: String(r.id || ""),
+      groupId: String(r.group_id || ""),
+      userId: null,
+      guestId: identityRowToRef(r, ctx, name).guestId,
+      displayName: name,
+      role: r.role === "admin" ? "admin" : "member",
+      status,
+      joinedAt: String(r.joined_at || ""),
+      leftAt: status === "active" ? null : cloudIso(r.left_at),
+      hiddenAt: null,
+    };
+  }
+
+  function inviteToRow(invite, ctx) {
+    const i = invite || {};
+    const creator = refToIdentityRow(i.createdBy, ctx);
+    // expires_at is deliberately not written: the local Invite has no expiry field, and sending
+    // the column would wipe an expiry set anywhere else.
+    return {
+      id: String(i.id || ""),
+      group_id: String(i.groupId || ""),
+      token: String(i.token || ""),
+      created_by_profile_id: creator.profile_id || (ctx || {}).profileId || null,
+      created_at: cloudIsoOr(i.createdAt),
+      revoked_at: cloudIso(i.revokedAt),
+    };
+  }
+  function rowToInvite(row, ctx) {
+    const r = row || {};
+    return {
+      id: String(r.id || ""),
+      groupId: String(r.group_id || ""),
+      token: String(r.token || ""),
+      createdBy: identityRowToRef({ profile_id: r.created_by_profile_id, guest_id: null }, ctx,
+        cloudProfileName(r.created_by_profile_id, ctx)),
+      createdAt: String(r.created_at || ""),
+      revokedAt: cloudIso(r.revoked_at),
+    };
+  }
+
+  function friendshipToRow(friendship, ctx) {
+    const f = friendship || {};
+    const status = f.status === "accepted" || f.status === "rejected" ? f.status : "pending";
+    const createdAt = cloudIsoOr(f.createdAt);
+    return {
+      id: String(f.id || ""),
+      requester_profile_id: refToIdentityRow(f.requester, ctx).profile_id,
+      addressee_profile_id: refToIdentityRow(f.addressee, ctx).profile_id,
+      status,
+      created_at: createdAt,
+      // friendships_responded_chk: pending means no responded_at, answered means one.
+      responded_at: status === "pending" ? null : cloudIsoOr(f.respondedAt, createdAt),
+    };
+  }
+  function rowToFriendship(row, ctx) {
+    const r = row || {};
+    const status = r.status === "accepted" || r.status === "rejected" ? r.status : "pending";
+    return {
+      id: String(r.id || ""),
+      requester: identityRowToRef({ profile_id: r.requester_profile_id, guest_id: null }, ctx,
+        cloudProfileName(r.requester_profile_id, ctx)),
+      addressee: identityRowToRef({ profile_id: r.addressee_profile_id, guest_id: null }, ctx,
+        cloudProfileName(r.addressee_profile_id, ctx)),
+      status,
+      createdAt: String(r.created_at || ""),
+      respondedAt: status === "pending" ? null : cloudIso(r.responded_at),
+    };
+  }
+
+  // guests.display_name is CHECK (length(btrim(...)) BETWEEN 1 AND 40) and created_by must be the
+  // pusher (guests_insert), so a guest row is only ever minted for a member this device knows.
+  function guestToRow(guestId, displayName, createdBy) {
+    const name = String(displayName || "").trim().slice(0, 40);
+    return { id: String(guestId || ""), display_name: name || "אורח", created_by: String(createdBy || "") };
+  }
+
+  // What each table will accept. A row that fails here is dropped before the request rather than
+  // sent and rejected — legacy "legacy-…" ids, a member with no identity, a token below the
+  // schema's 8-character floor.
+  const CLOUD_PUSHABLE = {
+    guests: row => isCloudId(row.id) && !!row.display_name && isCloudId(row.created_by),
+    groups: row => isCloudId(row.id) && !!row.name && isCloudId(row.created_by_profile_id),
+    groupMembers: row => isCloudId(row.id) && isCloudId(row.group_id)
+      && (isCloudId(row.profile_id) ? !row.guest_id : isCloudId(row.guest_id)),
+    invites: row => isCloudId(row.id) && isCloudId(row.group_id)
+      && String(row.token || "").length >= 8 && isCloudId(row.created_by_profile_id),
+    friendships: row => isCloudId(row.id) && isCloudId(row.requester_profile_id)
+      && isCloudId(row.addressee_profile_id) && row.requester_profile_id !== row.addressee_profile_id,
+  };
+
+  // The whole push payload for one device, keyed in FK order (guests before the members that
+  // reference them, groups before their children).
+  function buildCloudRows(collections, ctx) {
+    const c = collections || {};
+    const myProfileId = (ctx || {}).profileId || null;
+    const groups = (Array.isArray(c.groups) ? c.groups : [])
+      .map(g => groupToRow(g, ctx)).filter(CLOUD_PUSHABLE.groups);
+    const groupIds = new Set(groups.map(g => g.id));
+    const groupMembers = (Array.isArray(c.groupMembers) ? c.groupMembers : [])
+      .map(m => groupMemberToRow(m, ctx))
+      .filter(m => CLOUD_PUSHABLE.groupMembers(m) && groupIds.has(m.group_id));
+    const invites = (Array.isArray(c.invites) ? c.invites : [])
+      .map(i => inviteToRow(i, ctx))
+      .filter(i => CLOUD_PUSHABLE.invites(i) && groupIds.has(i.group_id));
+    // RLS lets the requester create a pending request and only the addressee answer one, so a
+    // row this device may not legally write is never attempted.
+    const friendships = (Array.isArray(c.friendships) ? c.friendships : [])
+      .map(f => friendshipToRow(f, ctx))
+      .filter(f => CLOUD_PUSHABLE.friendships(f) && (f.status === "pending"
+        ? f.requester_profile_id === myProfileId
+        : f.addressee_profile_id === myProfileId));
+    const guests = [];
+    const seenGuests = new Set();
+    groupMembers.forEach(m => {
+      if (!m.guest_id || seenGuests.has(m.guest_id)) return;
+      seenGuests.add(m.guest_id);
+      const row = guestToRow(m.guest_id, m.display_name_snapshot, myProfileId);
+      if (CLOUD_PUSHABLE.guests(row)) guests.push(row);
+    });
+    return { guests, groups, groupMembers, invites, friendships };
+  }
+
+  // What changed since the baseline (the rows the last pull/push confirmed the server holds).
+  // Deep-equal by JSON: both sides come out of the same mapper, so key order matches.
+  function diffCollections(prevRows, nextRows, key) {
+    const k = key || "id";
+    const before = new Map();
+    (Array.isArray(prevRows) ? prevRows : []).forEach(row => {
+      if (row && row[k] != null) before.set(String(row[k]), row);
+    });
+    const upserts = [];
+    const seen = new Set();
+    (Array.isArray(nextRows) ? nextRows : []).forEach(row => {
+      if (!row || row[k] == null) return;
+      const id = String(row[k]);
+      seen.add(id);
+      const previous = before.get(id);
+      if (!previous || JSON.stringify(previous) !== JSON.stringify(row)) upserts.push(row);
+    });
+    const deletes = [];
+    before.forEach((row, id) => { if (!seen.has(id)) deletes.push(row); });
+    return { upserts, deletes };
+  }
+
+  // The server owns groups / groupMembers / invites / friendships; every other collection on the
+  // state document (players, history, debts, settlementStatuses, …) is passed through untouched.
+  // Three things still have to survive a pull:
+  //   * local-only fields with no column — a group's avatarDataUrl and my own hiddenAt;
+  //   * records the server could not have returned — a legacy non-uuid id or one this device has
+  //     not confirmed pushing yet (options.keepLocalIds), which is what makes first-device
+  //     seeding safe;
+  //   * everything under a group this device soft-deleted, because RLS hides a deleted group
+  //     from SELECT and the local tombstone still titles that group's closed games.
+  function mergeCloudIntoState(state, pulled, options) {
+    const s = state || {};
+    const p = pulled || {};
+    const keep = new Set(((options || {}).keepLocalIds || []).map(String));
+    const byId = list => {
+      const map = new Map();
+      (Array.isArray(list) ? list : []).forEach(record => {
+        if (record && record.id) map.set(String(record.id), record);
+      });
+      return map;
+    };
+    const localGroups = Array.isArray(s.groups) ? s.groups : [];
+    const pulledGroups = Array.isArray(p.groups) ? p.groups : [];
+    const serverGroupIds = new Set(pulledGroups.map(g => String(g.id)));
+    const prevGroups = byId(localGroups);
+    const prevMembers = byId(s.groupMembers);
+    const keptGroups = localGroups.filter(g => g && g.id && !serverGroupIds.has(String(g.id))
+      && (keep.has(String(g.id)) || !!g.deletedAt));
+    const keptGroupIds = new Set(keptGroups.map(g => String(g.id)));
+    const isKeptChild = record => !!record && !!record.id
+      && (keep.has(String(record.id)) || keptGroupIds.has(String(record.groupId)));
+    const mergeKept = (pulledList, localList, mergeOne) => {
+      const merged = (Array.isArray(pulledList) ? pulledList : []).map(mergeOne);
+      const mergedIds = new Set(merged.map(record => String(record.id)));
+      return merged.concat((Array.isArray(localList) ? localList : [])
+        .filter(record => isKeptChild(record) && !mergedIds.has(String(record.id))));
+    };
+    return {
+      ...s,
+      groups: pulledGroups.map(g => {
+        const before = prevGroups.get(String(g.id));
+        return before ? { ...g, avatarDataUrl: before.avatarDataUrl } : g;
+      }).concat(keptGroups),
+      groupMembers: mergeKept(p.groupMembers, s.groupMembers, m => {
+        const before = prevMembers.get(String(m.id));
+        return before ? { ...m, hiddenAt: before.hiddenAt } : m;
+      }),
+      invites: mergeKept(p.invites, s.invites, i => i),
+      friendships: mergeKept(p.friendships, s.friendships, f => f),
+    };
   }
 
   function el(tag, cls, text) {
@@ -4395,6 +4919,7 @@
       if (!authUser && authAppliedUserId === null) return; // no session before, no session now
       authUser = null;
       authAppliedUserId = null;
+      exitCloudMode(); // local records stay put; we simply stop pushing them
       render(); // `me` deliberately stays: local play continues after a sign-out
       return;
     }
@@ -4406,6 +4931,7 @@
     stripAuthParamsFromUrl();
     document.getElementById("login").hidden = true;
     render();
+    enterCloudMode(); // phase 2a: groups/members/invites/friendships now live on the server
   }
 
   function initAuth() {
@@ -4418,6 +4944,7 @@
     if (!supabase || !authUser) return;
     authUser = null;
     authAppliedUserId = null;
+    exitCloudMode(); // applySession(null) short-circuits after this, so stop the pushes here
     supabase.auth.signOut().catch(() => {});
   }
 
@@ -5165,6 +5692,9 @@
   }
   if (supabase) bootBackend();
   else document.addEventListener("DOMContentLoaded", bootBackend, { once: true });
+  // After the auth section, so initSync() can ask cloudMode() whether a session already owns the
+  // data. A restored session arrives asynchronously and tears this down again (enterCloudMode).
+  initSync();
   const joinToken = parseJoinToken(location.search);
   if (joinToken) {
     // Nothing is joined here — this only shows the code and strips the query. Real redemption

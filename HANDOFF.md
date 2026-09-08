@@ -203,11 +203,10 @@ session) ----------` section owns everything else: `initAuth()` (`getSession` +
 offline cache. `#settings` shows the signed-in address under the avatar and "התנתקות" signs the
 session out before the existing local swap flow.
 
-**What is NOT wired.** Everything else. Game data is still the local/Claude-doc document sync:
-`save()`, `remoteBody()`, `scheduleRemoteSave()`, `applyRemote()`, `initSync()` are byte-for-byte
-unchanged, no table besides `profiles` is read or written, there is no realtime channel, and
-`ParticipantRef.userId` is still always `null` (phase 2). Nothing else in the app knows the session
-exists.
+**What phase 1 left alone.** Game data stayed on the local/Claude-doc document sync and no table
+besides `profiles` was read or written. Phase 2a (below) changed that for groups, members, invites
+and friendships; games, history and debts are still local-only, and `ParticipantRef.userId` is still
+always `null` (phase 3 links accounts to refs).
 
 **Offline / CDN-blocked is a first-class path.** `supabase` is `null` whenever supabase-js is
 missing, every call site early-returns on it (enforced by `tests/backend-config.test.cjs`), and the
@@ -232,6 +231,51 @@ round-trip returns to the page it left. Email OTP works out of the box but is ra
 **2 mails/hour** until custom SMTP is configured; Google sign-in needs the provider enabled in the
 Supabase dashboard with the OAuth client from Google Cloud. Opening `kupa-sgura.html` over `file://`
 gives no session (no allowed origin) — the local name flow still works there.
+
+## Backend (phase 2a: cloud persistence for groups, members, invites, friendships)
+
+**Two modes, one UI.** `cloudMode()` is `!!(supabase && authUser)`. With a session Supabase owns
+`groups` / `group_members` / `invites` / `friendships` and the local `state` document stays the
+working copy every renderer and adapter already reads — so no renderer, adapter or pure domain
+function changed. Without a session the app behaves exactly as before, including the Claude-document
+sync. The two writers never run together: `initSync()` returns immediately in cloud mode and
+`enterCloudMode()` drops `gameDoc` if a session arrives after it started.
+
+**Still local-only in 2a:** the open game, `history`, `debts`, `settlementStatuses`, and the
+`?join=` invite redemption. Those (plus the realtime channel for the open table) are phase 2b.
+
+**Two new sections in `kupa-sgura.html`:**
+
+- `// ---------- cloud mapping (pure) ----------` (right before `function el(`) — DOM-free,
+  state-free row mappers, unit-tested from a vm slice by `tests/cloud-mapping.test.cjs`:
+  `groupToRow`/`rowToGroup`, `groupMemberToRow`/`rowToGroupMember`, `inviteToRow`/`rowToInvite`,
+  `friendshipToRow`/`rowToFriendship`, `guestToRow`, plus `refToIdentityRow`/`identityRowToRef`,
+  `buildCloudRows`, `diffCollections` and `mergeCloudIntoState`.
+- `// ---------- cloud store (Supabase) ----------` (right after the document-sync section) —
+  `pullCloud()`, `pushCloud()`, `scheduleCloudPush()` (400ms debounce, same as before),
+  `scheduleCloudPull()`, `applyCloudPull()`, `enterCloudMode()`, `exitCloudMode()`.
+
+**Identity at the row boundary only.** The local model still has no accounts, so `userId` on every
+ref stays `null`. A membership whose `displayName` is `me` (or whose `guestId` is the one this
+device uses for me) becomes `profile_id = authUser.id`; everybody else becomes a `guests` row
+(`id = guestId`, `created_by = me`) upserted before the members that reference it. `hiddenAt` (no
+column) and a group's `avatarDataUrl` (`avatar_url` is object storage, not a data URL) are
+device-local and are carried across a pull by `mergeCloudIntoState`.
+
+**Push/pull rules.** `save()` calls `scheduleCloudPush()` in cloud mode and `scheduleRemoteSave()`
+otherwise. A push upserts in FK order — guests → groups → group_members → invites → friendships —
+with `{ onConflict: "id" }`, sending only rows `diffCollections` says changed since the last
+confirmed baseline. A row the schema or RLS would refuse is dropped before the request: a non-UUID
+legacy id, a member with no identity, a token under 8 characters, a friendship this device may not
+write. `deletes` are never applied (none of these tables has a DELETE policy; removal is
+`deleted_at` / `status`). A pull runs after sign-in, on `visibilitychange → visible`, and after a
+push error; it defers while an `<input>` is focused or a local edit is still unpushed, exactly like
+`applyRemote` always did. Sync dot: `"מסונכרן לחשבון"` on success, `"שגיאת שמירה — נשמר מקומית"` on a
+push error, `"שגיאת סנכרון — נשמר מקומית"` on a pull error.
+
+**First-device seeding.** `mergeCloudIntoState` keeps local records the server could not have
+returned (a legacy id, or anything created since the last confirmed push), so the pull that follows
+sign-in never eats an unsynced group; the push right after it sends them up.
 
 ## Next milestone (the reason for this handoff): real users
 
