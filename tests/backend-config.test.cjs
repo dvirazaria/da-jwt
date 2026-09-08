@@ -166,3 +166,54 @@ test('the settings overlay shows the signed-in address and no new localStorage k
     'poker-settle-v1',
   ]);
 });
+
+// ---------- signing in from settings while a local name is already set ----------
+//
+// Gap: with `me` set (local mode) and no Supabase session — including a dropped/expired one —
+// the settings overlay used to offer only "התנתקות", which wipes the local name. There was no
+// way back into an account without losing local play. #setSignInBtn reopens the login overlay
+// without touching `me`.
+
+test('the settings overlay has a sign-in control, hidden by default, above the sign-out button', () => {
+  const settings = html.slice(html.indexOf('<div class="login" id="settings"'), html.indexOf('<div class="login" id="groupSettings"'));
+  assert.match(settings, /<p class="games-primary-reason" id="setSignInNote" hidden>[^<]*<\/p>/);
+  assert.match(settings, /<button type="button" class="set-flat" id="setSignInBtn" hidden>התחבר עם חשבון<\/button>/);
+  // The note and the sign-in button must both come before #setSwapBtn in source order.
+  const noteIdx = settings.indexOf('id="setSignInNote"');
+  const btnIdx = settings.indexOf('id="setSignInBtn"');
+  const swapIdx = settings.indexOf('id="setSwapBtn"');
+  assert.ok(noteIdx >= 0 && btnIdx > noteIdx && swapIdx > btnIdx, 'sign-in note + button must sit above התנתקות/החלף שם');
+});
+
+test('the sign-in button opens the login overlay and never clears `me`', () => {
+  const start = appScript.indexOf('document.getElementById("setSignInBtn").addEventListener("click"');
+  assert.ok(start >= 0, 'missing #setSignInBtn click handler');
+  const close = appScript.indexOf('});', start);
+  const handler = appScript.slice(start, close);
+  assert.match(handler, /showLogin\(\)/);
+  assert.ok(!/\bme\s*=\s*null\b/.test(handler), 'must not clear the local name');
+  assert.ok(!/signOutAccount\(\)/.test(handler), 'must not sign out of Supabase');
+  assert.match(handler, /document\.getElementById\("settings"\)\.hidden = true;/);
+});
+
+test('refreshSettings branches sign-in visibility and the swap-button label on authUser + supabase', () => {
+  const start = appScript.indexOf('function refreshSettings()');
+  const close = appScript.indexOf('\n  }', start);
+  const body = appScript.slice(start, close);
+  assert.match(body, /!authUser && !!supabase/, 'no-session-but-available branch must check both authUser and supabase');
+  assert.match(body, /setSignInNote"\)\.hidden = !canSignIn/);
+  assert.match(body, /setSignInBtn"\)\.hidden = !canSignIn/);
+  assert.match(body, /setSwapBtn"\)\.textContent = canSignIn \? "החלף שם" : "התנתקות"/);
+});
+
+test('showLogin never requires `me` to be null, and skip only hides the overlay', () => {
+  const start = appScript.indexOf('function showLogin()');
+  const close = appScript.indexOf('\n  }', start);
+  const body = appScript.slice(start, close);
+  assert.ok(!/if \(me\)|if \(!me\)/.test(body), 'showLogin must not gate its body on `me`');
+  const skipStart = appScript.indexOf('document.getElementById("loginSkip").addEventListener("click"');
+  const skipClose = appScript.indexOf('});', skipStart);
+  const skipHandler = appScript.slice(skipStart, skipClose);
+  assert.match(skipHandler, /document\.getElementById\("login"\)\.hidden = true;/);
+  assert.ok(!/\bme\s*=/.test(skipHandler), 'דלג בינתיים must not touch `me`');
+});
