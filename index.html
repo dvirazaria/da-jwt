@@ -23,6 +23,7 @@
     --accent: #35E0DC;
     --accent-press: #8FF0EC;
     --bad: #FF6D6D;
+    --bad-press: #FF8A8A;
     --close-hold-fill: #EAF4F4;
     color-scheme: dark;
   }
@@ -35,6 +36,7 @@
     --accent: #089E98;
     --accent-press: #0CC2BB;
     --bad: #D4403E;
+    --bad-press: #B92F2C;
     --close-hold-fill: #05070A;
     color-scheme: light;
   }
@@ -128,7 +130,7 @@
   .tab {
     flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
     color: var(--dim); font-size: 14px; font-weight: 700;
-    border-radius: 999px; padding: 10px; min-height: 43px;
+    border-radius: 999px; padding: 10px; min-height: 44px;
     transition: background-color .25s ease, color .25s ease, flex-grow .25s ease, transform .12s ease;
   }
   .tab svg { width: 22px; height: 22px; flex: 0 0 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -254,11 +256,11 @@
   }
   .entry-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
   .exit-toggle {
-    display: flex; align-items: center; padding: 10px 0;
-    color: var(--dim); font-size: 12px; font-weight: 400;
+    display: flex; align-items: center; min-height: 44px; padding: 10px 0;
+    color: var(--bad); font-size: 12px; font-weight: 400;
     margin-inline-start: 10px; transition: color .2s;
   }
-  .exit-toggle:hover { color: var(--bad); }
+  .exit-toggle:hover { color: var(--bad-press); }
   .exit-tag { color: var(--dim); font-size: 12px; animation: fadeIn .25s ease; }
   /* Row 17: "עריכה" is an action, not another piece of meta — a 12px gap and a hairline
      separate it from the "יצא · ₪X" tag instead of one more middot in the same run. */
@@ -287,10 +289,10 @@
   .exit-field input.exit-cashout-input { border-bottom: none; }
   .exit-confirm {
     flex: 0 0 auto; min-height: 44px;
-    border-color: var(--accent); color: var(--accent); font-weight: 700;
+    border-color: var(--bad); color: var(--bad); font-weight: 700;
     white-space: nowrap;
   }
-  .exit-confirm:hover { background: var(--accent); color: var(--bg); }
+  .exit-confirm:active { background: var(--bad-press); border-color: var(--bad-press); color: var(--bg); }
   .exit-cancel {
     flex: 0 0 auto; min-height: 44px; padding: 10px 6px;
     color: var(--dim); font-size: 13px; font-weight: 400; transition: color .2s;
@@ -377,7 +379,6 @@
     transition: background-color .2s, color .2s, border-color .2s;
   }
   .games-quick-action.primary { border-color: var(--accent); color: var(--accent); }
-  .games-quick-action.primary:hover { background: var(--accent); color: var(--bg); }
   .games-quick-action:disabled { opacity: .45; cursor: default; color: var(--faint); }
   .games-active-card, .games-group-card { padding: 15px 0; border-bottom: 1px solid var(--line); text-align: center; }
   .games-card-status { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; font-weight: 400; }
@@ -388,7 +389,6 @@
   .games-card-time { margin-top: 2px; }
   .games-card-actions { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 10px; }
   .games-card-enter { border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 13px; font-weight: 700; padding: 6px 15px; min-height: 34px; transition: background-color .2s, color .2s, border-color .2s; }
-  .games-card-enter:hover { background: var(--accent); color: var(--bg); }
   .games-card-toggle { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); font-size: 12px; padding: 6px 0; transition: color .2s; }
   .games-card-toggle:hover { color: var(--accent); }
   .games-card-toggle svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .22s ease; }
@@ -429,7 +429,6 @@
     border: 1px solid var(--accent); border-radius: 999px; color: var(--accent);
     font-weight: 700; font-size: 15px; padding: 10px 24px; min-height: 44px;
   }
-  .games-create-submit:hover { background: var(--accent); color: var(--bg); }
   .games-create-cancel { color: var(--dim); font-size: 13px; padding: 6px 2px; }
   .games-create-cancel:hover { color: var(--text); }
 
@@ -486,7 +485,6 @@
   .games-primary-action { margin-top: 22px; text-align: center; }
   .games-primary-action .btn-primary { min-width: 200px; }
   .btn-primary:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--faint); }
-  .btn-primary:disabled:hover { background: none; color: var(--faint); }
   /* status line above the CTA when the group's own game is open (Task 9): phase + player count + start time */
   .games-primary-status { margin: 0; color: var(--text); font-size: 13px; font-weight: 500; animation: fadeIn .25s ease; }
   .games-primary-reason { margin: 10px 0; color: var(--dim); font-size: 12px; font-weight: 300; animation: fadeIn .25s ease; }
@@ -560,21 +558,18 @@
   .btn-close-table > span { position: relative; z-index: 1; }
   .btn-close-table::before {
     content: ""; position: absolute; z-index: 0;
-    inset: 50% auto auto 50%; width: 0; height: calc(100% - 6px);
-    border-radius: 999px; transform: translate(-50%, -50%);
-    background: var(--close-hold-fill); pointer-events: none;
-    transition: width 1s linear;
+    inset: 3px; border-radius: 999px;
+    transform: scaleX(0); transform-origin: right center;
+    background: var(--close-hold-fill); opacity: .18; pointer-events: none;
+    transition: transform .18s ease-out;
   }
-  .btn-close-table:hover { background: var(--accent); color: var(--bg); }
   .btn-close-table.warn-state { border-color: var(--bad); color: var(--bad); }
-  .btn-close-table.warn-state:hover { background: var(--bad); color: var(--bg); box-shadow: none; }
   .btn-close-table.blocked-state { cursor: default; opacity: .45; border-color: var(--line); color: var(--dim); }
-  .btn-close-table.blocked-state:hover { background: none; color: var(--dim); }
-  .btn-close-table.hold-state { opacity: 1; border-color: var(--line); color: var(--text); }
-  .btn-close-table.hold-state::before { width: 100%; }
+  .btn-close-table.hold-state { opacity: 1; border-color: var(--accent); color: var(--accent); }
+  .btn-close-table.hold-state::before { transform: scaleX(1); transition: transform 1s linear; }
+  .btn-close-table.hold-state:active { transform: scale(.98); }
   .btn-close-table.force-state { background: var(--accent); border-color: var(--accent); color: var(--bg); }
-  .btn-close-table.force-state::before { width: 0; transition: none; }
-  .btn-close-table.force-state:hover { background: var(--accent-press); color: var(--bg); }
+  .btn-close-table.force-state::before { transform: scaleX(0); transition: none; }
   .finish-game-hint { color: var(--dim); font-size: 12px; font-weight: 300; text-align: center; margin: 8px 0 0; }
   .return-edit-btn { display: block; margin: 18px auto 0; color: var(--dim); font-size: 13px; font-weight: 500; padding: 6px 2px; }
   .return-edit-btn:hover { color: var(--text); }
@@ -709,7 +704,6 @@
     color: var(--accent); font-weight: 700; font-size: 15px;
     padding: 12px 26px; min-height: 48px; align-self: flex-start;
   }
-  .btn-primary:hover { background: var(--accent); color: var(--bg); }
   .btn-skip { color: var(--dim); font-size: 13px; align-self: flex-start; }
 
   /* sign-in: the account block sits above, the existing local name flow stays below it, quieter */
@@ -778,7 +772,6 @@
     font-weight: 700; font-size: 15px; padding: 10px 24px; min-height: 44px;
     transition: background-color .2s, color .2s, border-color .2s;
   }
-  .games-invite-create:hover { background: var(--accent); color: var(--bg); }
   .games-invite-card { display: flex; flex-direction: column; align-items: center; gap: 12px; animation: rise .3s ease both; }
   .games-invite-code {
     margin: 0; text-align: center; color: var(--text);
@@ -813,6 +806,38 @@
   .games-create-avatar:disabled { cursor: default; opacity: .55; }
   .set-flat:disabled { color: var(--faint); cursor: default; }
   .set-flat:disabled:hover { color: var(--faint); }
+
+  /* Background hover feedback belongs only to devices that can actually hover. */
+  @media (hover: hover) {
+    .exit-confirm:hover { background: var(--bad-press); border-color: var(--bad-press); color: var(--bg); }
+    .games-quick-action.primary:hover { background: var(--accent); color: var(--bg); }
+    .games-card-enter:hover { background: var(--accent); color: var(--bg); }
+    .games-create-submit:hover { background: var(--accent); color: var(--bg); }
+    .btn-close-table:hover { background: var(--accent); color: var(--bg); }
+    .btn-close-table.warn-state:hover { background: var(--bad); color: var(--bg); box-shadow: none; }
+    .btn-close-table.blocked-state:hover { background: none; color: var(--dim); }
+    .btn-close-table.force-state:hover { background: var(--accent-press); color: var(--bg); }
+    .btn-close-table.hold-state:hover { background: none; border-color: var(--accent); color: var(--accent); }
+    .btn-primary:hover { background: var(--accent); color: var(--bg); }
+    .btn-primary:disabled:hover { background: none; color: var(--faint); }
+    .games-invite-create:hover { background: var(--accent); color: var(--bg); }
+  }
+
+  /* iOS cannot be locked to portrait, so a short landscape phone gets a quiet, blocking cue. */
+  #rotateNotice {
+    position: fixed; inset: 0; z-index: 50; display: none;
+    flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    background: var(--bg); color: var(--dim); text-align: center; padding: 24px;
+  }
+  #rotateNotice svg {
+    width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.7;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  #rotateNotice strong { color: var(--text); font-size: 17px; font-weight: 700; }
+  #rotateNotice span { color: var(--dim); font-size: 14px; font-weight: 400; }
+  @media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+    #rotateNotice { display: flex; pointer-events: auto; animation: fadeIn .3s ease both; }
+  }
 
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
@@ -855,7 +880,7 @@
     <button type="button" class="set-flat" id="setSignInBtn" hidden>התחבר עם חשבון</button>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
-    <p class="empty-note" style="margin-top:6px">גרסה 51</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 52</p>
   </div>
 </div>
 
@@ -931,6 +956,12 @@
   </div>
 </div>
 
+<aside id="rotateNotice" role="status" aria-live="polite">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7.5" y="3" width="9" height="18" rx="2"></rect><path d="M4 9.5a8.5 8.5 0 0 1 14.7-4.1"></path><path d="M18.7 3.8v3.7H15"></path></svg>
+  <strong>האפליקציה עובדת במצב אנכי</strong>
+  <span>סובבו את הטלפון חזרה</span>
+</aside>
+
 <div class="wrap">
   <header class="load-in">
     <div class="eyebrow"><span class="dot" id="syncDot" title="מצב סנכרון"></span></div>
@@ -945,6 +976,10 @@
 
   <nav class="tabbar load-in" style="animation-delay:.15s" aria-label="ניווט ראשי">
     <div class="tabbar-in">
+    <button type="button" class="tab" id="modeFriends" aria-label="חברים">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14.5" cy="8" r="3.5"></circle><path d="M7 19.5c1.2-3.7 4-5.3 7.5-5.3s6.3 1.6 7.5 5.3"></path><path d="M8.5 11.3a3 3 0 1 1 1.1-5.8M2 19.5c.8-2.8 2.7-4.2 5.2-4.6"></path></svg>
+      <span class="tlabel">חברים</span>
+    </button>
     <button type="button" class="tab on" id="modeGames" aria-label="משחקים">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="3.6"></circle><path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3"></path></svg>
       <span class="tlabel">משחקים</span>
@@ -980,6 +1015,7 @@
   </section>
 
   <section class="profile" id="profile" hidden></section>
+  <section class="profile friends-page" id="friendsPage" hidden></section>
 
 </div>
 
@@ -1041,7 +1077,7 @@
   const expandedGroupCards = new Set();
   const expandedGroupGames = new Set();
   let state = load();
-  let appView = "games";         // "games" | "game" | "settle" | "profile" | "group"
+  let appView = "games";         // "friends" | "games" | "game" | "settle" | "profile" | "group"
   let currentGroupId = null;  // UI-only: which group's page is open when appView === "group"
   let openMenu = null;        // player name whose buy-in menu is open
   let menuJustOpened = null;  // menu that should animate open on the next render
@@ -1108,10 +1144,9 @@
     return "closed";
   }
   function initialAppView(gameState) {
-    if (!gameState || gameState.example) return "games";
-    if (gameState.phase === "active") return "game";
-    if (gameState.phase === "settlement") return "settle";
-    return "games";
+    if (isGameOpen(gameState) && gameState.phase === "active") return "game";
+    if (isGameOpen(gameState) && gameState.phase === "settlement") return "settle";
+    return "profile";
   }
 
   function profileDebtIds(debts, userName) {
@@ -3620,10 +3655,10 @@
   }
 
   // Short fade+rise on the container that just became visible after a view switch (games/group
-  // share #gamesHome; game/settle share #rows; profile is #profile). Adds the shared .load-in
+  // share #gamesHome; game/settle share #rows; profile/friends use their own sections). Adds the shared .load-in
   // class and removes it once its animation finishes so the next switch can replay it.
   function flashViewEnter(nextView) {
-    const id = nextView === "profile" ? "profile" : (nextView === "game" || nextView === "settle") ? "rows" : "gamesHome";
+    const id = nextView === "profile" ? "profile" : nextView === "friends" ? "friendsPage" : (nextView === "game" || nextView === "settle") ? "rows" : "gamesHome";
     const container = document.getElementById(id);
     if (!container) return;
     container.classList.remove("load-in");
@@ -5121,16 +5156,19 @@
     if (appView === "group") document.body.classList.add("games-view"); // group page reuses the dashboard shell
     document.body.classList.toggle("game-view", appView === "game");
     document.body.classList.toggle("settle-view", appView === "settle");
+    document.body.classList.toggle("friends-view", appView === "friends");
+    document.getElementById("modeFriends").classList.toggle("on", appView === "friends");
     document.getElementById("modeGames").classList.toggle("on", inGames);
     document.getElementById("modeProfile").classList.toggle("on", appView === "profile");
     document.getElementById("addrow").hidden = appView !== "game";
     renderTableHeader();
     renderAddRowChips();
-    // Settings gear: profile and the games dashboard only. The group page has its own "הגדרות" (group
+    // Settings gear: profile, friends and the games dashboard. The group page has its own "הגדרות" (group
     // settings) in its header, and game/settle keep the reset control in that corner.
-    document.getElementById("settingsBtn").hidden = appView !== "profile" && appView !== "games";
-    document.getElementById("resetBtn").hidden = appView === "profile" || appView === "games" || appView === "group";
+    document.getElementById("settingsBtn").hidden = appView !== "profile" && appView !== "games" && appView !== "friends";
+    document.getElementById("resetBtn").hidden = appView === "profile" || appView === "friends" || appView === "games" || appView === "group";
     document.getElementById("gamesHome").hidden = appView !== "games" && appView !== "group";
+    document.getElementById("friendsPage").hidden = appView !== "friends";
 
     const rows = document.getElementById("rows");
     rows.innerHTML = "";
@@ -5444,6 +5482,7 @@
 
     renderDerived();
     renderProfile();
+    renderFriendsPage();
     if (appView === "games") renderGamesDashboard();
     else if (appView === "group") renderGroupPage();
     // A remote sync (applyRemote -> render) can change group data while the settings overlay is
@@ -5460,7 +5499,7 @@
     const canFinishGame = appView === "game" && state.phase === "active" && isGameOpen(state);
     finishBtn.hidden = !canFinishGame;
     returnBtn.hidden = appView !== "settle" || state.example;
-    if (!canFinishGame && finishGameHoldTimer) clearFinishGameHold();
+    if (!canFinishGame && (finishGameHoldTimer || finishGameCompletionTimer)) clearFinishGameHold();
     if (!canFinishGame && finishHint) finishHint.hidden = true;
 
     if (appView === "settle") {
@@ -5474,7 +5513,7 @@
     }
 
     const stat = document.getElementById("statline");
-    stat.hidden = appView === "profile" || appView === "games" || appView === "group";
+    stat.hidden = appView === "profile" || appView === "friends" || appView === "games" || appView === "group";
     if (appView === "game") {
       const exitedCount = exitedPlayers(state.players).length;
       const exitedLabel = exitedCount === 0 ? "" :
@@ -5608,12 +5647,17 @@
   let forceCloseUnlocked = false;
   let forceCloseUnlockDifference = null;
   let closeHoldTimer = null;
+  let closeHoldCompletionTimer = null;
+  let closeHoldAwaitingRelease = false;
   let longPressJustUnlocked = false;
   let finishGameHoldTimer = null;
+  let finishGameCompletionTimer = null;
 
   function clearFinishGameHold() {
     if (finishGameHoldTimer) clearTimeout(finishGameHoldTimer);
+    if (finishGameCompletionTimer) clearTimeout(finishGameCompletionTimer);
     finishGameHoldTimer = null;
+    finishGameCompletionTimer = null;
     const btn = document.getElementById("finishGameBtn");
     const hint = document.getElementById("finishGameHint");
     if (btn) btn.classList.remove("hold-state");
@@ -5631,14 +5675,17 @@
     if (btn.setPointerCapture && e.pointerId !== undefined) btn.setPointerCapture(e.pointerId);
     finishGameHoldTimer = setTimeout(() => {
       finishGameHoldTimer = null;
-      btn.classList.remove("hold-state");
-      if (hint) hint.hidden = true;
-      finishGame();
+      finishGameCompletionTimer = setTimeout(() => {
+        finishGameCompletionTimer = null;
+        btn.classList.remove("hold-state");
+        if (hint) hint.hidden = true;
+        finishGame();
+      }, 60);
     }, FINISH_GAME_HOLD_MS);
   }
 
   function endFinishGameHold(e) {
-    clearFinishGameHold();
+    if (finishGameHoldTimer) clearFinishGameHold();
     const btn = e.currentTarget;
     if (btn.releasePointerCapture && e.pointerId !== undefined && btn.hasPointerCapture && btn.hasPointerCapture(e.pointerId)) {
       btn.releasePointerCapture(e.pointerId);
@@ -5661,7 +5708,10 @@
 
   function clearCloseHold() {
     if (closeHoldTimer) clearTimeout(closeHoldTimer);
+    if (closeHoldCompletionTimer) clearTimeout(closeHoldCompletionTimer);
     closeHoldTimer = null;
+    closeHoldCompletionTimer = null;
+    closeHoldAwaitingRelease = false;
     const btn = document.getElementById("closeTableBtn");
     if (btn) btn.classList.remove("hold-state");
   }
@@ -5676,19 +5726,29 @@
     if (btn.setPointerCapture && e.pointerId !== undefined) btn.setPointerCapture(e.pointerId);
     closeHoldTimer = setTimeout(() => {
       closeHoldTimer = null;
-      const current = totals();
-      if (appView !== "settle" || !state.players.length || state.example || current.diff === 0) return;
-      btn.classList.remove("hold-state");
-      forceCloseUnlocked = true;
-      forceCloseUnlockDifference = current.diff;
-      forceCloseArmed = false;
-      longPressJustUnlocked = true;
-      renderDerived();
+      closeHoldAwaitingRelease = true;
+      closeHoldCompletionTimer = setTimeout(() => {
+        closeHoldCompletionTimer = null;
+        const current = totals();
+        if (appView !== "settle" || !state.players.length || state.example || current.diff === 0) {
+          btn.classList.remove("hold-state");
+          return;
+        }
+        btn.classList.remove("hold-state");
+        forceCloseUnlocked = true;
+        forceCloseUnlockDifference = current.diff;
+        forceCloseArmed = false;
+        renderDerived();
+      }, 60);
     }, HOLD_TO_FORCE_CLOSE_MS);
   }
 
   function endCloseHold(e) {
-    clearCloseHold();
+    if (closeHoldTimer) clearCloseHold();
+    else if (closeHoldAwaitingRelease) {
+      if (e.type === "pointerup") longPressJustUnlocked = true;
+      closeHoldAwaitingRelease = false;
+    }
     const btn = e.currentTarget;
     if (btn.releasePointerCapture && e.pointerId !== undefined && btn.hasPointerCapture && btn.hasPointerCapture(e.pointerId)) {
       btn.releasePointerCapture(e.pointerId);
@@ -6097,11 +6157,45 @@
     parent.appendChild(group);
   }
 
+  function renderFriendsPage() {
+    const box = document.getElementById("friendsPage");
+    box.hidden = appView !== "friends";
+    if (appView !== "friends") return;
+    box.innerHTML = "";
+
+    const friendsSec = el("section", "psection debt-section");
+    friendsSec.style.animationDelay = ".03s";
+    const friendData = me
+      ? friendRequestsFor(state.friendships || [], {
+          userId: null,
+          guestId: resolveGuestId(collectionsOf(state), me),
+          displayName: me,
+        })
+      : { friends: [], incoming: [], outgoing: [] };
+    const hasFriendData = friendData.friends.length || friendData.incoming.length || friendData.outgoing.length;
+    if (!hasFriendData) {
+      friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים"));
+    } else {
+      renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
+      renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך");
+      renderFriendGroup(friendsSec, "בקשות שנשלחו", friendData.outgoing.map(f => f.addressee), "ממתין לאישור");
+    }
+    const addFriendBtn = el("button", "btn-primary", "הוסף חבר");
+    addFriendBtn.type = "button";
+    addFriendBtn.disabled = true;
+    addFriendBtn.setAttribute("aria-disabled", "true");
+    addFriendBtn.style.marginTop = "14px";
+    friendsSec.appendChild(addFriendBtn);
+    friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
+    box.appendChild(friendsSec);
+  }
+
   function renderProfile() {
     const box = document.getElementById("profile");
     box.hidden = appView !== "profile";
     if (appView !== "profile") return;
     box.innerHTML = "";
+    if (profileTab !== "balance" && profileTab !== "debts") profileTab = "balance";
 
     if (!me) {
       const sec = el("section", "psection");
@@ -6136,7 +6230,6 @@
     [
       ["balance", "מאזן"],
       ["debts", "חובות"],
-      ["friends", "חברים"],
     ].forEach(([key, label]) => {
       const tab = el("button", "profile-tab" + (profileTab === key ? " active" : ""), label);
       tab.type = "button";
@@ -6188,29 +6281,6 @@
     debtSec.appendChild(debtPane);
     box.appendChild(debtSec);
 
-    // friends
-    const friendsSec = el("section", "psection debt-section");
-    friendsSec.style.animationDelay = ".09s";
-    friendsSec.hidden = profileTab !== "friends";
-    const meRef = { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me };
-    const friendData = friendRequestsFor(state.friendships || [], meRef);
-    const hasFriendData = friendData.friends.length || friendData.incoming.length || friendData.outgoing.length;
-    if (!hasFriendData) {
-      friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים"));
-    } else {
-      renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
-      renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך");
-      renderFriendGroup(friendsSec, "בקשות שנשלחו", friendData.outgoing.map(f => f.addressee), "ממתין לאישור");
-    }
-    const addFriendBtn = el("button", "btn-primary", "הוסף חבר");
-    addFriendBtn.type = "button";
-    addFriendBtn.disabled = true;
-    addFriendBtn.setAttribute("aria-disabled", "true");
-    addFriendBtn.style.marginTop = "14px";
-    friendsSec.appendChild(addFriendBtn);
-    friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
-    box.appendChild(friendsSec);
-
     // total balance
     const balSec = el("section", "psection");
     balSec.style.animationDelay = ".06s";
@@ -6259,7 +6329,7 @@
   }
 
   // Shared tail of "add a player to the open table": builds the Player, gives it its first
-  // buy-in, opens its buy-in menu, and saves/re-renders. Used by both addPlayer() (typed name)
+  // buy-in, clears any buy-in-menu draft, and saves/re-renders. Used by both addPlayer() (typed name)
   // and the group member chips in renderAddRowChips() (tapped member, memberId/guestId known).
   function addPlayerToTable(name, opts) {
     const o = opts || {};
@@ -6268,7 +6338,7 @@
     state.players.push(player);
     state.phase = "active";
     appView = "game";
-    openMenu = name;
+    openMenu = null;
     customOpen = null;
     pendingAmount = null;
     animNext = "one"; animName = name;
@@ -6303,6 +6373,7 @@
   });
 
   document.getElementById("modeGames").addEventListener("click", () => setAppView("games"));
+  document.getElementById("modeFriends").addEventListener("click", () => setAppView("friends"));
   document.getElementById("modeProfile").addEventListener("click", () => setAppView("profile"));
 
   // confirm() is blocked in the artifact sandbox; the two-step arm/confirm
@@ -6607,6 +6678,9 @@
   // ---------- boot ----------
   appView = initialAppView(state);
   render();
+  if (typeof screen.orientation?.lock === "function" && matchMedia("(display-mode: standalone)").matches) {
+    try { screen.orientation.lock("portrait").catch(() => {}); } catch (e) {}
+  }
   // Auth first: a redirect back from Google carries ?code=/#access_token=, and the join reader
   // below must not see those. bootBackend() runs immediately when supabase-js is already there,
   // otherwise once the deferred CDN script has executed (DOMContentLoaded is after that).
