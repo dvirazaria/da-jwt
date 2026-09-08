@@ -392,7 +392,7 @@ test('normalize defaults groups/groupMembers/invites/friendships to [] and leade
   }]);
   assert.deepEqual(saved.groupMembers, [{
     id: 'm1', groupId: '', userId: null, guestId: null, displayName: '',
-    role: 'member', status: 'active', joinedAt: '', leftAt: null,
+    role: 'member', status: 'active', joinedAt: '', leftAt: null, hiddenAt: null,
   }]);
   assert.deepEqual(saved.invites, [{
     id: 'i1', groupId: '', token: '',

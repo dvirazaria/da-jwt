@@ -297,7 +297,8 @@ test('knownNames guards Array.isArray(g.players) so a malformed history entry is
 
 // ---------- D6: quiet/disabled text moves from --faint to --dim (contrast) ----------
 
-test('empty-note, btn-skip, games-invite-qr, joinNoticeCode and the blocked close-button state read --dim, not --faint', () => {
+// The QR placeholder tile this test used to cover was removed entirely by the design round (D6).
+test('empty-note, btn-skip, joinNoticeCode and the blocked close-button state read --dim, not --faint', () => {
   const rule = (selector) => {
     // Anchored on a line start so a compound selector containing the same class as a suffix
     // (e.g. ".debt-group .empty-note {") can't shadow the standalone rule.
@@ -307,7 +308,6 @@ test('empty-note, btn-skip, games-invite-qr, joinNoticeCode and the blocked clos
   };
   assert.match(rule('.empty-note {'), /color: var\(--dim\)/);
   assert.match(rule('.btn-skip {'), /color: var\(--dim\)/);
-  assert.match(rule('.games-invite-qr {'), /color: var\(--dim\)/);
   assert.match(rule('#joinNoticeCode {'), /color: var\(--dim\)/);
   assert.match(rule('.btn-close-table.blocked-state {'), /color: var\(--dim\)/);
   assert.match(rule('.btn-close-table.blocked-state:hover {'), /color: var\(--dim\)/);

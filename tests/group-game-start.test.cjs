@@ -87,11 +87,15 @@ test('addPlayer resolves guestId/memberId then delegates to the shared addPlayer
   assert.match(tailSection, /createPlayer\(\{ name, guestId: o\.guestId \|\| null, memberId: o\.memberId \|\| null \}\)/);
 });
 
-test('the game view stat line shows the group name ("קבוצה: ") built via DOM nodes, not raw innerHTML', () => {
-  const section = sourceBetween('function renderDerived(', '    const warn = document.getElementById("warnbox");');
-  assert.match(section, /קבוצה: /);
-  assert.match(section, /document\.createTextNode\("קבוצה: "\)/);
-  assert.match(section, /statGroup\.name/);
+// D2 moved the group name off the bottom stat line and into the table header at the top of the
+// screen, where it also carries the way back to the group.
+test('the table header shows the group name as a text node, not raw innerHTML, and links back to the group', () => {
+  const section = sourceBetween('  function renderTableHeader() {', '  function render() {');
+  assert.match(section, /el\("span", "table-header-name", group \? group\.name : "משחק ללא קבוצה"\)/);
+  assert.doesNotMatch(section, /innerHTML\s*[+]?=\s*[^;]*group\.name/);
+  assert.match(section, /openGroup\(state\.groupId\)/);
+  const statSection = sourceBetween('function renderDerived(', '    const warn = document.getElementById("warnbox");');
+  assert.doesNotMatch(statSection, /קבוצה: /);
 });
 
 test('the group page primary action opens an inline start-game panel gated by canStartGroupGame.ok', () => {

@@ -135,12 +135,13 @@ test('parseJoinToken rejects a missing param, wrong length, or disallowed charac
 
 // ---------- wiring: renderGroupPage renders the invite section ----------
 
-test('renderGroupPage renders the group invite as the last section, after the history', () => {
-  const source = sourceBetween('  function renderGroupPage() {', '  function render() {');
-  assert.match(source, /renderGroupInvite\(summary, activeInvite\(state\.invites, currentGroupId\), summary\.isAdmin\)/);
-  const historyIdx = source.indexOf('renderGroupHistory(gameSummaries)');
-  const inviteIdx = source.indexOf('renderGroupInvite(');
-  assert.ok(historyIdx >= 0 && inviteIdx > historyIdx, 'renderGroupInvite should be composed after renderGroupHistory');
+// D1 moved the invite block off the (long) group page and into the group settings overlay,
+// where every active member can still reach it through the header's "הגדרות".
+test('the group settings overlay renders the group invite, and the group page no longer does', () => {
+  const page = sourceBetween('  function renderGroupPage() {', '  function renderAddRowChips() {');
+  assert.doesNotMatch(page, /renderGroupInvite/);
+  const overlay = sourceBetween('  function refreshGroupSettings() {', '  function openGroupSettings() {');
+  assert.match(overlay, /renderGroupInvite\(summary, activeInvite\(state\.invites, currentGroupId\), summary\.isAdmin\)/);
 });
 
 test('renderGroupInvite is defined right after renderGroupHistory', () => {

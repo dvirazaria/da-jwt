@@ -178,11 +178,13 @@ test('respondToFriendRequest can reject a pending request', () => {
 test('profile has a third "חברים" tab wired to profileTab === "friends"', () => {
   assert.match(html, /\[\s*\["balance", "מאזן"\],\s*\["debts", "חובות"\],\s*\["friends", "חברים"\]/s);
   assert.match(html, /friendsSec\.hidden = profileTab !== "friends";/);
-  assert.match(html, /עוד אין חברים\. בקשות חברות יעבדו כשהאפליקציה תתחבר לשרת\./);
+  // Design round (row 22): the empty state states the fact, and the single shared SERVER_NOTE
+  // constant under the disabled button carries the "needs a backend" wording for all five places.
+  assert.match(html, /עוד אין חברים/);
   assert.match(html, /"הוסף חבר"/);
   assert.match(html, /addFriendBtn\.disabled = true;/);
   assert.match(html, /addFriendBtn\.setAttribute\("aria-disabled", "true"\);/);
-  assert.match(html, /דורש חיבור לשרת/);
+  assert.match(html, /el\("p", "friend-helper", SERVER_NOTE\)/);
 });
 
 test('no UI handler calls createFriendRequest or respondToFriendRequest (guards against fake local friendships)', () => {

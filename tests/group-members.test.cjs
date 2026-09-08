@@ -257,11 +257,13 @@ test('the remove control is a two-step armed confirm (like resetBtn/setClearBtn)
   assert.match(html, /armed/);
 });
 
-test('renderGroupMembers takes active and former members and renders the add-member panel and note', () => {
+// D1: renderGroupMembers keeps the active/former lists; "+ הוסף חבר" and its note moved into
+// the group settings overlay (see tests/design-round.test.cjs for the overlay wiring).
+test('renderGroupMembers takes active and former members and keeps the former-members toggle', () => {
   assert.match(html, /function renderGroupMembers\(members, former, isAdmin\)/);
   assert.match(html, /\+ הוסף חבר/);
   assert.match(html, /חברים לשעבר/);
-  assert.match(html, /חיבור חשבונות יגיע עם השרת/);
+  assert.match(html, /el\("p", "games-member-add-note", SERVER_NOTE\)/);
 });
 
 test('a duplicate add-member submission shakes the input instead of silently failing', () => {

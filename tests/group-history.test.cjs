@@ -106,8 +106,9 @@ test('formatDuration returns "" for null/invalid input', () => {
 
 test('formatDuration renders minutes-only under an hour', () => {
   const context = loadPure();
-  assert.equal(vm.runInContext('formatDuration(5)', context), '5דק׳');
-  assert.equal(vm.runInContext('formatDuration(45)', context), '45דק׳');
+  // Design round (row 9): a space between the number and its unit.
+  assert.equal(vm.runInContext('formatDuration(5)', context), '5 דק׳');
+  assert.equal(vm.runInContext('formatDuration(45)', context), '45 דק׳');
 });
 
 test('formatDuration(0) reads "פחות מדקה", not "0דק׳" (C7)', () => {
@@ -117,8 +118,8 @@ test('formatDuration(0) reads "פחות מדקה", not "0דק׳" (C7)', () => {
 
 test('formatDuration renders hours and minutes, or bare hours when exact', () => {
   const context = loadPure();
-  assert.equal(vm.runInContext('formatDuration(65)', context), '1שע׳ 5דק׳');
-  assert.equal(vm.runInContext('formatDuration(120)', context), '2שע׳');
+  assert.equal(vm.runInContext('formatDuration(65)', context), '1 שע׳ 5 דק׳');
+  assert.equal(vm.runInContext('formatDuration(120)', context), '2 שע׳');
 });
 
 // ---------- buildLeaderboard: eligibility (Task 12) ----------

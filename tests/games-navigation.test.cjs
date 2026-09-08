@@ -130,7 +130,9 @@ test('active game card renderer never reads game state directly', () => {
 test('card expansion is UI-only and is not persisted', () => {
   assert.match(html, /const expandedGameCards = new Set\(\)/);
   assert.match(html, /const expandedGroupCards = new Set\(\)/);
-  const dashboardSource = sourceBetween('  function getActiveGameSummaries', '  function render\(\)');
+  // Scoped to the dashboard card renderers: the group page below them legitimately saves
+  // (D8's "remove a group I left from this device"), but no card expand/collapse does.
+  const dashboardSource = sourceBetween('  function renderActiveGameCard', '  function renderGroupHeader(summary) {');
   assert.doesNotMatch(dashboardSource, /\bsave\(\)/);
 });
 
