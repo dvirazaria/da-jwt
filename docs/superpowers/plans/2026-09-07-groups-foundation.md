@@ -624,3 +624,41 @@ animationend). Keep durations ≤ .5s. Test: a regex test asserting the new pane
 transition classes and that no new `animation:` lacks the reduced-motion guard (the global
 `@media (prefers-reduced-motion: reduce) * { animation: none !important; transition: none !important }`
 must still be the last rule of the stylesheet).
+
+---
+
+## Task 19: Pre-backend gap audit
+
+**Goal 19:** a written list of every requirement from the original product brief (sections B–I of
+the owner's prompt, mirrored in Tasks 1–15) that is missing, partial, or deviates, each classified
+as fix-now (small, frontend) / defer-to-backend / intentional deviation. The controller fixes the
+fix-now items via one fix dispatch. Output: `docs/superpowers/plans/2026-09-08-pre-backend-gaps.md`.
+
+## Task 20: Backend platform research
+
+**Goal 20:** `docs/backend/platform-research.md` — free-tier-first, low-lock-in platform decision with
+exit path and a connection plan (dispatched to an opus researcher; see that file).
+
+## Task 21: Backend preparation artifacts (no account needed)
+
+**Goal 21:** portable artifacts an agent can produce without the owner's accounts:
+- `docs/backend/schema.sql` — standard Postgres DDL for profiles, groups, group_members, invites,
+  friendships, games, game_participants, entries (buy-ins), game_results, transfers, debts; with
+  constraints (one open game per group via partial unique index; guest/user identity check),
+  indexes, `updated_at` triggers. No vendor-specific syntax except in a clearly marked RLS section.
+- `docs/backend/rls-policies.sql` — row-level-security policy drafts implementing the privacy
+  rules (members see group data; P&L visible only to owner; debts visible to debtor/creditor).
+- `docs/backend/migration-from-local-state.md` + `tools/export-local-state.js`? — NO new runtime
+  files: instead a documented procedure + a Node script under `tools/` (outside the deploy, added to
+  `.vercelignore`) that converts a `poker-settle-v1` JSON export into SQL inserts matching schema.sql.
+- The frontend already flows through `normalize()`/`save()`/`remoteBody()`; document the seam where
+  a `RemoteStore` adapter will replace the Claude-doc sync (`initSync`, `scheduleRemoteSave`,
+  `applyRemote`) so the owner sees exactly which functions change.
+
+## Task 22: Design QA report for the owner
+
+**Goal 22:** `docs/design-review-2026-09-08.md` with screenshots (`docs/design-review/*.png`) of every
+screen in both themes at 390px: dashboard (empty / with groups / with active game), create-group
+panel, group page (empty, with history, archived), settings overlay, participant picker, table with
+an exited player, settlement, profile tabs, join notice. For each: what matches DESIGN.md, what does
+not (spacing, hierarchy, contrast, wording, motion), and a prioritized fix list. No code changes.
