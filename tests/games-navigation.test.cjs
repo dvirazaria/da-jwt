@@ -108,7 +108,9 @@ test('Games dashboard is composed from three modular sections', () => {
   assert.match(html, /function renderGroupsSection\(parent, groups\)/);
   assert.match(html, /function renderGroupCard\(group, actions\)/);
   assert.match(html, /renderQuickActions\(inner\)/);
-  assert.match(html, /renderActiveGamesSection\(inner, getActiveGameSummaries\(state\)\)/);
+  // Task 9: getActiveGameSummaries gains an optional `groups` argument for title resolution;
+  // the dashboard call site passes state.groups.
+  assert.match(html, /renderActiveGamesSection\(inner, getActiveGameSummaries\(state, state\.groups\)\)/);
   assert.match(html, /renderGroupsSection\(inner, getGroupSummaries\(collectionsOf\(state\), me\)\)/);
   assert.match(html, /אין משחקים פעילים כרגע/);
   assert.match(html, /אין לך קבוצות עדיין/);

@@ -74,12 +74,17 @@ test('startGroupGame builds leaderRef from resolveGuestId(collectionsOf(state), 
   assert.match(section, /return false/);
 });
 
-test('addPlayer builds its player via the shared createPlayer helper, not an ad-hoc literal', () => {
+// Task 9 extracts addPlayer's shared tail (createPlayer/addEntry/open-menu/save/render) into
+// addPlayerToTable so the group member chips can reuse it; addPlayer itself still resolves
+// guestId/memberId (only inside a group game, exactly like startGroupGame's ids) and delegates.
+test('addPlayer resolves guestId/memberId then delegates to the shared addPlayerToTable, which builds the player via createPlayer', () => {
   const section = sourceBetween('function addPlayer(', '  document.getElementById("addBtn")');
-  assert.match(section, /createPlayer\(\{ name, guestId, memberId \}\)/);
-  // and resolves guestId/memberId only inside a group game, exactly like startGroupGame's ids
   assert.match(section, /if \(state\.groupId\) \{/);
   assert.match(section, /resolveGuestId\(collectionsOf\(state\), name\)/);
+  assert.match(section, /addPlayerToTable\(name, \{ guestId, memberId \}\)/);
+
+  const tailSection = sourceBetween('function addPlayerToTable(', '  function addPlayer() {');
+  assert.match(tailSection, /createPlayer\(\{ name, guestId: o\.guestId \|\| null, memberId: o\.memberId \|\| null \}\)/);
 });
 
 test('the game view stat line shows the group name ("קבוצה: ") built via DOM nodes, not raw innerHTML', () => {
