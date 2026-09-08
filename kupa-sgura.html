@@ -218,7 +218,14 @@
 
 
   /* entry details — quiet, inline, using the existing row language */
-  .player-heading { flex: 1; min-width: 0; }
+  /* D2: a flex row so "יציאה" (exit-toggle) sits beside "פירוט כניסות" (entry-toggle) instead of
+     wrapping under it; the name forces its own line via flex-basis so long names don't crowd
+     the two text actions onto a half-width row. */
+  .player-heading {
+    flex: 1; min-width: 0;
+    display: flex; flex-wrap: wrap; align-items: center; column-gap: 14px; row-gap: 2px;
+  }
+  .player-heading .pname { flex-basis: 100%; }
   .entry-toggle {
     display: flex; align-items: center; gap: 5px; padding: 4px 0;
     color: var(--dim); font-size: 12px; font-weight: 400;
@@ -472,6 +479,9 @@
   .games-history-row { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
   .games-history-tag { margin-inline-start: 6px; color: var(--bad); font-size: 12px; font-weight: 500; animation: fadeIn .25s ease; }
   .games-history-rank { margin: 0; padding: 4px 0; font-size: 13px; font-weight: 500; color: var(--text); }
+  /* Rank number ("1.") isolated in its own dir="ltr" span so the digit+dot never gets reversed
+     by the bidi algorithm inside an RTL row (D4) — used by both the leaderboard and history rank. */
+  .games-rank { margin-inline-end: 4px; font-variant-numeric: tabular-nums; }
 
   .btn-close-table {
     position: relative; overflow: hidden; isolation: isolate;
@@ -492,8 +502,8 @@
   .btn-close-table:hover { background: var(--accent); color: var(--bg); }
   .btn-close-table.warn-state { border-color: var(--bad); color: var(--bad); }
   .btn-close-table.warn-state:hover { background: var(--bad); color: var(--bg); box-shadow: none; }
-  .btn-close-table.blocked-state { cursor: default; opacity: .45; border-color: var(--line); color: var(--faint); }
-  .btn-close-table.blocked-state:hover { background: none; color: var(--faint); }
+  .btn-close-table.blocked-state { cursor: default; opacity: .45; border-color: var(--line); color: var(--dim); }
+  .btn-close-table.blocked-state:hover { background: none; color: var(--dim); }
   .btn-close-table.hold-state { opacity: 1; border-color: var(--line); color: var(--text); }
   .btn-close-table.hold-state::before { width: 100%; }
   .btn-close-table.force-state { background: var(--accent); border-color: var(--accent); color: var(--bg); }
@@ -556,7 +566,7 @@
   .debt-paid-btn { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); font-size: 12px; font-weight: 500; padding: 4px 10px; min-height: 30px; }
   .debt-paid-btn:hover { color: var(--accent); border-color: var(--accent); }
   .friend-helper { color: var(--faint); font-size: 12px; font-weight: 300; margin-top: 8px; text-align: center; }
-  .empty-note { color: var(--faint); font-size: 14px; font-weight: 300; margin-top: 10px; }
+  .empty-note { color: var(--dim); font-size: 14px; font-weight: 300; margin-top: 10px; }
   .pid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .pname-big { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
   .pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; margin-top: 16px; }
@@ -583,7 +593,7 @@
   .corner-btn.danger-armed { color: var(--bad); }
   header { padding-inline-end: 96px; }
   /* Keep the main content below the fixed corner controls after the app title was removed. */
-  .game-view .wrap > header { min-height: 64px; }
+  .game-view .wrap > header, .settle-view .wrap > header { min-height: 64px; }
 
   /* ---------- login overlay ---------- */
   .login {
@@ -603,7 +613,7 @@
     padding: 12px 26px; min-height: 48px; align-self: flex-start;
   }
   .btn-primary:hover { background: var(--accent); color: var(--bg); }
-  .btn-skip { color: var(--faint); font-size: 13px; align-self: flex-start; }
+  .btn-skip { color: var(--dim); font-size: 13px; align-self: flex-start; }
 
   /* settings — flat, centered */
   .back-arrow {
@@ -653,6 +663,8 @@
     font-size: 28px; font-weight: 800; letter-spacing: .12em;
     font-variant-numeric: tabular-nums;
   }
+  /* D6: the join-notice's own code display reads quieter than the group settings invite code. */
+  #joinNoticeCode { color: var(--dim); }
   .games-invite-actions { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
   .games-invite-action {
     border: 1px solid var(--line); border-radius: 999px; color: var(--text);
@@ -664,7 +676,7 @@
   .games-invite-qr {
     width: 120px; height: 120px; border: 1px solid var(--line); border-radius: 12px;
     display: flex; align-items: center; justify-content: center; text-align: center;
-    padding: 10px; color: var(--faint); font-size: 12px; font-weight: 300;
+    padding: 10px; color: var(--dim); font-size: 12px; font-weight: 300;
   }
   .games-invite-note { margin: 0; color: var(--dim); font-size: 12px; font-weight: 300; max-width: 280px; }
   .games-invite-revoke { color: var(--dim); font-size: 12px; font-weight: 400; padding: 4px 0; transition: color .2s; }
@@ -732,6 +744,7 @@
     <input type="file" id="groupSetAvatarFile" accept="image/*" hidden aria-hidden="true">
     <input type="text" id="groupSetName" maxlength="40" placeholder="שם הקבוצה" autocomplete="off" aria-label="שם הקבוצה">
     <button type="button" class="set-flat" id="groupSetArchiveBtn">העבר לארכיון</button>
+    <p class="games-primary-reason" id="groupSetArchiveReason" hidden></p>
     <button type="button" class="set-flat danger" id="groupSetDeleteBtn">מחק קבוצה</button>
     <p class="games-primary-reason" id="groupSetDeleteReason" hidden></p>
     <button type="button" class="set-flat" id="groupSetLeaveBtn">עזוב קבוצה</button>
@@ -981,6 +994,7 @@
         return { ...p, id, buyins,
           status: p.status === "exited" ? "exited" : "active",
           exitedAt: typeof p.exitedAt === "string" ? p.exitedAt : null,
+          userId: null, // pre-backend: forced like every other normalizer (no accounts yet)
           guestId: typeof p.guestId === "string" ? p.guestId : null,
           memberId: typeof p.memberId === "string" ? p.memberId : null,
           entryLog: buyins.map((amount, i) => {
@@ -1175,8 +1189,11 @@
     return true;
   }
 
-  const fmt = (n) => "₪" + (Math.round(n * 100) / 100).toLocaleString("he-IL");
-  const fmtSigned = (n) => ((n > 0 ? "+" : "") + fmt(n)).replace("₪-", "-₪");
+  // D3: wrapped in FSI/PDI (U+2068/U+2069) so the bidi algorithm treats the whole "₪123"/"-₪123"
+  // as one isolated run — otherwise ₪ lands on a different side of the digits depending on sign
+  // when this string sits inside RTL text. Digits/amount otherwise unchanged.
+  const fmt = (n) => "⁨₪" + (Math.round(n * 100) / 100).toLocaleString("he-IL") + "⁩";
+  const fmtSigned = (n) => "⁨" + ((n > 0 ? "+" : "") + fmt(n)).replace("₪-", "-₪") + "⁩";
   const sum = (a) => a.reduce((x, y) => x + y, 0);
   const wholeMoney = (n) => Math.round(Number(n) || 0);
 
@@ -1497,10 +1514,13 @@
   function groupClosedGames(history, groupId) {
     return (Array.isArray(history) ? history : []).filter(h => h && h.groupId === groupId);
   }
+  // D5: a game where nobody actually profited (max net <= 0 — everyone lost or, at best, broke
+  // even) has no winner. Ties at a positive net still return every tied leader.
   function gameWinners(historyEntry) {
     const players = historyEntry && Array.isArray(historyEntry.players) ? historyEntry.players : [];
     if (!players.length) return [];
     const maxNet = Math.max(...players.map(p => Number(p.net) || 0));
+    if (maxNet <= 0) return [];
     return players.filter(p => (Number(p.net) || 0) === maxNet);
   }
   // Builds a GroupGameSummary from a closed-game HistoryEntry for the group's last-game and
@@ -1533,14 +1553,14 @@
       isBalanced: !!entry.isBalanced,
     };
   }
-  // Short Hebrew duration for group history rows: "Xשע׳ Yדק׳" / "Yדק׳". Empty string when null
-  // (no startedAt on legacy/ungrouped games).
+  // Short Hebrew duration for group history rows: "Xשע׳ Yדק׳" / "Yדק׳" / "פחות מדקה". Empty
+  // string when null (no startedAt on legacy/ungrouped games).
   function formatDuration(minutes) {
     if (minutes === null || minutes === undefined || !Number.isFinite(minutes)) return "";
     const total = Math.max(0, Math.round(minutes));
     const hours = Math.floor(total / 60);
     const mins = total % 60;
-    if (hours <= 0) return mins + "דק׳";
+    if (hours <= 0) return mins > 0 ? mins + "דק׳" : "פחות מדקה";
     return mins > 0 ? hours + "שע׳ " + mins + "דק׳" : hours + "שע׳";
   }
   // Deviation (documented): a participant is eligible when their identity matches any
@@ -1974,8 +1994,18 @@
       forceCloseUnlocked = false;
       forceCloseUnlockDifference = null;
       longPressJustUnlocked = false;
+      clearTimeout(closeArmTimer);
+      closeArmTimer = null;
+      closeArmed = false;
+      const closeBtn = document.getElementById("closeTableBtn");
+      if (closeBtn) {
+        closeBtn.classList.remove("warn-state");
+        setCloseButtonLabel(closeBtn, "סגירת שולחן ורישום לרקורד");
+      }
     }
     resetStartGamePanel();
+    resetCreateGroupPanel();
+    disarmRemoveMember();
     animNext = "all";
     groupPageEnterNext = nextView === "group";
     gamesPageEnterNext = nextView === "games";
@@ -1993,7 +2023,14 @@
     container.classList.remove("load-in");
     void container.offsetWidth; // force reflow so re-adding the class restarts the animation
     container.classList.add("load-in");
-    container.addEventListener("animationend", () => container.classList.remove("load-in"), { once: true });
+    // B1: under prefers-reduced-motion the CSS kills the animation, so animationend never fires —
+    // registering the listener anyway would leak one more never-firing listener on every view
+    // switch. Skip it there; either way, a capped setTimeout fallback guarantees the class never
+    // sticks even if animationend is missed for some other reason (e.g. an interrupted animation).
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      container.addEventListener("animationend", () => container.classList.remove("load-in"), { once: true });
+    }
+    setTimeout(() => container.classList.remove("load-in"), 600);
   }
 
   function startUngroupedGame() {
@@ -2370,10 +2407,10 @@
     const enter = el("button", "games-card-enter", "כנס לשולחן");
     enter.type = "button";
     enter.addEventListener("click", actions.onEnter);
-    const toggle = el("button", "games-card-toggle", "הרחב");
+    const toggle = el("button", "games-card-toggle");
     toggle.type = "button";
     toggle.setAttribute("aria-expanded", actions.expanded ? "true" : "false");
-    toggle.innerHTML = '<span>הרחב</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
+    toggle.innerHTML = '<span>' + (actions.expanded ? "כווץ" : "הרחב") + '</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
     toggle.addEventListener("click", actions.onToggle);
     cardActions.append(enter, toggle);
     card.appendChild(cardActions);
@@ -2461,10 +2498,10 @@
     const leaderNames = Array.isArray(group.leaderNames) ? group.leaderNames : [];
     const hasDetails = memberNames.length || lastGameLabel || Number.isFinite(group.gameCount) || leaderNames.length;
     if (hasDetails) {
-      const toggle = el("button", "games-card-toggle", "הרחב");
+      const toggle = el("button", "games-card-toggle");
       toggle.type = "button";
       toggle.setAttribute("aria-expanded", actions.expanded ? "true" : "false");
-      toggle.innerHTML = '<span>הרחב</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
+      toggle.innerHTML = '<span>' + (actions.expanded ? "כווץ" : "הרחב") + '</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
       toggle.addEventListener("click", actions.onToggle);
       card.appendChild(toggle);
       const details = el("div", "games-card-details");
@@ -2576,6 +2613,10 @@
   }
 
   function renderGamesDashboard() {
+    // A deferred call (a panel's collapse setTimeout) can still fire after the user has
+    // navigated away from the dashboard — bail instead of rebuilding a #gamesHome that's now
+    // showing a different view (same guard as renderGroupPage).
+    if (appView !== "games") return;
     // Only a fresh navigation into the dashboard (setAppView) stagger-animates the cards below;
     // an in-place re-render after e.g. toggling a card's expand state must not replay it (Task 15,
     // same pattern as renderGroupPage's enterStagger).
@@ -2853,7 +2894,12 @@
       list.forEach((entry, i) => {
         const row = el("p", "games-leader-row anim");
         row.style.animationDelay = (i * 45) + "ms";
-        const name = el("span", "", entry.rank + ". " + entry.displayName);
+        // Rank number isolated in its own dir="ltr" span so "1." doesn't read reversed inside
+        // the RTL row (D4).
+        const rank = el("span", "games-rank", entry.rank + ".");
+        rank.dir = "ltr";
+        row.appendChild(rank);
+        const name = el("span", "", entry.displayName);
         if (entry.isFormerMember) name.appendChild(el("span", "games-member-tag", "לשעבר"));
         row.appendChild(name);
         row.appendChild(el("span", "games-card-meta", formatGamesPlayedCount(entry.gamesPlayed) + " · " + formatWinsCount(entry.wins)));
@@ -3059,6 +3105,8 @@
     head.setAttribute("role", "button");
     head.setAttribute("tabindex", "0");
     head.setAttribute("aria-expanded", expanded ? "true" : "false");
+    const detailsId = "group-history-details-" + game.gameId;
+    head.setAttribute("aria-controls", detailsId);
     const winners = (Array.isArray(game.winnerNames) ? game.winnerNames : []).filter(Boolean);
     const winnerLabel = winners.length ? (winners.length > 1 ? "מנצחים: " : "מנצח: ") + winners.join(", ") : "";
     const mainLine = [formatShortGameDate(game.at), formatPlayerCount(game.playerCount), winnerLabel].filter(Boolean).join(" · ");
@@ -3077,12 +3125,17 @@
     item.appendChild(head);
 
     const details = el("div", "games-card-details");
+    details.id = detailsId;
     const detailsIn = el("div", "games-card-details-in");
     const content = el("div", "games-card-details-content");
     const ranking = Array.isArray(game.ranking) ? game.ranking : [];
     ranking.forEach((name, idx) => {
-      const row = el("p", "games-history-rank anim", (idx + 1) + ". " + name);
+      const row = el("p", "games-history-rank anim");
       row.style.animationDelay = (idx * 40) + "ms";
+      const rank = el("span", "games-rank", (idx + 1) + ".");
+      rank.dir = "ltr";
+      row.appendChild(rank);
+      row.appendChild(document.createTextNode(" " + name));
       content.appendChild(row);
     });
     detailsIn.appendChild(content);
@@ -3199,6 +3252,10 @@
   }
 
   function renderGroupPage() {
+    // A deferred call (a panel's collapse setTimeout, the async avatar handler) can still fire
+    // after the user has navigated away from the group page — bail instead of rebuilding a
+    // #gamesHome that's now showing a different view.
+    if (appView !== "group") return;
     // Only a fresh navigation into the group page (openGroup()/setAppView) stagger-animates the
     // sections below; an in-place re-render after e.g. removing a member must not replay it.
     const enterStagger = groupPageEnterNext;
@@ -3282,6 +3339,7 @@
     document.body.classList.toggle("games-view", appView === "games");
     if (appView === "group") document.body.classList.add("games-view"); // group page reuses the dashboard shell
     document.body.classList.toggle("game-view", appView === "game");
+    document.body.classList.toggle("settle-view", appView === "settle");
     document.getElementById("modeGames").classList.toggle("on", inGames);
     document.getElementById("modeProfile").classList.toggle("on", appView === "profile");
     document.getElementById("addrow").hidden = appView !== "game";
@@ -3361,12 +3419,14 @@
         } else detailsInner.appendChild(el("p", "entry-empty", "אין כניסות עדיין"));
         details.appendChild(detailsInner);
         const meta = el("span", "pmeta");
-        meta.innerHTML = "<b>" + fmt(sum(p.buyins)) + "</b> · " + p.buyins.length + " כניסות";
+        meta.innerHTML = "<b>" + fmt(sum(p.buyins)) + "</b> · " + formatEntryCount(p.buyins.length);
         if (isExited(p)) {
           meta.appendChild(el("span", "exit-tag", " · יצא · " + fmt(p.cashout)));
           const editBtn = el("button", "exit-edit", "עריכה");
           editBtn.type = "button";
           editBtn.setAttribute("aria-label", "עריכת סכום היציאה של " + p.name);
+          editBtn.setAttribute("aria-expanded", String(exitOpen === p.name));
+          editBtn.setAttribute("aria-controls", "exit-panel-" + idx);
           editBtn.addEventListener("click", () => openExitPanel(p.name));
           meta.appendChild(editBtn);
         }
@@ -3593,6 +3653,9 @@
     renderProfile();
     if (appView === "games") renderGamesDashboard();
     else if (appView === "group") renderGroupPage();
+    // A remote sync (applyRemote -> render) can change group data while the settings overlay is
+    // open on top of the group page — keep it in sync instead of showing stale name/admin state.
+    if (!document.getElementById("groupSettings").hidden) refreshGroupSettings();
   }
 
   function renderDerived() {
@@ -3871,6 +3934,7 @@
     state.settlementStatuses = {};
     state.groupId = null;
     state.leaderRef = null;
+    state.startedAt = null;
     expandedEntries.clear();
     state.example = false;
     openMenu = null; customOpen = null;
@@ -3965,7 +4029,10 @@
   // ---------- profile ----------
   function knownNames() {
     const names = [];
-    state.history.forEach(g => g.players.forEach(p => { if (!names.includes(p.name)) names.push(p.name); }));
+    state.history.forEach(g => {
+      if (!Array.isArray(g.players)) return; // malformed/legacy history entry — skip, don't throw
+      g.players.forEach(p => { if (!names.includes(p.name)) names.push(p.name); });
+    });
     state.players.forEach(p => { if (!state.example && !names.includes(p.name)) names.push(p.name); });
     return names;
   }
@@ -4310,6 +4377,13 @@
     const archiveBtn = document.getElementById("groupSetArchiveBtn");
     archiveBtn.hidden = !summary.isAdmin;
     archiveBtn.textContent = group.archivedAt ? "שחזר מהארכיון" : "העבר לארכיון";
+    // Archiving is blocked while the group has an open game (same rule as delete); restoring
+    // from the archive is always allowed.
+    const archiveBlocked = !group.archivedAt && summary.hasActiveGame;
+    archiveBtn.disabled = archiveBlocked;
+    const archiveReason = document.getElementById("groupSetArchiveReason");
+    archiveReason.hidden = !archiveBlocked;
+    archiveReason.textContent = archiveBlocked ? "סגור קודם את המשחק הפעיל" : "";
 
     const deleteBtn = document.getElementById("groupSetDeleteBtn");
     deleteBtn.hidden = !summary.isAdmin;
@@ -4359,6 +4433,8 @@
     const group = (state.groups || []).find(g => g && g.id === currentGroupId);
     if (!group) return;
     const wasArchived = !!group.archivedAt;
+    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
+    if (!wasArchived && summary && summary.hasActiveGame) return; // refused — inline reason already shown
     const ok = wasArchived ? unarchiveGroup(state.groups, currentGroupId) : archiveGroup(state.groups, currentGroupId, new Date().toISOString());
     if (!ok) return;
     save();

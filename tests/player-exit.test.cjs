@@ -77,6 +77,17 @@ test('normalize defaults status to active and exitedAt to null for legacy player
   assert.equal(result.players[0].exitedAt, null);
 });
 
+test('normalize forces userId null on every player (pre-backend, same as the other normalizers)', () => {
+  const result = normalize({
+    gameId: 'g3',
+    players: [{ name: 'א', buyins: [50], cashout: 0, userId: 'bogus-user-id' }],
+    history: [],
+  });
+  assert.equal(result.players[0].userId, null);
+  assert.equal(result.players[0].guestId, null);
+  assert.equal(result.players[0].memberId, null);
+});
+
 test('normalize preserves a saved exited status and exitedAt across reload', () => {
   const result = normalize({
     gameId: 'g2',

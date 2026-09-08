@@ -25,6 +25,8 @@ test('finishCloseTable captures the closing group, frees groupId/leaderRef, and 
   // The current-game slot is free for a new group game after close.
   assert.match(source, /state\.groupId = null;/);
   assert.match(source, /state\.leaderRef = null;/);
+  // startedAt belongs to the closed game only — a fresh current-game slot must not inherit it.
+  assert.match(source, /state\.startedAt = null;/);
   // A group game returns to its group page; an ungrouped game still lands on Games.
   assert.match(source, /openGroup\(closedGroupId\)/);
   assert.match(source, /else setAppView\("games"\);/);

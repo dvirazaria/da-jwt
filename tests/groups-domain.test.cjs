@@ -158,6 +158,24 @@ test('gameWinners returns the single top net, all tied leaders, or [] when there
   assert.deepEqual(runJSON(`gameWinners(null)`, context), []);
 });
 
+// D5: a game where the max net is <= 0 (nobody actually profited) has no winner. A genuine tie
+// at a positive net still returns every tied leader (kept as its own case, distinct from the
+// no-winner rule above).
+test('gameWinners returns [] when the max net is zero or negative (nobody profited), even on a tie', () => {
+  const context = load();
+  assert.deepEqual(runJSON(`gameWinners({players:[{name:'a', net:0},{name:'b', net:0}]})`, context), []);
+  assert.deepEqual(runJSON(`gameWinners({players:[{name:'a', net:-10},{name:'b', net:-40}]})`, context), []);
+  assert.deepEqual(runJSON(`gameWinners({players:[{name:'a', net:0},{name:'b', net:-20}]})`, context), []);
+});
+
+test('gameWinners still returns both leaders on a genuine tie at a positive net', () => {
+  const context = load();
+  assert.deepEqual(
+    runJSON(`gameWinners({players:[{name:'a', net:40},{name:'b', net:40},{name:'c', net:-80}]}).map(p=>p.name)`, context),
+    ['a', 'b']
+  );
+});
+
 test('isLeaderboardEligible admits active and former members by identity, and excludes ad-hoc guests', () => {
   const context = load();
   const members = [

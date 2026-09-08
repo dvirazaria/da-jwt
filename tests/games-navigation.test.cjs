@@ -159,6 +159,20 @@ test('Games dashboard centers its visible content while preserving RTL text dire
   assert.match(html, /direction: rtl;/);
 });
 
+test('the settlement view also clears the header corner controls, like the game view (D1)', () => {
+  assert.match(html, /document\.body\.classList\.toggle\("settle-view", appView === "settle"\)/);
+  assert.match(html, /\.game-view \.wrap > header, \.settle-view \.wrap > header \{ min-height: 64px; \}/);
+});
+
+test('.player-heading is a wrapping flex row so "יציאה" sits beside "פירוט כניסות" instead of under it (D2)', () => {
+  const idx = html.indexOf('.player-heading {');
+  assert.ok(idx >= 0, '.player-heading base rule not found');
+  const rule = html.slice(idx, html.indexOf('}', idx));
+  assert.match(rule, /display:\s*flex/);
+  assert.match(rule, /flex-wrap:\s*wrap/);
+  assert.match(html, /\.player-heading \.pname \{ flex-basis: 100%; \}/);
+});
+
 test('active game finish is a one-second hold and settlement can return to editing', () => {
   assert.match(html, /const FINISH_GAME_HOLD_MS = 1000;/);
   assert.match(html, /id="finishGameBtn"/);

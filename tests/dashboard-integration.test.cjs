@@ -63,6 +63,17 @@ test('the expand snapshot truncates members like formatPlayerNames, shows gameCo
   assert.doesNotMatch(groupCardSource, /group\.members\.join/);
 });
 
+// ---------- games-card-toggle label reflects open/closed state (C4) ----------
+
+test('the active-game card toggle label is "כווץ" when expanded and "הרחב" when collapsed', () => {
+  const activeCardSource = sourceBetween('  function renderActiveGameCard(summary, actions) {', '  function renderActiveGamesSection(');
+  assert.match(activeCardSource, /actions\.expanded \? "כווץ" : "הרחב"/);
+});
+
+test('the group card toggle label is "כווץ" when expanded and "הרחב" when collapsed', () => {
+  assert.match(groupCardSource, /actions\.expanded \? "כווץ" : "הרחב"/);
+});
+
 // ---------- quick actions: "+ צור קבוצה" leads as the primary capsule ----------
 
 test('quick actions lead with the create-group action as the primary capsule; the ungrouped-game action is secondary', () => {

@@ -110,6 +110,11 @@ test('formatDuration renders minutes-only under an hour', () => {
   assert.equal(vm.runInContext('formatDuration(45)', context), '45דק׳');
 });
 
+test('formatDuration(0) reads "פחות מדקה", not "0דק׳" (C7)', () => {
+  const context = loadPure();
+  assert.equal(vm.runInContext('formatDuration(0)', context), 'פחות מדקה');
+});
+
 test('formatDuration renders hours and minutes, or bare hours when exact', () => {
   const context = loadPure();
   assert.equal(vm.runInContext('formatDuration(65)', context), '1שע׳ 5דק׳');
@@ -192,7 +197,11 @@ test('renderGroupHistory toggles expandedGroupGames by gameId and re-renders the
 test('renderGroupHistoryRow renders the ranking as numbered, names-only rows using game.ranking', () => {
   const source = sourceBetween('  function renderGroupHistoryRow(game, expanded, onToggle) {', '  function renderGroupHistory(');
   assert.match(source, /game\.ranking/);
-  assert.match(source, /\(idx \+ 1\) \+ "\. " \+ name/);
+  // The rank number is its own dir="ltr" span (D4: bidi fix so "1." doesn't read reversed inside
+  // the RTL row), followed by the name as a separate text node.
+  assert.match(source, /\(idx \+ 1\) \+ "\."/);
+  assert.match(source, /rank\.dir = "ltr"/);
+  assert.match(source, /document\.createTextNode\(" " \+ name\)/);
 });
 
 test('renderGroupHistoryRow shows a "לא מאוזן" tag only when the game is not balanced', () => {
