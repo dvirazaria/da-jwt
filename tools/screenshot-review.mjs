@@ -85,10 +85,16 @@ for (const theme of ["dark", "light"]) {
   await shot(`12-table-exit-panel-${t}`);
   await evaluate(`${W} const r2=[...document.querySelectorAll('.prow')].find(r=>r.querySelector('.pname')?.textContent==='רון'); r2.querySelector('.exit-cashout-input').dispatchEvent(new Event('input',{bubbles:true})); r2.querySelector('.exit-confirm').click(); await wait(300); const r3=[...document.querySelectorAll('.prow')].find(r=>r.querySelector('.pname')?.textContent==='דביר'); [...r3.querySelectorAll('button')].find(b=>b.textContent.includes('פירוט כניסות')).click(); await wait(200); 'ok'`);
   await shot(`13-table-exited-entries-${t}`);
+  await evaluate(`${W} document.getElementById('finishGameBtn').dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:1,bubbles:true})); await wait(500); 'ok'`);
+  await shot(`13a-table-finish-hold-${t}`);
+  await evaluate(`${W} document.getElementById('finishGameBtn').dispatchEvent(new PointerEvent('pointerup',{button:0,pointerId:1,bubbles:true})); await wait(250); 'ok'`);
   await evaluate(`${W} document.getElementById('finishGameBtn').dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:1,bubbles:true})); await wait(1200); for (const r of document.querySelectorAll('.prow')){ const n=r.querySelector('.pname').textContent.trim(); const i=r.querySelector('.srow-input'); if(n==='דביר'){i.value='130'; i.dispatchEvent(new Event('input',{bubbles:true}));} if(n==='יוסי'){i.value='100'; i.dispatchEvent(new Event('input',{bubbles:true}));} } await wait(200); 'ok'`);
   await shot(`14-settlement-${t}`);
   await evaluate(`${W} const r=[...document.querySelectorAll('.prow')].find(r=>r.querySelector('.pname').textContent.trim()==='יוסי'); const i=r.querySelector('.srow-input'); i.value='80'; i.dispatchEvent(new Event('input',{bubbles:true})); await wait(200); 'ok'`);
   await shot(`15-settlement-unbalanced-${t}`);
+  await evaluate(`${W} document.getElementById('closeTableBtn').dispatchEvent(new PointerEvent('pointerdown',{button:0,pointerId:2,bubbles:true})); await wait(500); 'ok'`);
+  await shot(`15a-settlement-force-hold-${t}`);
+  await evaluate(`${W} document.getElementById('closeTableBtn').dispatchEvent(new PointerEvent('pointerup',{button:0,pointerId:2,bubbles:true})); await wait(250); 'ok'`);
   await evaluate(`${W} document.getElementById('modeProfile').click(); await wait(200); 'ok'`);
   await shot(`16-profile-balance-${t}`);
   await evaluate(`${W} [...document.querySelectorAll('.profile-tab')].find(x=>x.textContent.includes('חובות')).click(); await wait(200); 'ok'`);

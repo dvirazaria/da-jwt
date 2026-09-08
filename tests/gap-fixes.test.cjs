@@ -313,7 +313,9 @@ test('empty-note, btn-skip, joinNoticeCode and the blocked close-button state re
   assert.match(rule('.btn-skip {'), /color: var\(--dim\)/);
   assert.match(rule('#joinNoticeCode {'), /color: var\(--dim\)/);
   assert.match(rule('.btn-close-table.blocked-state {'), /color: var\(--dim\)/);
-  assert.match(rule('.btn-close-table.blocked-state:hover {'), /color: var\(--dim\)/);
+  const hoverMedia = sourceBetween('  @media (hover: hover) {', '  /* iOS cannot be locked to portrait');
+  assert.match(hoverMedia, /\.btn-close-table\.blocked-state:hover\s*\{[^}]*color: var\(--dim\)/,
+    'the blocked hover stays dim inside the real-hover-only media query');
 });
 
 // ---------- B2: archiving a group is blocked while it has an open game ----------

@@ -80,6 +80,49 @@ test('exit controls use the destructive red treatment and keep 44px touch target
   assert.match(confirmRule, /border-color:\s*var\(--bad\).*color:\s*var\(--bad\)/, 'exit confirmation matches the destructive action');
 });
 
+test('finish and force-close holds sweep from the RTL inline start and release quickly', () => {
+  const fill = sourceBetween('  .btn-close-table::before {', '  .finish-game-hint {');
+  assert.match(fill, /transform:\s*scaleX\(0\)/, 'the resting fill is collapsed with scaleX');
+  assert.match(fill, /transform-origin:\s*right center/, 'the sweep starts at inline-start in RTL');
+  assert.match(fill, /transition:\s*transform \.18s ease-out/, 'an early release retracts quickly');
+  assert.match(fill, /\.btn-close-table\.hold-state\s*\{[^}]*border-color:\s*var\(--accent\)[^}]*color:\s*var\(--accent\)/s, 'the active hold keeps the turquoise affordance');
+  assert.match(fill, /\.btn-close-table\.hold-state::before\s*\{[^}]*transform:\s*scaleX\(1\)[^}]*transition:\s*transform 1s linear/s, 'a continuous hold fills for one second');
+  assert.match(fill, /\.btn-close-table\.hold-state:active\s*\{[^}]*scale\(\.98\)/s, 'the long-press feedback avoids the generic deep button shrink');
+});
+
+test('background-changing hover rules are gated to real hover devices', () => {
+  const hoverMedia = sourceBetween('  @media (hover: hover) {', '  /* iOS cannot be locked to portrait');
+  [
+    '.btn-close-table:hover',
+    '.btn-close-table.warn-state:hover',
+    '.btn-close-table.blocked-state:hover',
+    '.btn-close-table.force-state:hover',
+    '.btn-close-table.hold-state:hover',
+    '.exit-confirm:hover',
+    '.games-quick-action.primary:hover',
+    '.games-card-enter:hover',
+    '.games-create-submit:hover',
+    '.btn-primary:hover',
+    '.btn-primary:disabled:hover',
+    '.games-invite-create:hover',
+  ].forEach(selector => assert.ok(hoverMedia.includes(selector), `${selector} should be inside hover media`));
+  const outsideHoverMedia = styleBlock.replace(hoverMedia, '');
+  assert.doesNotMatch(outsideHoverMedia, /\.btn-close-table(?:\.[\w-]+)?:hover/, 'close-table hover must never apply to touch-only devices');
+});
+
+test('both one-second holds show the completed fill before acting', () => {
+  const source = sourceBetween('  let closeHoldTimer = null;', '  function finishCloseTable() {');
+  assert.match(source, /let finishGameCompletionTimer = null;/);
+  assert.match(source, /let closeHoldCompletionTimer = null;/);
+  assert.match(source, /let closeHoldAwaitingRelease = false;/);
+  assert.match(source, /finishGameCompletionTimer = setTimeout\([\s\S]*?finishGame\(\);[\s\S]*?60\);/);
+  assert.match(source, /closeHoldCompletionTimer = setTimeout\([\s\S]*?forceCloseUnlocked = true;[\s\S]*?60\);/);
+  assert.match(source, /if \(finishGameHoldTimer\) clearFinishGameHold\(\);/, 'release only cancels before the threshold');
+  assert.match(source, /if \(closeHoldTimer\) clearCloseHold\(\);/, 'release only cancels before the threshold');
+  assert.match(source, /closeHoldTimer = null;\s*closeHoldAwaitingRelease = true;\s*closeHoldCompletionTimer = setTimeout/, 'the release guard is armed exactly when the hold threshold is reached');
+  assert.match(source, /else if \(closeHoldAwaitingRelease\) \{\s*if \(e\.type === "pointerup"\) longPressJustUnlocked = true;\s*closeHoldAwaitingRelease = false;/, 'only the native click following the completed hold is swallowed');
+});
+
 test('the start-game participant panel reuses .games-create-panel for its collapse animation', () => {
   const source = sourceBetween('  function renderStartGamePanel', '  function renderStartGameMemberRow');
   assert.match(source, /"games-create-panel"/, 'renderStartGamePanel should build a .games-create-panel element');
