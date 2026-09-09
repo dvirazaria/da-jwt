@@ -189,8 +189,10 @@ test('friends are a primary screen and are no longer rendered inside profile', (
   // constant under the disabled button carries the "needs a backend" wording for all five places.
   assert.match(html, /עוד אין חברים/);
   assert.match(html, /"הוסף חבר"/);
-  assert.match(html, /addFriendBtn\.disabled = true;/);
-  assert.match(html, /addFriendBtn\.setAttribute\("aria-disabled", "true"\);/);
+  // The button is live with a session and disabled without one; the shared note is what the
+  // signed-out screen still shows (see tests/friend-requests.test.cjs for the wiring).
+  assert.match(html, /addFriendBtn\.disabled = !online;/);
+  assert.match(html, /addFriendBtn\.setAttribute\("aria-disabled", online \? "false" : "true"\);/);
   assert.match(html, /el\("p", "friend-helper", SERVER_NOTE\)/);
 });
 
@@ -202,9 +204,13 @@ test('render routes and controls the standalone friends screen', () => {
   assert.match(html, /document\.getElementById\("modeFriends"\)\.addEventListener\("click", \(\) => setAppView\("friends"\)\)/);
 });
 
-test('no UI handler calls createFriendRequest or respondToFriendRequest (guards against fake local friendships)', () => {
+// The pure mutations are now wired to the friends screen, but through exactly one caller each:
+// the id/validation rules must stay in the pure functions, not be re-implemented in a handler.
+test('createFriendRequest and respondToFriendRequest each have exactly one UI caller', () => {
   const createCalls = html.split('createFriendRequest(').length - 1;
   const respondCalls = html.split('respondToFriendRequest(').length - 1;
-  assert.equal(createCalls, 1, 'createFriendRequest( should appear exactly once (its own definition)');
-  assert.equal(respondCalls, 1, 'respondToFriendRequest( should appear exactly once (its own definition)');
+  assert.equal(createCalls, 2, 'its definition plus submitFriendRequest');
+  assert.equal(respondCalls, 2, 'its definition plus respondToFriend');
+  assert.match(html, /if \(!createFriendRequest\(state\.friendships, meRef, toRef, new Date\(\)\.toISOString\(\)\)\)/);
+  assert.match(html, /if \(!respondToFriendRequest\(state\.friendships \|\| \[\], id, myFriendRef\(\), accept, new Date\(\)\.toISOString\(\)\)\) return;/);
 });

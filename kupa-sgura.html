@@ -635,6 +635,16 @@
   .debt-paid-btn { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); font-size: 12px; font-weight: 500; padding: 4px 10px; min-height: 30px; }
   .debt-paid-btn:hover { color: var(--accent); border-color: var(--accent); }
   .friend-helper { color: var(--dim); font-size: 12px; font-weight: 300; margin-top: 8px; text-align: center; }
+  /* friend request row actions — a full 44px target inside the flat .debt-row */
+  .friend-action {
+    flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; color: var(--dim);
+    font-size: 13px; font-weight: 500; padding: 6px 14px; min-height: 44px;
+    transition: color .18s ease, border-color .18s ease, transform .12s ease;
+  }
+  .friend-action:hover { color: var(--text); border-color: var(--dim); }
+  .friend-action:active { transform: scale(.96); }
+  .friend-action.primary { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .friend-error { color: var(--bad); font-size: 13px; font-weight: 500; margin: 0; text-align: center; animation: rise .25s ease both; }
   .empty-note { color: var(--dim); font-size: 14px; font-weight: 300; margin-top: 10px; }
   .pid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .pname-big { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
@@ -1156,6 +1166,13 @@
                                    // pattern as groupPageEnterNext above)
   let cardDetailsJustOpenedId = null; // gameId/historyGameId whose .games-card-details should
                                        // animate its grid-collapse open on the next render (Task 18 motion)
+  // friends screen: the inline "הוסף חבר" panel. Draft text, the lookup's in-flight flag and
+  // the inline error live here so a re-render (a pull landing, a row answered) keeps them.
+  let addFriendOpen = false;
+  let addFriendJustOpened = false;   // panel should animate its grid-collapse open next render
+  let addFriendQuery = "";
+  let addFriendError = "";           // "" or a friendRequestError() string
+  let addFriendBusy = false;         // a lookup/send is in flight
   let me = loadMe();
   let profileTab = "balance";
   let debtTab = "owed";
@@ -1732,6 +1749,23 @@
     if (result && result.error) throw result.error;
   }
 
+  // The one friendship DELETE. Every other group-table removal is a soft column the upsert
+  // carries, but withdrawing a request really removes the row — friendships_delete_requester
+  // allows exactly that, and only while it is still pending. The row is already gone locally
+  // (removeFriendRequest); dropping it from the diff baseline too keeps the next push from
+  // seeing a phantom delete it would never apply anyway.
+  async function cloudDeleteFriendship(id) {
+    if (!supabase || !authUser) return;
+    if (!isCloudId(id)) return;
+    try {
+      const result = await supabase.from("friendships").delete().eq("id", String(id));
+      if (result && result.error) { scheduleCloudPull(1200); return; }
+      if (lastPushedRows && Array.isArray(lastPushedRows.friendships)) {
+        lastPushedRows.friendships = lastPushedRows.friendships.filter(row => String(row.id) !== String(id));
+      }
+    } catch (e) { scheduleCloudPull(1200); }
+  }
+
   async function pullCloud() {
     if (!supabase || !authUser) return;
     if (cloudPulling) return;
@@ -2194,6 +2228,51 @@
     friendship.status = accept ? "accepted" : "rejected";
     friendship.respondedAt = at;
     return true;
+  }
+  // Withdrawing a request I sent. Only a PENDING friendship whose requester is me can go —
+  // which is exactly what friendships_delete_requester allows on the server, so the local
+  // rule and the RLS rule are the same rule. Returns the removed Friendship, or null.
+  function removeFriendRequest(friendships, id, meRef) {
+    const list = Array.isArray(friendships) ? friendships : [];
+    const index = list.findIndex(f => f && f.id === id && f.status === "pending" && sameIdentity(f.requester, meRef));
+    if (index < 0) return null;
+    return list.splice(index, 1)[0];
+  }
+  // Why a request from `fromRef` to `toRef` cannot be sent: "self" | "friends" | "pending",
+  // or null when it can. createFriendRequest refuses exactly these cases too (it returns null
+  // for all three); this is the same rule spelled out so the panel can say which one it was.
+  // A rejected friendship is not a block: people change their minds.
+  function friendRequestBlockReason(friendships, fromRef, toRef) {
+    if (sameIdentity(fromRef, toRef)) return "self";
+    const list = Array.isArray(friendships) ? friendships : [];
+    const between = list.filter(f => f &&
+      ((sameIdentity(f.requester, fromRef) && sameIdentity(f.addressee, toRef)) ||
+       (sameIdentity(f.requester, toRef) && sameIdentity(f.addressee, fromRef))));
+    if (between.some(f => f.status === "accepted")) return "friends";
+    if (between.some(f => f.status === "pending")) return "pending";
+    return null;
+  }
+  // The inline errors of the add-friend panel, keyed by the reason the send stopped.
+  // Object.create(null): a kind like "toString" must fall through to the generic message
+  // instead of returning a function off Object.prototype.
+  const FRIEND_REQUEST_ERRORS = Object.assign(Object.create(null), {
+    empty: "יש להזין מייל או שם",
+    notFound: "לא נמצא משתמש",
+    self: "אי אפשר לשלוח לעצמך",
+    friends: "כבר חברים",
+    pending: "כבר נשלחה בקשה",
+  });
+  function friendRequestError(kind) {
+    return FRIEND_REQUEST_ERRORS[kind] || "לא הצלחנו לשלוח את הבקשה";
+  }
+  // What the add-friend field was asking for. An address (it has an "@") is matched on the
+  // lowercased email; anything else is an exact display name, kept character for character
+  // because Hebrew names have no case to fold.
+  function normalizeFriendSearch(raw) {
+    const value = String(raw == null ? "" : raw).trim();
+    if (!value) return { kind: "empty", value: "" };
+    if (value.indexOf("@") >= 0) return { kind: "email", value: value.toLowerCase() };
+    return { kind: "name", value };
   }
 
   // ---------- player exit (pure) ----------
@@ -3364,15 +3443,28 @@
       responded_at: status === "pending" ? null : cloudIsoOr(f.respondedAt, createdAt),
     };
   }
+  // profiles carries no name on the friendships row and RLS hides the profile of somebody who
+  // is not yet a friend, so the other party's name has to come from what this device already
+  // knows: my own name for me, otherwise the group membership that made them visible in the
+  // first place (this release only lets you invite a group-mate or an existing friend, so
+  // there is always such a row). An empty name is still possible and renders as "משתמש".
+  function cloudFriendName(profileId, ctx) {
+    const mine = cloudProfileName(profileId, ctx);
+    if (mine) return mine;
+    if (!profileId) return "";
+    const members = Array.isArray((ctx || {}).groupMembers) ? ctx.groupMembers : [];
+    const known = members.find(m => m && (m.userId === profileId || m.guestId === profileId) && m.displayName);
+    return known ? String(known.displayName) : "";
+  }
   function rowToFriendship(row, ctx) {
     const r = row || {};
     const status = r.status === "accepted" || r.status === "rejected" ? r.status : "pending";
     return {
       id: String(r.id || ""),
       requester: identityRowToRef({ profile_id: r.requester_profile_id, guest_id: null }, ctx,
-        cloudProfileName(r.requester_profile_id, ctx)),
+        cloudFriendName(r.requester_profile_id, ctx)),
       addressee: identityRowToRef({ profile_id: r.addressee_profile_id, guest_id: null }, ctx,
-        cloudProfileName(r.addressee_profile_id, ctx)),
+        cloudFriendName(r.addressee_profile_id, ctx)),
       status,
       createdAt: String(r.created_at || ""),
       respondedAt: status === "pending" ? null : cloudIso(r.responded_at),
@@ -3558,6 +3650,14 @@
     const serverGroupIds = new Set(pulledGroups.map(g => String(g.id)));
     const prevGroups = byId(localGroups);
     const prevMembers = byId(s.groupMembers);
+    const prevFriendships = byId(s.friendships);
+    // Fills a pulled ref's missing displayName from the local one for the same person.
+    const keptRefName = (pulledRef, localRef) => {
+      const pulled = pulledRef || {};
+      const local = localRef || {};
+      if (pulled.displayName || !local.displayName) return pulled;
+      return { ...pulled, displayName: local.displayName };
+    };
     const keptGroups = localGroups.filter(g => g && g.id && !serverGroupIds.has(String(g.id))
       && (keep.has(String(g.id)) || !!g.deletedAt));
     const keptGroupIds = new Set(keptGroups.map(g => String(g.id)));
@@ -3583,7 +3683,15 @@
           return before ? { ...m, hiddenAt: before.hiddenAt } : m;
         }),
         invites: mergeKept(p.invites, s.invites, i => i),
-        friendships: mergeKept(p.friendships, s.friendships, f => f),
+        // A friendship row has no name column, so a pulled row can arrive with an empty
+        // displayName on the other party. Whatever this device already knew about that
+        // person survives, exactly like a group's avatarDataUrl above.
+        friendships: mergeKept(p.friendships, s.friendships, f => {
+          const before = prevFriendships.get(String(f.id));
+          if (!before) return f;
+          return { ...f, requester: keptRefName(f.requester, before.requester),
+            addressee: keptRefName(f.addressee, before.addressee) };
+        }),
       } : {}),
       // The server owns a closed game once it holds one; a local-only entry (legacy, or closed
       // before this device ever had a session) simply stays. Newest first, like unshift() leaves it.
@@ -6370,22 +6478,181 @@
     parent.appendChild(group);
   }
 
-  // Flat .debt-row-style rows for one friends list (friends / incoming / outgoing). No action
-  // buttons in this phase: createFriendRequest/respondToFriendRequest exist and are tested for
-  // the backend, but nothing in the UI may call them yet (no fake local friendships).
-  function renderFriendGroup(parent, title, refs, metaLabel) {
+  // The one place the app reads another person's profile row. RLS decides who that can be:
+  // profiles_select_self / _friends / _group_mates, so an exact match only ever resolves to
+  // somebody I already share a group with (or am already friends with) — a stranger simply
+  // comes back as "לא נמצא משתמש". No wildcard, no listing: one column, one exact value.
+  async function lookupFriendProfile(parsed) {
+    if (!supabase || !authUser) return null; // == cloudMode(), spelled out like every other call site
+    const column = parsed.kind === "email" ? "email" : "display_name";
+    try {
+      const result = await supabase.from("profiles").select("id,display_name").eq(column, parsed.value).limit(1);
+      if (result.error) return null;
+      const row = (result.data || [])[0];
+      if (!row || !isCloudId(row.id)) return null;
+      return { id: String(row.id), displayName: String(row.display_name || "") };
+    } catch (e) { return null; }
+  }
+  // Me as a ParticipantRef. The profile id is not minted here — it is the one the server handed
+  // this session, run through keptUserId() like every uuid that arrives on a pull — and carrying
+  // it is what makes sameIdentity() match the friendship rows a pull built for me, which are
+  // keyed on profiles.id and may know no guestId at all. (Same precedent as the profileId
+  // renderHideGroupAction hands the hide-group helpers.)
+  function myFriendRef() {
+    const profileId = authUser && authUser.id;
+    return {
+      userId: keptUserId(profileId),
+      guestId: resolveGuestId(collectionsOf(state), me),
+      displayName: me,
+    };
+  }
+  function setAddFriendError(kind) {
+    addFriendError = friendRequestError(kind);
+    addFriendBusy = false;
+    renderFriendsPage();
+  }
+  // Sends one friend request. The row itself is minted by createFriendRequest (one place for
+  // ids and validation) and reaches the server the ordinary way — save() → scheduleCloudPush()
+  // → the friendships entry of CLOUD_TABLES. Nothing here writes to Supabase directly.
+  async function submitFriendRequest() {
+    if (!cloudMode()) return;
+    if (addFriendBusy) return;
+    const parsed = normalizeFriendSearch(addFriendQuery);
+    if (parsed.kind === "empty") { setAddFriendError("empty"); return; }
+    addFriendBusy = true;
+    addFriendError = "";
+    renderFriendsPage();
+    const found = await lookupFriendProfile(parsed);
+    if (!addFriendOpen) { addFriendBusy = false; return; } // the panel closed while we waited
+    if (!found) { setAddFriendError("notFound"); return; }
+    const meRef = myFriendRef();
+    // The addressee's guestId is their profile id, the same shape identityRowToRef() gives a
+    // pulled row for somebody else — so this row and its server copy are one person.
+    const toRef = { userId: found.id, guestId: found.id, displayName: found.displayName };
+    const blocked = friendRequestBlockReason(state.friendships || [], meRef, toRef);
+    if (blocked) { setAddFriendError(blocked); return; }
+    if (!createFriendRequest(state.friendships, meRef, toRef, new Date().toISOString())) { setAddFriendError("unknown"); return; }
+    save();
+    addFriendBusy = false;
+    closeAddFriendPanel();
+  }
+  // Answering an incoming request: accepted/rejected is an UPDATE by the addressee, which is
+  // exactly what friendships_update_addressee permits, so the ordinary push carries it.
+  function respondToFriend(id, accept) {
+    if (!cloudMode()) return;
+    if (!respondToFriendRequest(state.friendships || [], id, myFriendRef(), accept, new Date().toISOString())) return;
+    save();
+    renderFriendsPage();
+  }
+  // Withdrawing a request I sent. A real DELETE, so it needs its own call: the push only ever
+  // upserts the group tables.
+  function withdrawFriendRequest(id) {
+    if (!cloudMode()) return;
+    const removed = removeFriendRequest(state.friendships || [], id, myFriendRef());
+    if (!removed) return;
+    save();
+    cloudDeleteFriendship(removed.id);
+    renderFriendsPage();
+  }
+
+  function resetAddFriendPanel() {
+    addFriendOpen = false;
+    addFriendJustOpened = false;
+    addFriendQuery = "";
+    addFriendError = "";
+    addFriendBusy = false;
+  }
+  function toggleAddFriendPanel() {
+    if (addFriendOpen) { closeAddFriendPanel(); return; }
+    addFriendOpen = true;
+    addFriendJustOpened = true;
+    addFriendError = "";
+    renderFriendsPage();
+  }
+  // Plays the panel's collapse transition before clearing the draft (same as closeCreateGroupPanel).
+  function closeAddFriendPanel() {
+    const panel = document.querySelector("#friendsPage .games-create-panel.open");
+    const finish = () => { resetAddFriendPanel(); renderFriendsPage(); };
+    if (!panel) { finish(); return; }
+    panel.classList.remove("open");
+    setTimeout(finish, 280);
+  }
+
+  // Flat .debt-row-style rows for one friends list (friends / incoming / outgoing).
+  // `actionsFor(index)` returns the row's buttons ([] for the accepted-friends list, which
+  // carries nothing destructive by default).
+  function renderFriendGroup(parent, title, refs, metaLabel, actionsFor) {
     const group = el("div", "debt-group");
     group.appendChild(el("h3", "", title));
     refs.forEach((ref, i) => {
       const row = el("div", "debt-row");
       row.style.animationDelay = (i * 45) + "ms";
       const copy = el("div", "debt-copy");
-      copy.appendChild(el("span", "debt-person", ref.displayName));
+      copy.appendChild(el("span", "debt-person", ref.displayName || "משתמש"));
       if (metaLabel) copy.appendChild(el("span", "debt-meta", metaLabel));
       row.appendChild(copy);
+      (actionsFor ? actionsFor(i) : []).forEach(action => {
+        const btn = el("button", "friend-action" + (action.primary ? " primary" : ""), action.label);
+        btn.type = "button";
+        btn.addEventListener("click", action.onClick);
+        row.appendChild(btn);
+      });
       group.appendChild(row);
     });
     parent.appendChild(group);
+  }
+
+  // The inline add-friend panel: same grid-collapse shape as the create-group panel.
+  function renderAddFriendPanel(parent) {
+    const panel = el("div", "games-create-panel");
+    const panelIn = el("div", "games-create-panel-in");
+    const content = el("div", "games-create-panel-content");
+    content.appendChild(el("h3", "games-section-title", "חבר חדש"));
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 60;
+    input.placeholder = "מייל או שם מדויק";
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", "מייל או שם מדויק");
+    // An address is latin and reads left to right even on this RTL screen; a Hebrew name does
+    // not, so the direction follows what is actually typed.
+    input.setAttribute("dir", addFriendQuery.indexOf("@") >= 0 ? "ltr" : "auto");
+    input.value = addFriendQuery;
+    input.disabled = addFriendBusy;
+    input.addEventListener("input", () => {
+      addFriendQuery = input.value;
+      input.setAttribute("dir", addFriendQuery.indexOf("@") >= 0 ? "ltr" : "auto");
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submitFriendRequest(); }
+    });
+
+    const submitBtn = el("button", "games-create-submit", addFriendBusy ? "שולח…" : "שלח בקשה");
+    submitBtn.type = "button";
+    submitBtn.disabled = addFriendBusy;
+    submitBtn.addEventListener("click", () => submitFriendRequest());
+
+    const cancelBtn = el("button", "games-create-cancel", "ביטול");
+    cancelBtn.type = "button";
+    cancelBtn.addEventListener("click", closeAddFriendPanel);
+
+    content.append(input, submitBtn);
+    if (addFriendError) content.appendChild(el("p", "friend-error", addFriendError));
+    content.appendChild(cancelBtn);
+    panelIn.appendChild(content);
+    panel.appendChild(panelIn);
+
+    if (addFriendOpen && addFriendJustOpened) {
+      addFriendJustOpened = false;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        panel.classList.add("open");
+        input.focus();
+      }));
+    } else if (addFriendOpen) {
+      panel.classList.add("open");
+    }
+    parent.appendChild(panel);
   }
 
   function renderFriendsPage() {
@@ -6394,30 +6661,43 @@
     if (appView !== "friends") return;
     box.innerHTML = "";
 
+    // Sending, answering and withdrawing all need a session: without one this is the read-only
+    // screen it has always been — the button stays disabled under the shared server note.
+    const online = cloudMode();
     const friendsSec = el("section", "psection debt-section");
     friendsSec.style.animationDelay = ".03s";
     const friendData = me
-      ? friendRequestsFor(state.friendships || [], {
-          userId: null,
-          guestId: resolveGuestId(collectionsOf(state), me),
-          displayName: me,
-        })
+      ? friendRequestsFor(state.friendships || [], myFriendRef())
       : { friends: [], incoming: [], outgoing: [] };
     const hasFriendData = friendData.friends.length || friendData.incoming.length || friendData.outgoing.length;
     if (!hasFriendData) {
       friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים"));
     } else {
       renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
-      renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך");
-      renderFriendGroup(friendsSec, "בקשות שנשלחו", friendData.outgoing.map(f => f.addressee), "ממתין לאישור");
+      renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך",
+        online ? (i => {
+          const id = friendData.incoming[i].id;
+          return [
+            { label: "אשר", primary: true, onClick: () => respondToFriend(id, true) },
+            { label: "דחה", onClick: () => respondToFriend(id, false) },
+          ];
+        }) : null);
+      renderFriendGroup(friendsSec, "בקשות שנשלחו", friendData.outgoing.map(f => f.addressee), "ממתין לאישור",
+        online ? (i => {
+          const id = friendData.outgoing[i].id;
+          return [{ label: "בטל", onClick: () => withdrawFriendRequest(id) }];
+        }) : null);
     }
     const addFriendBtn = el("button", "btn-primary", "הוסף חבר");
     addFriendBtn.type = "button";
-    addFriendBtn.disabled = true;
-    addFriendBtn.setAttribute("aria-disabled", "true");
+    addFriendBtn.disabled = !online;
+    addFriendBtn.setAttribute("aria-disabled", online ? "false" : "true");
+    addFriendBtn.setAttribute("aria-expanded", addFriendOpen ? "true" : "false");
     addFriendBtn.style.marginTop = "14px";
+    if (online) addFriendBtn.addEventListener("click", toggleAddFriendPanel);
     friendsSec.appendChild(addFriendBtn);
-    friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
+    if (online) renderAddFriendPanel(friendsSec);
+    if (!online) friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
     box.appendChild(friendsSec);
   }
 
