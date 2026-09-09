@@ -793,7 +793,7 @@
   .set-flat.danger { color: var(--bad); }
   .set-flat.danger:hover, .set-flat.danger.armed { color: var(--bad); }
 
-  /* group page: invite (code / link / QR placeholder) */
+  /* group page: invite (code / link / QR) */
   .games-invite-create {
     border: 1px solid var(--accent); border-radius: 999px; color: var(--accent);
     font-weight: 700; font-size: 15px; padding: 10px 24px; min-height: 44px;
@@ -807,6 +807,10 @@
   }
   /* D6: the join-notice's own code display reads quieter than the group settings invite code. */
   #joinNoticeCode { color: var(--dim); }
+  /* The one-line result of a redemption; fadeIn is the "text appears in place" motion (DESIGN). */
+  .join-notice-status { margin: 0; font-size: 15px; font-weight: 600; color: var(--accent); animation: fadeIn .25s ease both; }
+  .join-notice-status.is-error { color: var(--bad); }
+  .games-invite-qr { display: block; width: 160px; height: 160px; border-radius: 8px; animation: fadeIn .25s ease both; }
   .games-invite-actions { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
   .games-invite-action {
     border: 1px solid var(--line); border-radius: 999px; color: var(--text);
@@ -989,7 +993,9 @@
     <p class="games-primary-status" id="joinNoticeGroup" hidden></p>
     <p class="games-invite-code" id="joinNoticeCode" dir="ltr"></p>
     <p id="joinNoticeNote"></p>
+    <p class="join-notice-status" id="joinNoticeStatus" role="status" aria-live="polite" hidden></p>
     <div class="join-notice-actions">
+      <button type="button" class="btn-primary" id="joinNoticeJoinBtn" hidden>הצטרף לקבוצה</button>
       <button type="button" class="btn-primary" id="joinNoticeContinueBtn">המשך</button>
       <button type="button" class="btn-skip" id="joinNoticeLaterBtn">לא עכשיו</button>
     </div>
@@ -2737,9 +2743,9 @@
   }
 
   // ---------- invites (pure) ----------
-  // One invite token model, three presentations (large code / link / QR placeholder). Joining
-  // through an invite needs a backend and does not exist yet: parseJoinToken only recognizes a
-  // token in the URL so boot can show a friendly notice; nothing here ever touches state.
+  // One invite token model, three presentations (large code / link / QR). These functions stay
+  // pure: they mint, format and read tokens, and never touch state. Redeeming one is the join-by-
+  // invite section's job, and happens entirely on the server (docs/backend/join-invite.sql).
   var INVITE_TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
   // randomBytes is a Uint8Array(8) the caller fills (crypto.getRandomValues, Math.random
   // fallback) — kept as an argument so this stays a pure, deterministically testable function.
@@ -2775,14 +2781,312 @@
     const t = String(token || "");
     return t.slice(0, 4) + "-" + t.slice(4, 8);
   }
+  // The one normalization for a token that arrives from outside (a URL, a paste, a hand-typed
+  // code): uppercase, dashes and whitespace removed. app_redeem_invite() in
+  // docs/backend/join-invite.sql normalizes with upper(regexp_replace(..., '[[:space:]-]', ''))
+  // — the same two operations in the same order. If the two ever diverge, valid codes stop
+  // redeeming, which is why tests/join-invite.test.cjs pins both sides.
+  function normalizeInviteToken(raw) {
+    return String(raw == null ? "" : raw).toUpperCase().replace(/[\s-]/g, "");
+  }
   // Reads a ?join= token out of a location.search string. Accepts a dash the way the formatted
   // code displays it, uppercases, and only returns 8 alphabet characters — anything else is null
   // so a malformed or foreign query can't be mistaken for a real invite.
   function parseJoinToken(search) {
     const match = String(search || "").match(/[?&]join=([^&]*)/);
     if (!match) return null;
-    const token = decodeURIComponent(match[1]).toUpperCase().replace(/-/g, "");
+    let raw = "";
+    try { raw = decodeURIComponent(match[1]); } catch (e) { raw = match[1]; }
+    const token = normalizeInviteToken(raw);
     return new RegExp("^[" + INVITE_TOKEN_ALPHABET + "]{8}$").test(token) ? token : null;
+  }
+  // The statuses app_redeem_invite() returns, mapped to the one line the join notice shows.
+  // Only a success names the group: a failure must not reveal the name of a group the caller is
+  // not (or no longer) a member of. Anything unknown — a newer server, a thrown fetch, an empty
+  // result — lands on the neutral retry line rather than showing nothing.
+  const JOIN_SUCCESS_STATUSES = ["joined", "rejoined", "already-member"];
+  function joinSucceeded(status) {
+    return JOIN_SUCCESS_STATUSES.indexOf(String(status || "")) >= 0;
+  }
+  function joinNoticeMessage(status, groupName) {
+    const name = String(groupName == null ? "" : groupName).trim();
+    const withName = (base) => (name ? base + " " + name : base);
+    switch (String(status || "")) {
+      case "joined": return withName("הצטרפת לקבוצה");
+      case "rejoined": return withName("חזרת לקבוצה");
+      case "already-member": return withName("אתם כבר בקבוצה");
+      case "invalid": return "הקוד לא נמצא";
+      case "revoked": return "ההזמנה בוטלה";
+      case "expired": return "תוקף ההזמנה פג";
+      case "group-gone": return "הקבוצה כבר לא קיימת";
+      default: return "ההצטרפות נכשלה, נסו שוב";
+    }
+  }
+
+  // ---------- qr (pure) ----------
+  // A small QR encoder — byte mode, error-correction level M, versions 1..10. Hand written on
+  // purpose: the app is one file and artifact rules rule out a CDN. It exists for exactly one
+  // payload, inviteLink(...) (~50 characters), so nothing here tries to be a general library:
+  // no other mode, no other EC level, and a payload that does not fit version 10 returns null
+  // and the UI simply shows no QR.
+  //
+  // Everything is DOM-free; qrSvgElement() in the render section is the only part that touches
+  // the document. tests/qr.test.cjs checks the GF(256) tables, that data+EC is divisible by the
+  // generator polynomial (the property Reed-Solomon exists for), the function patterns, and a
+  // full decode of the placed bits back to the original string.
+  const QR_EXP = [], QR_LOG = [];
+  (function () {
+    // GF(256) with the QR primitive polynomial x^8 + x^4 + x^3 + x^2 + 1 (0x11d).
+    let x = 1;
+    for (let i = 0; i < 255; i++) { QR_EXP[i] = x; QR_LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11d; }
+    for (let i = 255; i < 512; i++) QR_EXP[i] = QR_EXP[i - 255]; // doubled, so a+b never wraps
+  })();
+  function qrMul(a, b) { return (a && b) ? QR_EXP[QR_LOG[a] + QR_LOG[b]] : 0; }
+  // ∏ (x - α^i) for i in 0..n-1, coefficients leading-first.
+  function qrGeneratorPoly(n) {
+    let g = [1];
+    for (let i = 0; i < n; i++) {
+      const next = [];
+      for (let k = 0; k <= g.length; k++) next[k] = 0;
+      for (let j = 0; j < g.length; j++) { next[j] ^= g[j]; next[j + 1] ^= qrMul(g[j], QR_EXP[i]); }
+      g = next;
+    }
+    return g;
+  }
+  // Remainder of data·x^ecLen divided by the generator — the EC codewords.
+  function qrEcCodewords(data, ecLen) {
+    const gen = qrGeneratorPoly(ecLen), res = [];
+    for (let i = 0; i < data.length + ecLen; i++) res[i] = i < data.length ? data[i] : 0;
+    for (let i = 0; i < data.length; i++) {
+      const factor = res[i];
+      if (!factor) continue;
+      for (let j = 0; j < gen.length; j++) res[i + j] ^= qrMul(gen[j], factor);
+    }
+    return res.slice(data.length);
+  }
+  // [version, totalCodewords, ecCodewordsPerBlock, [[blocks, dataCodewordsPerBlock], ...]] — the
+  // level-M rows of the standard's block table. blocks·(data+ec) always equals totalCodewords.
+  const QR_M_VERSIONS = [
+    [1, 26, 10, [[1, 16]]],
+    [2, 44, 16, [[1, 28]]],
+    [3, 70, 26, [[1, 44]]],
+    [4, 100, 18, [[2, 32]]],
+    [5, 134, 24, [[2, 43]]],
+    [6, 172, 16, [[4, 27]]],
+    [7, 196, 18, [[4, 31]]],
+    [8, 242, 22, [[2, 38], [2, 39]]],
+    [9, 292, 22, [[3, 36], [2, 37]]],
+    [10, 346, 26, [[4, 43], [1, 44]]]
+  ];
+  // Alignment-pattern centre coordinates per version (their cross product, minus the three
+  // corners the finders already occupy).
+  const QR_ALIGN = [
+    [], [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50]
+  ];
+  function qrDataCapacity(spec) {
+    let cap = 0;
+    spec[3].forEach(g => { cap += g[0] * g[1]; });
+    return cap;
+  }
+  // Byte mode header: 4 mode bits + a character count that is 8 bits up to version 9 and 16 bits
+  // from version 10. The smallest version whose data area holds header+payload wins.
+  function qrVersionForByteLength(len) {
+    for (let i = 0; i < QR_M_VERSIONS.length; i++) {
+      const spec = QR_M_VERSIONS[i];
+      const countBits = spec[0] < 10 ? 8 : 16;
+      if (4 + countBits + 8 * len <= qrDataCapacity(spec) * 8) return spec;
+    }
+    return null;
+  }
+  // UTF-8 bytes without TextEncoder (kept working in the vm slice too).
+  function qrUtf8Bytes(text) {
+    const s = encodeURIComponent(String(text == null ? "" : text)), out = [];
+    for (let i = 0; i < s.length; i++) {
+      if (s.charAt(i) === "%") { out.push(parseInt(s.substr(i + 1, 2), 16)); i += 2; }
+      else out.push(s.charCodeAt(i) & 0xff);
+    }
+    return out;
+  }
+  function qrDataCodewords(bytes, version, dataCap) {
+    const bits = [];
+    const push = (value, len) => { for (let i = len - 1; i >= 0; i--) bits.push((value >> i) & 1); };
+    push(4, 4);                                   // mode: byte
+    push(bytes.length, version < 10 ? 8 : 16);    // character count
+    bytes.forEach(b => push(b, 8));
+    const cap = dataCap * 8;
+    for (let i = 0; i < 4 && bits.length < cap; i++) bits.push(0); // terminator
+    while (bits.length % 8) bits.push(0);
+    const words = [];
+    for (let i = 0; i < bits.length; i += 8) {
+      let v = 0;
+      for (let j = 0; j < 8; j++) v = (v << 1) | bits[i + j];
+      words.push(v);
+    }
+    const pad = [0xec, 0x11];
+    for (let i = 0; words.length < dataCap; i++) words.push(pad[i % 2]);
+    return words;
+  }
+  // Data blocks and EC blocks are interleaved column-wise, which is what makes a burst of damage
+  // spread across blocks instead of destroying one of them.
+  function qrCodewords(text) {
+    const bytes = qrUtf8Bytes(text);
+    const spec = qrVersionForByteLength(bytes.length);
+    if (!spec) return null;
+    const version = spec[0], ecLen = spec[2], dataCap = qrDataCapacity(spec);
+    const words = qrDataCodewords(bytes, version, dataCap);
+    const dataBlocks = [], ecBlocks = [];
+    let at = 0;
+    spec[3].forEach(g => {
+      for (let b = 0; b < g[0]; b++) {
+        const block = words.slice(at, at + g[1]);
+        at += g[1];
+        dataBlocks.push(block);
+        ecBlocks.push(qrEcCodewords(block, ecLen));
+      }
+    });
+    const out = [];
+    let widest = 0;
+    dataBlocks.forEach(b => { if (b.length > widest) widest = b.length; });
+    for (let i = 0; i < widest; i++) dataBlocks.forEach(b => { if (i < b.length) out.push(b[i]); });
+    for (let i = 0; i < ecLen; i++) ecBlocks.forEach(b => out.push(b[i]));
+    return { version: version, codewords: out };
+  }
+  // 15-bit format information: 2 EC-level bits (M = 00) + 3 mask bits, BCH(15,5) with generator
+  // 0x537, finally XORed with 0x5412 so an all-zero format is not a valid pattern.
+  function qrFormatBits(mask) {
+    const data = (0 << 3) | (mask & 7);
+    let rem = data;
+    for (let i = 0; i < 10; i++) rem = (rem << 1) ^ (((rem >> 9) & 1) ? 0x537 : 0);
+    return (((data << 10) | (rem & 0x3ff)) ^ 0x5412) & 0x7fff;
+  }
+  const QR_MASKS = [
+    (r, c) => ((r + c) % 2) === 0,
+    (r, c) => (r % 2) === 0,
+    (r, c) => (c % 3) === 0,
+    (r, c) => ((r + c) % 3) === 0,
+    (r, c) => ((Math.floor(r / 2) + Math.floor(c / 3)) % 2) === 0,
+    (r, c) => (((r * c) % 2) + ((r * c) % 3)) === 0,
+    (r, c) => (((((r * c) % 2) + ((r * c) % 3)) % 2)) === 0,
+    (r, c) => (((((r + c) % 2) + ((r * c) % 3)) % 2)) === 0
+  ];
+  function qrWriteFormat(m, size, mask) {
+    const bits = qrFormatBits(mask);
+    const bit = (i) => (bits >> i) & 1;
+    for (let i = 0; i <= 5; i++) m[8][i] = bit(i);
+    m[8][7] = bit(6); m[8][8] = bit(7); m[7][8] = bit(8);
+    for (let i = 9; i <= 14; i++) m[14 - i][8] = bit(i);
+    for (let i = 0; i <= 7; i++) m[size - 1 - i][8] = bit(i);
+    for (let i = 8; i <= 14; i++) m[8][size - 15 + i] = bit(i);
+  }
+  // The standard's four penalty rules. Any mask produces a scannable symbol as long as the format
+  // bits name it, so this only picks the most readable one.
+  function qrPenalty(m, size) {
+    let score = 0, dark = 0;
+    const runScore = (run) => (run >= 5 ? 3 + (run - 5) : 0);
+    for (let i = 0; i < size; i++) {
+      let rowRun = 1, colRun = 1;
+      for (let j = 0; j < size; j++) {
+        if (m[i][j]) dark++;
+        if (j > 0) {
+          rowRun = m[i][j] === m[i][j - 1] ? rowRun + 1 : (score += runScore(rowRun), 1);
+          colRun = m[j][i] === m[j - 1][i] ? colRun + 1 : (score += runScore(colRun), 1);
+        }
+      }
+      score += runScore(rowRun) + runScore(colRun);
+    }
+    for (let i = 0; i < size - 1; i++) {
+      for (let j = 0; j < size - 1; j++) {
+        const v = m[i][j];
+        if (v === m[i][j + 1] && v === m[i + 1][j] && v === m[i + 1][j + 1]) score += 3;
+      }
+    }
+    const finderish = [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0];
+    const matches = (get, at) => {
+      for (let k = 0; k < 11; k++) if (get(at + k) !== finderish[k]) return false;
+      return true;
+    };
+    for (let i = 0; i < size; i++) {
+      for (let j = 0; j + 11 <= size; j++) {
+        if (matches(k => m[i][k], j)) score += 40;
+        if (matches(k => m[i][j + 10 - (k - j)], j)) score += 40; // reversed pattern
+        if (matches(k => m[k][i], j)) score += 40;
+        if (matches(k => m[j + 10 - (k - j)][i], j)) score += 40;
+      }
+    }
+    const percent = (dark * 100) / (size * size);
+    score += Math.floor(Math.abs(percent - 50) / 5) * 10;
+    return score;
+  }
+  // Returns { version, size, modules } where modules[row][col] is 0/1, or null when the payload
+  // does not fit version 10.
+  function qrModules(text) {
+    const enc = qrCodewords(text);
+    if (!enc) return null;
+    const version = enc.version, size = version * 4 + 17;
+    const m = [], fn = [];
+    for (let r = 0; r < size; r++) {
+      const row = [], flags = [];
+      for (let c = 0; c < size; c++) { row.push(0); flags.push(false); }
+      m.push(row); fn.push(flags);
+    }
+    const set = (r, c, v) => {
+      if (r < 0 || c < 0 || r >= size || c >= size) return;
+      m[r][c] = v ? 1 : 0; fn[r][c] = true;
+    };
+    // Finder patterns + their separators, in the three corners.
+    [[0, 0], [0, size - 7], [size - 7, 0]].forEach(p => {
+      for (let r = -1; r <= 7; r++) for (let c = -1; c <= 7; c++) {
+        const ring = (r >= 0 && r <= 6 && (c === 0 || c === 6)) || (c >= 0 && c <= 6 && (r === 0 || r === 6));
+        const core = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+        set(p[0] + r, p[1] + c, ring || core);
+      }
+    });
+    // Timing patterns (row 6 / column 6), between the finders.
+    for (let i = 8; i < size - 8; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+    // Alignment patterns, skipping the three centres that fall inside a finder.
+    const centers = QR_ALIGN[version] || [];
+    centers.forEach(r => centers.forEach(c => {
+      if ((r <= 8 && c <= 8) || (r <= 8 && c >= size - 9) || (r >= size - 9 && c <= 8)) return;
+      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) {
+        set(r + dr, c + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
+      }
+    }));
+    // Reserve the format areas (written after masking) and the always-dark module.
+    for (let i = 0; i <= 8; i++) { if (!fn[8][i]) set(8, i, 0); if (!fn[i][8]) set(i, 8, 0); }
+    for (let i = 0; i < 8; i++) {
+      if (!fn[8][size - 1 - i]) set(8, size - 1 - i, 0);
+      if (!fn[size - 1 - i][8]) set(size - 1 - i, 8, 0);
+    }
+    set(size - 8, 8, 1);
+    // Payload bits, two columns at a time, upward then downward, skipping the timing column.
+    const bits = [];
+    enc.codewords.forEach(w => { for (let i = 7; i >= 0; i--) bits.push((w >> i) & 1); });
+    let bi = 0, upward = true;
+    for (let col = size - 1; col > 0; col -= 2) {
+      if (col === 6) col--; // column 6 is the vertical timing pattern
+      for (let k = 0; k < size; k++) {
+        const row = upward ? size - 1 - k : k;
+        for (let d = 0; d < 2; d++) {
+          const c = col - d;
+          if (fn[row][c]) continue;
+          m[row][c] = bi < bits.length ? bits[bi++] : 0;
+        }
+      }
+      upward = !upward;
+    }
+    let best = null;
+    for (let mask = 0; mask < 8; mask++) {
+      const cand = [];
+      for (let r = 0; r < size; r++) {
+        const row = [];
+        for (let c = 0; c < size; c++) row.push(fn[r][c] ? m[r][c] : (m[r][c] ^ (QR_MASKS[mask](r, c) ? 1 : 0)));
+        cand.push(row);
+      }
+      qrWriteFormat(cand, size, mask);
+      const score = qrPenalty(cand, size);
+      if (!best || score < best.score) best = { score: score, mask: mask, modules: cand };
+    }
+    return { version: version, size: size, mask: best.mask, modules: best.modules };
   }
 
   // ---------- cloud mapping (pure) ----------
@@ -5179,6 +5483,39 @@
     return section;
   }
 
+  // The DOM half of the qr section: an SVG of the invite link, always dark-on-white because a
+  // scanner needs the contrast regardless of the app theme. Returns null when qrModules() refuses
+  // the payload, so the caller simply shows no QR.
+  function qrSvgElement(text, px) {
+    const q = qrModules(text);
+    if (!q) return null;
+    const quiet = 4, span = q.size + quiet * 2;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 " + span + " " + span);
+    svg.setAttribute("width", String(px));
+    svg.setAttribute("height", String(px));
+    svg.setAttribute("class", "games-invite-qr");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "קוד QR להזמנה");
+    const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    bg.setAttribute("width", String(span));
+    bg.setAttribute("height", String(span));
+    bg.setAttribute("rx", "2");
+    bg.setAttribute("fill", "#ffffff");
+    svg.appendChild(bg);
+    let d = "";
+    for (let r = 0; r < q.size; r++) {
+      for (let c = 0; c < q.size; c++) {
+        if (q.modules[r][c]) d += "M" + (c + quiet) + " " + (r + quiet) + "h1v1h-1z";
+      }
+    }
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "#05070A");
+    svg.appendChild(path);
+    return svg;
+  }
+
   // The group's invite, rendered inside the group settings overlay (D1): any active member sees
   // it (returns null otherwise). No invite yet → "צור הזמנה". With one → the code, copy/share,
   // the shared server note, and, for admins only, a text action to revoke it (which brings back
@@ -5244,9 +5581,11 @@
     }
     card.appendChild(actions);
 
-    // D6: no QR placeholder tile — a real QR will be generated from inviteLink(...) once a
-    // backend can redeem it; until then the shared note below says exactly that, once.
-    card.appendChild(el("p", "games-invite-note", SERVER_NOTE));
+    // The QR carries the same link as "העתק קישור" — scanning it opens the join notice.
+    const qr = qrSvgElement(inviteLink(invite.token, location.origin, location.pathname), 160);
+    if (qr) card.appendChild(qr);
+
+    if (!supabase) card.appendChild(el("p", "games-invite-note", SERVER_NOTE));
 
     if (isAdmin) {
       const revokeBtn = el("button", "games-invite-revoke", "בטל הזמנה");
@@ -6132,6 +6471,7 @@
     document.getElementById("login").hidden = true;
     render();
     enterCloudMode(); // phase 2a: groups/members/invites/friendships now live on the server
+    maybeRunPendingJoin(); // an invite link opened before signing in redeems itself now, once
   }
 
   function initAuth() {
@@ -6940,6 +7280,163 @@
   });
 
 
+  // ---------- join by invite ----------
+  // Opening ?join=TOKEN shows #joinNotice. Redemption is one server call: RLS hides the invite
+  // row from a non-member (invites_select_members) and refuses a self-insert into group_members
+  // (group_members_insert_admin), so the only way in is the SECURITY DEFINER function
+  // app_redeem_invite() from docs/backend/join-invite.sql. Nothing here writes a table directly.
+  //
+  // Three shapes of the same notice:
+  //   * no backend at all (supabase === null) — the old copy, nothing to press;
+  //   * backend but no session — "התחבר כדי להצטרף"; the token is held in memory and redeemed
+  //     automatically, once, the moment a session arrives (applySession → maybeRunPendingJoin);
+  //   * signed in — "הצטרף לקבוצה".
+  // The ?join= query is stripped only once the flow resolves, so a reload mid-sign-in keeps it.
+  let pendingJoinToken = null;   // in memory only: no new storage key for UI-only state
+  let joinRedeemRunning = false;
+  let joinNoticeBound = false;
+
+  function stripJoinFromUrl() {
+    const params = new URLSearchParams(location.search);
+    if (!params.has("join")) return;
+    params.delete("join");
+    const qs = params.toString();
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
+  }
+
+  // The single server call. Always resolves — a network failure or an unknown shape comes back as
+  // { status: "error" }, which joinNoticeMessage() turns into the neutral retry line.
+  async function redeemInviteToken(token) {
+    if (!supabase) return { status: "error" };
+    if (!cloudMode()) return { status: "error" };
+    try {
+      const { data, error } = await supabase.rpc("app_redeem_invite", { p_token: normalizeInviteToken(token) });
+      if (error) return { status: "error" };
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return { status: "error" };
+      return {
+        status: String(row.status || ""),
+        groupId: row.group_id ? String(row.group_id) : "",
+        groupName: row.group_name ? String(row.group_name) : ""
+      };
+    } catch (e) {
+      return { status: "error" };
+    }
+  }
+
+  function joinNoticeParts() {
+    return {
+      notice: document.getElementById("joinNotice"),
+      group: document.getElementById("joinNoticeGroup"),
+      code: document.getElementById("joinNoticeCode"),
+      note: document.getElementById("joinNoticeNote"),
+      status: document.getElementById("joinNoticeStatus"),
+      joinBtn: document.getElementById("joinNoticeJoinBtn"),
+      continueBtn: document.getElementById("joinNoticeContinueBtn"),
+      laterBtn: document.getElementById("joinNoticeLaterBtn")
+    };
+  }
+
+  function closeJoinNotice() {
+    pendingJoinToken = null;
+    joinNoticeParts().notice.hidden = true;
+    stripJoinFromUrl();
+  }
+
+  async function runJoin(token) {
+    if (joinRedeemRunning) return;
+    joinRedeemRunning = true;
+    const ui = joinNoticeParts();
+    ui.joinBtn.disabled = true;
+    ui.joinBtn.textContent = "מצטרף…";
+    ui.status.hidden = true;
+    const result = await redeemInviteToken(token);
+    const ok = joinSucceeded(result.status);
+    ui.status.textContent = joinNoticeMessage(result.status, result.groupName);
+    ui.status.classList.toggle("is-error", !ok);
+    ui.status.hidden = false;
+    joinRedeemRunning = false;
+    if (!ok) {
+      // A dead token has no second try: only "המשך" is left, and it just closes.
+      ui.joinBtn.hidden = true;
+      ui.continueBtn.hidden = false;
+      ui.laterBtn.hidden = true;
+      pendingJoinToken = null;
+      stripJoinFromUrl();
+      return;
+    }
+    try { await pullCloud(); } catch (e) { /* the membership is already on the server */ }
+    // The success line gets a beat on screen before the group page replaces it.
+    setTimeout(() => {
+      closeJoinNotice();
+      if (result.groupId) openGroup(result.groupId);
+      else render();
+    }, 700);
+  }
+
+  function showJoinNotice(token, autoRun) {
+    const ui = joinNoticeParts();
+    ui.code.textContent = formatInviteCode(token);
+    ui.status.hidden = true;
+    ui.status.classList.remove("is-error");
+    ui.joinBtn.disabled = false;
+    ui.laterBtn.hidden = false;
+    // Row 21: name the group when this device already knows the token (an invite it created or
+    // synced). Unknown tokens stay nameless — nothing is fabricated before the server answers.
+    const localInvite = (state.invites || []).find(i => i && i.token === token && !i.revokedAt);
+    const invitedGroup = localInvite && (state.groups || []).find(g => g && g.id === localInvite.groupId);
+    ui.group.textContent = invitedGroup ? invitedGroup.name : "";
+    ui.group.hidden = !invitedGroup;
+
+    if (!supabase) {
+      ui.note.textContent = SERVER_NOTE;
+      ui.joinBtn.hidden = true;
+      ui.continueBtn.hidden = false;
+    } else if (!cloudMode()) {
+      ui.note.textContent = "ההצטרפות דורשת חשבון";
+      ui.joinBtn.textContent = "התחבר כדי להצטרף";
+      ui.joinBtn.hidden = false;
+      ui.continueBtn.hidden = true;
+    } else {
+      ui.note.textContent = "";
+      ui.joinBtn.textContent = "הצטרף לקבוצה";
+      ui.joinBtn.hidden = false;
+      ui.continueBtn.hidden = true;
+    }
+
+    if (!joinNoticeBound) {
+      joinNoticeBound = true;
+      ui.joinBtn.addEventListener("click", () => {
+        const token2 = pendingJoinToken;
+        if (!token2) return;
+        if (cloudMode()) { runJoin(token2); return; }
+        // Signed out: keep the token in memory, hide the notice, and let the login screen take
+        // over. applySession() picks the token back up as soon as there is a session.
+        joinNoticeParts().notice.hidden = true;
+        showLogin();
+      });
+      ui.continueBtn.addEventListener("click", () => {
+        const wasSignedOut = !me;
+        closeJoinNotice();
+        if (wasSignedOut) showLogin();
+      });
+      // "לא עכשיו" dismisses without pushing the login screen — the app is usable without a name.
+      ui.laterBtn.addEventListener("click", closeJoinNotice);
+    }
+
+    pendingJoinToken = token;
+    ui.notice.hidden = false;
+    if (autoRun && cloudMode()) runJoin(token);
+  }
+
+  // Called from applySession() right after a session lands. One attempt: if the token is gone or
+  // a redemption is already in flight there is nothing to do.
+  function maybeRunPendingJoin() {
+    const token = pendingJoinToken || parseJoinToken(location.search);
+    if (!token || joinRedeemRunning || !cloudMode()) return;
+    showJoinNotice(token, true);
+  }
+
   // ---------- boot ----------
   appView = initialAppView(state);
   render();
@@ -6962,29 +7459,9 @@
   initSync();
   const joinToken = parseJoinToken(location.search);
   if (joinToken) {
-    // Nothing is joined here — this only shows the code and strips the query. Real redemption
-    // needs a backend (see the invite section's note); if the user isn't signed in yet, the
-    // normal login screen still follows once they dismiss the notice.
-    document.getElementById("joinNoticeCode").textContent = formatInviteCode(joinToken);
-    document.getElementById("joinNoticeNote").textContent = SERVER_NOTE;
-    // Row 21: name the group when this device already knows the token (an invite it created or
-    // synced). Unknown tokens simply stay nameless — nothing is fabricated and nothing is joined.
-    const localInvite = (state.invites || []).find(i => i && i.token === joinToken && !i.revokedAt);
-    const invitedGroup = localInvite && (state.groups || []).find(g => g && g.id === localInvite.groupId);
-    const groupLine = document.getElementById("joinNoticeGroup");
-    groupLine.textContent = invitedGroup ? invitedGroup.name : "";
-    groupLine.hidden = !invitedGroup;
-    const notice = document.getElementById("joinNotice");
-    notice.hidden = false;
-    document.getElementById("joinNoticeContinueBtn").addEventListener("click", () => {
-      notice.hidden = true;
-      if (!me) showLogin();
-    }, { once: true });
-    // "לא עכשיו" dismisses without pushing the login screen — the app is usable without a name.
-    document.getElementById("joinNoticeLaterBtn").addEventListener("click", () => {
-      notice.hidden = true;
-    }, { once: true });
-    history.replaceState(null, "", location.pathname);
+    // The notice decides for itself what it can offer (join / sign in / nothing yet) and keeps
+    // ?join= in the address bar until the flow resolves — see the join-by-invite section.
+    showJoinNotice(joinToken, false);
   } else if (!me) {
     showLogin();
   }

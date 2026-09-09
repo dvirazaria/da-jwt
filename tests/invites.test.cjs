@@ -152,12 +152,20 @@ test('renderGroupInvite is defined right after renderGroupHistory', () => {
 
 // ---------- wiring: no fake join / no state mutation from the URL ----------
 
-test('the boot join-notice flow never pushes to state.groupMembers or state.groups', () => {
+test('the join-notice flow never pushes to state.groupMembers or state.groups', () => {
+  // Boot still reads the token; the notice and its redemption live in the join-by-invite
+  // section, which reaches the server through app_redeem_invite and never writes locally —
+  // membership arrives on the next pullCloud() like any other row.
   const bootSource = html.slice(html.indexOf('  // ---------- boot ----------'));
   assert.match(bootSource, /parseJoinToken\(location\.search\)/);
-  assert.match(bootSource, /history\.replaceState\(/);
-  assert.doesNotMatch(bootSource, /state\.groupMembers\.push/);
-  assert.doesNotMatch(bootSource, /state\.groups\.push/);
+  const joinSource = html.slice(
+    html.indexOf('  // ---------- join by invite ----------'),
+    html.indexOf('  // ---------- boot ----------'));
+  assert.match(joinSource, /history\.replaceState\(/);
+  [bootSource, joinSource].forEach(source => {
+    assert.doesNotMatch(source, /state\.groupMembers\.push/);
+    assert.doesNotMatch(source, /state\.groups\.push/);
+  });
 });
 
 test('createGroupInvite and revokeGroupInvite save() and re-render the active group surface, using no alert/confirm', () => {

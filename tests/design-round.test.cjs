@@ -187,9 +187,10 @@ test('one shared "יעבוד כשהאפליקציה תתחבר לשרת" constan
   assert.ok((html.match(/SERVER_NOTE/g) || []).length >= 5);
 });
 
-test('the QR placeholder tile is gone, code and CSS alike', () => {
-  assert.doesNotMatch(html, /games-invite-qr/);
-  assert.doesNotMatch(html, /QR יופיע עם חיבור לשרת/);
+test('the QR placeholder is gone — the invite card now draws a real QR of the link', () => {
+  assert.doesNotMatch(html, /QR יופיע עם חיבור לשרת/, 'the placeholder copy must not come back');
+  assert.match(html, /qrSvgElement\(inviteLink\(/, 'the QR encodes the same link as "העתק קישור"');
+  assert.match(html, /\.games-invite-qr \{/, 'and it has a sized, themed rule of its own');
 });
 
 // ---------- D3: member row actions behind a tap ----------
@@ -319,9 +320,12 @@ test('rows 19 + 20: neutral flat actions read --text, disabled ones --faint, and
 test('row 21: the join notice names the group, and offers "לא עכשיו" beside "המשך"', () => {
   assert.match(html, /id="joinNoticeGroup"/);
   assert.match(html, /לא עכשיו/);
-  const boot = html.slice(html.indexOf('  // ---------- boot ----------'));
-  assert.match(boot, /joinNoticeGroup/);
-  assert.match(boot, /state\.invites/);
+  // The notice grew an actionable join path, so its body moved out of boot into its own section.
+  const join = html.slice(
+    html.indexOf('  // ---------- join by invite ----------'),
+    html.indexOf('  // ---------- boot ----------'));
+  assert.match(join, /joinNoticeGroup/);
+  assert.match(join, /state\.invites/);
 });
 
 test('rows 25 + 27 + 30 + 34: nested ranking, anchored card head, plus-button touch area, settings icon', () => {
