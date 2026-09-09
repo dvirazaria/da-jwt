@@ -28,7 +28,7 @@ test('opening a preview reuses the existing group adapters and renderers', () =>
   assert.match(renderer, /getGroupSummary\(collections, currentGroupId, me\)/);
   assert.match(renderer, /renderGroupHeader\(summary, closeGroupPreview, openGroupSettings\)/);
   assert.match(renderer, /renderGroupPrimaryAction\(summary, canStartGroupGame\(collections, currentGroupId\)\)/);
-  assert.match(renderer, /renderGroupMembers\(activeMembers\(/);
+  assert.match(renderer, /renderGroupMembers\(summary, activeMembers\(/);
   assert.match(renderer, /renderGroupHistory\(gameSummaries\)/);
 });
 
