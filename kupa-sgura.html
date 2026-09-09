@@ -1694,10 +1694,31 @@
           upserts = upserts.filter(row => !frozen.has(String(row.id)));
         }
         if (upserts.length) {
-          const result = CLOUD_INSERT_ONLY[pair[0]]
-            ? await supabase.from(pair[1]).upsert(upserts, { onConflict: "id", ignoreDuplicates: true })
-            : await supabase.from(pair[1]).upsert(upserts, { onConflict: "id" });
-          if (result && result.error) throw result.error;
+          if (CLOUD_INSERT_ONLY[pair[0]]) {
+            const result = await supabase.from(pair[1]).upsert(upserts, { onConflict: "id", ignoreDuplicates: true });
+            if (result && result.error) throw result.error;
+          } else {
+            // Rows the server is known to hold. For the two collections that share the `games`
+            // table the baseline is both halves; a gamesClosed row is never new — the games
+            // branch above already sent it as an open shell, and games_insert_member forbids
+            // inserting a closed game at all.
+            const known = pair[0] === "games"
+              ? (previous.games || []).map(row => row.id).concat((previous.gamesClosed || []).map(row => row.id))
+              : pair[0] === "gamesClosed"
+                ? upserts.map(row => row.id)
+                : (previous[pair[0]] || []).map(row => row.id);
+            const split = splitCloudWrites(upserts, known, "id");
+            // Never ask for representation on a write: games_select / game_participants_select
+            // run on RETURNING and cannot see the row that is being inserted either.
+            if (split.inserts.length) {
+              const result = await supabase.from(pair[1]).upsert(split.inserts, { onConflict: "id", ignoreDuplicates: true });
+              if (result && result.error) throw result.error;
+            }
+            if (split.updates.length) {
+              const result = await supabase.from(pair[1]).upsert(split.updates, { onConflict: "id" });
+              if (result && result.error) throw result.error;
+            }
+          }
         }
         confirmed[pair[0]] = rows;
         if (pair[0] === "gameParticipants" || pair[0] === "entries") {
@@ -3927,6 +3948,30 @@
     const deletes = [];
     before.forEach((row, id) => { if (!seen.has(id)) deletes.push(row); });
     return { upserts, deletes };
+  }
+
+  // Splits the rows a push wants to write into the ones the server has never seen and the ones
+  // the confirmed baseline says it holds.
+  //
+  // Why this exists: `upsert(rows, { onConflict: "id" })` compiles to INSERT ... ON CONFLICT DO
+  // UPDATE, and PostgreSQL then evaluates the UPDATE policy as well as the INSERT one. Every
+  // UPDATE policy here is built on app_can_read_game() / app_is_group_admin() — STABLE SECURITY
+  // DEFINER functions that re-query the target table and therefore cannot see the row being
+  // inserted. The check fails and PostgREST reports 42501, which is why a brand-new game never
+  // reached the server while later writes to the same row worked.
+  //
+  // So: new rows go up as INSERT ... ON CONFLICT DO NOTHING (insert policy only, and a re-send
+  // after a failed push is a harmless no-op), known rows keep the merge upsert.
+  function splitCloudWrites(upserts, knownIds, key) {
+    const k = key || "id";
+    const known = new Set((Array.isArray(knownIds) ? knownIds : []).map(String));
+    const inserts = [];
+    const updates = [];
+    (Array.isArray(upserts) ? upserts : []).forEach(row => {
+      if (!row || row[k] == null) return;
+      if (known.has(String(row[k]))) updates.push(row); else inserts.push(row);
+    });
+    return { inserts, updates };
   }
 
   // The server owns groups / groupMembers / invites / friendships; every other collection on the

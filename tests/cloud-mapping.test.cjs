@@ -490,7 +490,10 @@ test('the push writes the five tables in FK order, upserting on the primary key'
     appScript.indexOf('  // ---------- cloud store (Supabase) ----------'),
     appScript.indexOf('  // Example data promises'));
   assert.match(store, /\["guests", "guests"\][\s\S]*?\["groups", "groups"\][\s\S]*?\["groupMembers", "group_members"\][\s\S]*?\["invites", "invites"\][\s\S]*?\["friendships", "friendships"\]/);
-  assert.match(store, /\.upsert\(upserts, \{ onConflict: "id" \}\)/);
+  // A row the baseline confirms the server holds is merge-upserted; a row it has never seen
+  // must be an INSERT ... ON CONFLICT DO NOTHING (see tests/cloud-upsert.test.cjs).
+  assert.match(store, /\.upsert\(split\.updates, \{ onConflict: "id" \}\)/);
+  assert.match(store, /\.upsert\(split\.inserts, \{ onConflict: "id", ignoreDuplicates: true \}\)/);
   // entries/transfers/debts are insert-only (no UPDATE policy / column-limited grants).
   assert.match(store, /ignoreDuplicates: true/);
 });
