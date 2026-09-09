@@ -1,26 +1,21 @@
 -- #####################################################################
--- ##  DO NOT RUN THIS YET.  ###########################################
+-- ##  APPLY ORDER -- read before running.  ############################
 -- #####################################################################
 --
--- Verified by the controller on 2026-09-10. This file is correct, but it
--- must NOT be applied on its own: it narrows entries_select and
--- game_participants_select to "participant of this game", while the client
--- still builds the group leaderboard and the group history from those raw
--- rows for EVERY game in the group. Applying it alone makes a member who
--- missed a night stop seeing that night in the group's history, and
--- computes their leaderboard over only the games they played.
+-- This narrows entries_select and game_participants_select to "participant
+-- of this game". The group leaderboard and group history used to be built
+-- from those raw rows for EVERY game in the group, so applying this alone
+-- made a member who missed a night lose that night from the group's history.
 --
--- That trades an obscure leak (a group member opening devtools) for a
--- visible, everyday regression. Wrong way round.
+-- That prerequisite has now landed (2026-09-10): the client reads
+-- group_leaderboard_public_v and group_game_summaries_v instead, and falls
+-- back to its old local computation when a view is unavailable.
 --
--- The prerequisite already exists in schema.sql and the client simply
--- never uses it: group_leaderboard_public_v, plus a per-game summary of
--- the same shape as GroupGameSummary (date / player count / winner names /
--- pot / balance flag, no per-player money). Wire the client onto those
--- FIRST; then this file closes F3 with nothing lost.
---
--- Apply order once that lands: this SQL and the client change ship in the
--- SAME release. Either one alone is broken.
+-- Required order:
+--   1. docs/backend/group-summaries.sql   (adds group_game_summaries_v)
+--   2. deploy the client that reads the views (version 64 or later)
+--   3. THIS FILE
+-- Running this file before 1 and 2 reproduces the regression above.
 -- #####################################################################
 
 -- =====================================================================
