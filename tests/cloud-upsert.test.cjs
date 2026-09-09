@@ -72,13 +72,38 @@ test('an unknown local row that already exists on the server is reconciled into 
   assert.deepEqual(JSON.parse(JSON.stringify(retry.inserts)), []);
   assert.deepEqual(JSON.parse(JSON.stringify(retry.updates)), [local]);
 
-  assert.match(storeSource, /cloudInsertReconcileAccountId/,
+  assert.match(storeSource, /cloudInsertReconcile/,
     'successful unknown inserts must re-pull a server baseline before their retry');
   assert.match(storeSource,
-    /if \(cloudInsertReconcileAccountId === authUser\.id\) \{[\s\S]*?lastPushedRows = serverBaseline;[\s\S]*?scheduleCloudPush\(\);/,
+    /cloudInsertReconcile\.accountId === authUser\.id[\s\S]*?lastPushedRows = serverBaseline;[\s\S]*?scheduleCloudPush\(\);/,
     'the reconciliation must retain the local working copy, install the server baseline, then schedule the update pass');
   assert.match(storeSource, /authUser\.id !== pullAccountId/,
     'a pull started by another account must not reconcile this account\'s local rows');
+  assert.match(storeSource, /pushAccountId = authUser\.id/,
+    'an in-flight push must keep the account that started it');
+  assert.match(storeSource, /if \(!pushIsCurrent\(\)\) return;/,
+    'an account switch must stop an old push before it mutates the new account\'s baseline');
+});
+
+test('a reconciliation marker does not schedule an insert loop for an invisible row', () => {
+  const ctx = load();
+  const marker = { ids: { groups: ['hidden'], entries: ['seen'] } };
+  const baseline = { groups: [], entries: [{ id: 'seen' }] };
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.cloudRowsMissingReconcileIds(baseline, marker))), ['groups:hidden']);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.cloudRowsMissingReconcileIds({ groups: [{ id: 'hidden' }], entries: [{ id: 'seen' }] }, marker))), []);
+  assert.match(storeSource, /cloudInsertReconcile = null;[\s\S]*?do not schedule another INSERT immediately/,
+    'missing rows must surface an error without immediately re-queuing the same insert');
+});
+
+test('transient pull failures retry reconciliation only a bounded number of times', () => {
+  assert.match(storeSource, /marker\.attempts >= 3/);
+  assert.match(storeSource, /retryCloudInsertReconcile\(accountId\)/);
+  assert.match(storeSource, /failCloudPull\(pullAccountId\)/);
+});
+
+test('append-only collections intentionally confirm DO NOTHING writes without mutable reconciliation', () => {
+  assert.match(storeSource, /CLOUD_INSERT_ONLY\[pair\[0\]\]/);
+  assert.match(storeSource, /entries are append-only; transfers only grant UPDATE/);
 });
 
 test('the push plan keeps FK order as data: parents before children', () => {

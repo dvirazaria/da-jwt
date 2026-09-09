@@ -56,16 +56,24 @@ BEGIN
   END IF;
 
   -- 32 random bytes = 256 bits. Hex is URL-safe without client-side encoding.
-  v_token := encode(gen_random_bytes(32), 'hex');
-  BEGIN
-    INSERT INTO friend_invites (profile_id, token) VALUES (v_profile_id, v_token);
-    RETURN QUERY SELECT v_token, 'created'::text;
-  EXCEPTION WHEN unique_violation THEN
-    -- A second tab raced the first. Reuse that stable token instead of minting
-    -- a second invitation or exposing a transient conflict to the client.
+  -- ON CONFLICT DO NOTHING covers both the profile race and the vanishingly rare
+  -- token collision; only the former has a row to reuse, so the latter loops and
+  -- mints a fresh value instead of returning a NULL token to the client.
+  LOOP
+    v_token := encode(gen_random_bytes(32), 'hex');
+    INSERT INTO friend_invites (profile_id, token) VALUES (v_profile_id, v_token)
+    ON CONFLICT DO NOTHING
+    RETURNING friend_invites.token INTO v_token;
+    IF FOUND THEN
+      RETURN QUERY SELECT v_token, 'created'::text;
+      RETURN;
+    END IF;
     SELECT fi.token INTO v_token FROM friend_invites fi WHERE fi.profile_id = v_profile_id;
-    RETURN QUERY SELECT v_token, 'existing'::text;
-  END;
+    IF FOUND THEN
+      RETURN QUERY SELECT v_token, 'existing'::text;
+      RETURN;
+    END IF;
+  END LOOP;
 END;
 $$;
 

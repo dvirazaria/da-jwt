@@ -87,6 +87,13 @@ test('parseFriendToken accepts the server-issued 256-bit hex token and rejects s
   assert.equal(run(`parseFriendToken('?friend=${'g'.repeat(64)}')`, context), null);
 });
 
+test('normalizeFriendToken also accepts the raw token returned by the create RPC', () => {
+  const context = freshContext();
+  assert.equal(run(`normalizeFriendToken('${SAMPLE_TOKEN.toUpperCase()}')`, context), SAMPLE_TOKEN);
+  assert.equal(run(`normalizeFriendToken('${SAMPLE_TOKEN.slice(0, 8)}-${SAMPLE_TOKEN.slice(8)}')`, context), SAMPLE_TOKEN);
+  assert.equal(run("normalizeFriendToken('not-a-token')", context), null);
+});
+
 test('?join= and ?friend= never shadow each other when both are present in the same URL', () => {
   const context = freshContext();
   const combined = '?join=ABCD2345&friend=' + SAMPLE_TOKEN;
@@ -126,6 +133,7 @@ test('the friend-invite share handler requires a cloud session and gets its toke
   );
   assert.match(handler, /encodeURIComponent\(message\)/);
   assert.match(handler, /window\.open\([\s\S]*?"_blank", "noopener"\)/);
+  assert.match(handler, /normalizeFriendToken\(row\.token\)/);
 });
 
 test('the friend notice redeems only through the accept RPC, has busy state, pulls cloud data and cleans the URL', () => {
@@ -134,7 +142,14 @@ test('the friend notice redeems only through the accept RPC, has busy state, pul
   assert.match(notice, /friendNoticeRedeeming/);
   assert.match(notice, /await pullCloud\(\)/);
   assert.match(notice, /stripFriendFromUrl\(\)/);
+  assert.match(notice, /parseJoinToken\(location\.search\)/,
+    'closing a friend notice must continue a second ?join= flow from the same URL');
   assert.doesNotMatch(notice, /\.from\("friend_invites"\)/);
+});
+
+test('friend URL cleanup preserves an existing hash fragment', () => {
+  const notice = sourceBetween('  function stripFriendFromUrl() {', '  function friendNoticeParts() {');
+  assert.match(notice, /location\.hash/);
 });
 
 test('friend-invites SQL keeps tokens out of profile reads and confines both RPCs to authenticated callers', () => {
@@ -145,6 +160,8 @@ test('friend-invites SQL keeps tokens out of profile reads and confines both RPC
   assert.match(sql, /CREATE OR REPLACE FUNCTION app_create_friend_invite\(\)/);
   assert.match(sql, /CREATE OR REPLACE FUNCTION app_accept_friend_invite\(p_token text\)/);
   assert.match(sql, /gen_random_bytes\(32\)/);
+  assert.match(sql, /ON CONFLICT DO NOTHING/);
+  assert.match(sql, /token collision/);
   assert.match(sql, /REVOKE ALL ON FUNCTION app_create_friend_invite\(\) FROM public/);
   assert.match(sql, /GRANT EXECUTE ON FUNCTION app_accept_friend_invite\(text\) TO authenticated/);
 });

@@ -1737,7 +1737,7 @@
   // INSERT ... DO NOTHING cannot tell a newly-created row from an existing row it ignored. Keep
   // this account-scoped marker in memory until a pull rebuilds the baseline, then retry the local
   // row as a real update. The state document remains the only durable outbox.
-  let cloudInsertReconcileAccountId = "";
+  let cloudInsertReconcile = null; // { accountId, ids: { collection: string[] }, attempts }
   let cloudProfileIds = [];  // every profile id seen in a pulled row (see CloudCtx)
   let cloudGameCreators = {}; // gameId -> games.created_by, so a second device never rewrites it
   let cloudGameChannel = null;   // the postgres_changes subscription for the open table
@@ -1890,6 +1890,39 @@
     cloudPullTimer = setTimeout(() => { cloudPullTimer = null; pullCloud(); }, delay || 1500);
   }
 
+  function noteCloudInsertReconcile(accountId, collection, rows) {
+    if (!accountId || !collection || !Array.isArray(rows) || !rows.length) return;
+    if (!cloudInsertReconcile || cloudInsertReconcile.accountId !== accountId) {
+      cloudInsertReconcile = { accountId, ids: {}, attempts: 0 };
+    }
+    const ids = cloudInsertReconcile.ids[collection] || [];
+    rows.forEach(row => {
+      const id = row && row.id != null ? String(row.id) : "";
+      if (id && !ids.includes(id)) ids.push(id);
+    });
+    cloudInsertReconcile.ids[collection] = ids;
+    cloudInsertReconcile.attempts = 0;
+  }
+
+  function retryCloudInsertReconcile(accountId) {
+    const marker = cloudInsertReconcile;
+    if (!marker || marker.accountId !== accountId || !authUser || authUser.id !== accountId) return;
+    if (marker.attempts >= 3) {
+      cloudInsertReconcile = null;
+      cloudSurfaceError = true;
+      return;
+    }
+    const delay = Math.min(4000, 800 * Math.pow(2, marker.attempts));
+    marker.attempts += 1;
+    scheduleCloudPull(delay);
+  }
+
+  function failCloudPull(accountId) {
+    if (!authUser || authUser.id !== accountId) return;
+    retryCloudInsertReconcile(accountId);
+    setSync(false, "שגיאת סנכרון — נשמר מקומית");
+  }
+
   async function pushCloud() {
     if (!supabase || !authUser) return;
     // Two pushes in flight would race over lastPushedRows and could confirm a row the other one
@@ -1901,6 +1934,8 @@
   }
   async function pushCloudRun() {
     if (!supabase || !authUser) return;
+    const pushAccountId = authUser.id;
+    const pushIsCurrent = () => !!authUser && authUser.id === pushAccountId;
     const ctx = cloudContext();
     const next = buildCloudRows(cloudCollections(), ctx);
     const previous = lastPushedRows || EMPTY_CLOUD_ROWS;
@@ -1916,6 +1951,7 @@
     const isEditable = row => editable.has(String(row.game_id || ""));
     try {
       for (const pair of CLOUD_TABLES) {
+        if (!pushIsCurrent()) return;
         // gamesClosed IS the frozen set, so it keeps its rows; everything else drops the rows of
         // a game the server already closed, and never deletes them either.
         const rows = pair[0] === "gamesClosed" ? (next[pair[0]] || []) : (next[pair[0]] || []).filter(notFrozen);
@@ -1943,6 +1979,7 @@
         if (upserts.length) {
           if (CLOUD_INSERT_ONLY[pair[0]]) {
             const result = await supabase.from(pair[1]).upsert(upserts, { onConflict: "id", ignoreDuplicates: true });
+            if (!pushIsCurrent()) return;
             if (result && result.error) throw result.error;
           } else {
             // Rows the server is known to hold. For the two collections that share the `games`
@@ -1959,15 +1996,17 @@
             // run on RETURNING and cannot see the row that is being inserted either.
             if (split.inserts.length) {
               const result = await supabase.from(pair[1]).upsert(split.inserts, { onConflict: "id", ignoreDuplicates: true });
+              if (!pushIsCurrent()) return;
               if (result && result.error) throw result.error;
               // DO NOTHING reports success both when it inserted and when the row was already on
               // the server. Do not promote either case into the local baseline until a pull
               // resolves it; otherwise an unseen server row would swallow this local edit forever.
               split.inserts.forEach(row => unknownInsertIds.add(String(row.id)));
-              cloudInsertReconcileAccountId = authUser.id;
+              noteCloudInsertReconcile(pushAccountId, pair[0], split.inserts);
             }
             if (split.updates.length) {
               const result = await supabase.from(pair[1]).upsert(split.updates, { onConflict: "id" });
+              if (!pushIsCurrent()) return;
               if (result && result.error) throw result.error;
             }
           }
@@ -1979,6 +2018,7 @@
           : rows;
         if (pair[0] === "gameParticipants" || pair[0] === "entries") {
           await pushCloudGameDeletes(pair[1], diff.deletes.filter(row => notFrozen(row) && isEditable(row)));
+          if (!pushIsCurrent()) return;
         }
       }
       // The one thing a closed game still allows: the creditor marking a debt paid
@@ -1988,6 +2028,7 @@
         const result = await supabase.from("debts")
           .update({ status: payment.status, paid_at: payment.paid_at, paid_by_profile_id: payment.paid_by_profile_id })
           .eq("id", payment.id);
+        if (!pushIsCurrent()) return;
         if (result && result.error) throw result.error;
       }
       confirmed.debtPayments = next.debtPayments;
@@ -1995,6 +2036,7 @@
         if (row.created_by) cloudGameCreators[String(row.id)] = row.created_by;
       });
     } catch (e) {
+      if (!pushIsCurrent()) return;
       lastPushedRows = confirmed;
       clearCloudPending(confirmed); // whatever DID land stops being pending; the rest stays protected
       // Network/timeout/5xx is the server's problem (or no server reached at all) and is worth
@@ -2009,21 +2051,25 @@
         const delay = cloudBackoffDelay(cloudPushAttempt, Math.random());
         cloudPushAttempt++;
         clearTimeout(cloudPushTimer);
-        cloudPushTimer = setTimeout(() => { cloudPushTimer = null; pushCloud(); }, delay);
+        cloudPushTimer = setTimeout(() => {
+          cloudPushTimer = null;
+          if (pushIsCurrent()) pushCloud();
+        }, delay);
         return;
       }
       cloudPushAttempt = 0;
       cloudSurfaceError = true;
-      scheduleCloudPull(1200);
+      if (pushIsCurrent()) scheduleCloudPull(1200);
       return;
     }
+    if (!pushIsCurrent()) return;
     cloudPushAttempt = 0;
     cloudSurfaceError = false;
     lastPushedRows = confirmed;
     clearCloudPending(confirmed);
     dirtyUntil = 0;
     syncCloudGameChannel();
-    if (cloudInsertReconcileAccountId === authUser.id) scheduleCloudPull(50);
+    if (cloudInsertReconcile && cloudInsertReconcile.accountId === pushAccountId) scheduleCloudPull(50);
   }
 
   // "בטל אחרונה" really removes an entry, and undoing a player's last buy-in removes the player.
@@ -2031,9 +2077,11 @@
   // game is open — a row whose game has since closed is simply left alone.
   async function pushCloudGameDeletes(table, deletes) {
     if (!supabase || !authUser) return;
+    const deleteAccountId = authUser.id;
     const ids = (deletes || []).map(row => String(row.id)).filter(isCloudId);
     if (!ids.length) return;
     const result = await supabase.from(table).delete().in("id", ids);
+    if (!authUser || authUser.id !== deleteAccountId) return;
     if (result && result.error) throw result.error;
   }
 
@@ -2067,14 +2115,14 @@
       // RLS already narrows this to the groups I am an active member of (or created), so there
       // is nothing to filter here — group_members/invites then follow those ids.
       const groupsResult = await supabase.from("groups").select("*");
-      if (groupsResult.error) { setSync(false, "שגיאת סנכרון — נשמר מקומית"); return; }
+      if (groupsResult.error) { failCloudPull(pullAccountId); return; }
       const groupRows = groupsResult.data || [];
       const groupIds = groupRows.map(row => row.id).filter(Boolean);
       let memberRows = [];
       let inviteRows = [];
       if (groupIds.length) {
         const membersResult = await supabase.from("group_members").select("*").in("group_id", groupIds);
-        if (membersResult.error) { setSync(false, "שגיאת סנכרון — נשמר מקומית"); return; }
+        if (membersResult.error) { failCloudPull(pullAccountId); return; }
         memberRows = membersResult.data || [];
         const invitesResult = await supabase.from("invites").select("*").in("group_id", groupIds);
         if (!invitesResult.error) inviteRows = invitesResult.data || [];
@@ -2083,7 +2131,7 @@
       // games_select is app_can_read_game(): my groups' games plus any ad-hoc game I created or
       // played in. Only the most recent closed games are worth carrying to the device.
       const gamesResult = await supabase.from("games").select("*");
-      if (gamesResult.error) { setSync(false, "שגיאת סנכרון — נשמר מקומית"); return; }
+      if (gamesResult.error) { failCloudPull(pullAccountId); return; }
       const allGames = gamesResult.data || [];
       const openGames = allGames.filter(row => row && row.phase !== "closed");
       const closedGames = allGames.filter(row => row && row.phase === "closed")
@@ -2110,7 +2158,7 @@
         guests: guestsResult.error ? [] : (guestsResult.data || []),
       }, pullSeq, pullAccountId);
     } catch (e) {
-      setSync(false, "שגיאת סנכרון — נשמר מקומית");
+      failCloudPull(pullAccountId);
     } finally {
       cloudPulling = false;
     }
@@ -2226,13 +2274,25 @@
     // rebuilt server baseline makes an existing row known, so scheduleCloudPush sends the local
     // intended version through the normal UPDATE pass. A newer write aborts this pull above, and
     // a changed account cannot consume another account's reconciliation marker.
-    if (cloudInsertReconcileAccountId === authUser.id) {
-      lastPushedRows = serverBaseline;
-      cloudInsertReconcileAccountId = "";
-      cloudSurfaceError = false;
-      scheduleCloudPush();
-      refreshSyncDot();
-      return;
+    let missingReconcileRows = [];
+    if (cloudInsertReconcile && cloudInsertReconcile.accountId === authUser.id) {
+      missingReconcileRows = cloudRowsMissingReconcileIds(serverBaseline, cloudInsertReconcile);
+      if (missingReconcileRows.length) {
+        // The row is not visible in this account's SELECT snapshot (for example an RLS conflict).
+        // Install the visible baseline but do not schedule another INSERT immediately: that would
+        // loop forever while the row remains invisible. The local pending id stays durable and a
+        // later edit/retry can try it again.
+        lastPushedRows = serverBaseline;
+        cloudInsertReconcile = null;
+        cloudSurfaceError = true;
+      } else {
+        lastPushedRows = serverBaseline;
+        cloudInsertReconcile = null;
+        cloudSurfaceError = false;
+        scheduleCloudPush();
+        refreshSyncDot();
+        return;
+      }
     }
     const merged = normalize(mergeCloudIntoState(state, pulled, { keepLocalIds: cloudKeepLocalIds() }));
     if (merged) state = merged;
@@ -2240,7 +2300,7 @@
     // The baseline is what the SERVER holds, not what we now hold: a record the merge kept is
     // absent from it and goes up on the next push (that is the first-device seeding rule).
     lastPushedRows = serverBaseline;
-    cloudSurfaceError = false; // the server's view just landed and superseded whatever was refused
+    cloudSurfaceError = missingReconcileRows.length > 0;
     render();
     refreshSyncDot();
     syncCloudGameChannel();
@@ -2345,7 +2405,7 @@
     gameDoc = null;
     pendingRemote = null;
     lastPushedRows = null;
-    cloudInsertReconcileAccountId = "";
+    cloudInsertReconcile = null;
     cloudGameCreators = {};
     cloudPushAttempt = 0;
     cloudSurfaceError = false;
@@ -2367,7 +2427,7 @@
     state.cloudPendingIds = [];
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     lastPushedRows = null;
-    cloudInsertReconcileAccountId = "";
+    cloudInsertReconcile = null;
     cloudProfileIds = [];
     cloudGameCreators = {};
     cloudGuestRows = [];
@@ -3355,13 +3415,17 @@
   // Reads a ?friend= token out of a location.search string — same normalization and alphabet
   // check as parseJoinToken below, on the distinct "friend" param, so a URL carrying both never
   // confuses one for the other.
+  function normalizeFriendToken(raw) {
+    let decoded = "";
+    try { decoded = decodeURIComponent(String(raw == null ? "" : raw)); } catch (e) { decoded = String(raw == null ? "" : raw); }
+    const token = decoded.toLowerCase().replace(/[\s-]/g, "");
+    return /^[0-9a-f]{64}$/.test(token) ? token : null;
+  }
+
   function parseFriendToken(search) {
     const match = String(search || "").match(/[?&]friend=([^&]*)/);
     if (!match) return null;
-    let raw = "";
-    try { raw = decodeURIComponent(match[1]); } catch (e) { raw = match[1]; }
-    const token = String(raw).toLowerCase().replace(/[\s-]/g, "");
-    return /^[0-9a-f]{64}$/.test(token) ? token : null;
+    return normalizeFriendToken(match[1]);
   }
 
   function formatFriendInviteToken(token) {
@@ -3712,6 +3776,21 @@
     const ids = new Set((Array.isArray(c.profileIds) ? c.profileIds : []).filter(isCloudId));
     if (isCloudId(c.profileId)) ids.add(c.profileId);
     return ids;
+  }
+
+  // INSERT ... DO NOTHING reconciliation is keyed by the local collection name. Keeping this
+  // check pure makes the important no-loop behavior easy to verify without a Supabase client.
+  function cloudRowsMissingReconcileIds(serverBaseline, marker) {
+    const missing = [];
+    const baseline = serverBaseline || {};
+    const idsByCollection = marker && marker.ids ? marker.ids : {};
+    Object.keys(idsByCollection).forEach(collection => {
+      const rows = Array.isArray(baseline[collection]) ? baseline[collection] : [];
+      (Array.isArray(idsByCollection[collection]) ? idsByCollection[collection] : []).forEach(id => {
+        if (!rows.some(row => row && String(row.id) === String(id))) missing.push(collection + ":" + id);
+      });
+    });
+    return missing;
   }
   // A profile row carries no name of its own on groups/invites/friendships, so the only name we
   // can honestly restore is my own; anybody else's comes from a membership snapshot instead.
@@ -7628,7 +7707,7 @@
       if (error) throw error;
       if (!cloudMode() || !authUser || authUser.id !== sessionUserId) return;
       const row = Array.isArray(data) ? data[0] : data;
-      const token = row && parseFriendToken(row.token);
+      const token = row && normalizeFriendToken(row.token);
       if (!token) throw new Error("bad friend invite token");
       const link = friendInviteLink(token, location.origin, location.pathname);
       const message = buildFriendShareText(me, link);
@@ -8658,7 +8737,7 @@
     if (!params.has("friend")) return;
     params.delete("friend");
     const qs = params.toString();
-    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
   }
 
   function friendNoticeParts() {
@@ -8675,6 +8754,11 @@
     pendingFriendToken = null;
     friendNoticeParts().notice.hidden = true;
     stripFriendFromUrl();
+    const joinToken = parseJoinToken(location.search);
+    if (joinToken) {
+      pendingJoinToken = joinToken;
+      showJoinNotice(joinToken, false);
+    }
   }
 
   function friendNoticeMessage(status) {
@@ -8714,6 +8798,11 @@
         ui.acceptBtn.hidden = true;
         pendingFriendToken = null;
         stripFriendFromUrl();
+        const joinToken = parseJoinToken(location.search);
+        if (joinToken) {
+          pendingJoinToken = joinToken;
+          showJoinNotice(joinToken, false);
+        }
         return;
       }
       await pullCloud();

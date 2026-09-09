@@ -181,8 +181,8 @@ test('a push failure retries a retryable error with backoff and surfaces the res
   const catchBlock = storeSource.slice(storeSource.indexOf('    } catch (e) {'));
   assert.match(catchBlock, /if \(classifyCloudError\(e\) === "retry"\) \{[\s\S]*?cloudBackoffDelay\(cloudPushAttempt, Math\.random\(\)\)[\s\S]*?cloudPushAttempt\+\+;[\s\S]*?pushCloud\(\)/,
     'a retryable failure schedules the next attempt from the bounded/jittered helper');
-  assert.match(catchBlock, /cloudSurfaceError = true;\n {6}scheduleCloudPull\(1200\)/,
-    'a non-retryable failure surfaces on the dot and re-pulls so the server wins, without looping');
+  assert.match(catchBlock, /cloudSurfaceError = true;[\s\S]*?if \(pushIsCurrent\(\)\) scheduleCloudPull\(1200\)/,
+    'a non-retryable failure surfaces on the dot and re-pulls for the same account, without looping');
   assert.match(storeSource, /clearCloudPending\(confirmed\)/, 'only the rows that landed stop being pending');
 });
 
