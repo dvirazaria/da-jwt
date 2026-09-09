@@ -89,28 +89,90 @@ Compare to the design this replaces: every claim cost the claimant 1 tap *and* a
 separate 1-tap approval, plus an indefinite wait between the two. Paths 1 and 3 both collapse that
 to at most 1 tap, by exactly one person, with no wait.
 
-## What was skipped, and why (path 2)
+## Path 2 — verified contact match: investigated, not built (docs/backend/verified-link.sql)
 
-`guests` stores no phone/email column, and — more importantly — **no local data model carries one
-either**: a guest is not a stored local collection at all (`kupa-sgura.html` has no `state.guests`;
-`grep` for it returns nothing). A guest's identity is derived implicitly from `displayName` +
-`guestId` wherever it appears in `groupMembers`/`players`, and the only creation path
-(`addMemberByName`, `renderStartGameAddGuest`) takes a typed name and nothing else. Adding contact
-capture would mean widening the `GroupMember`/`Player` pure data contracts (typedefs, `normalize*`,
-`*ToRow`/`rowTo*`, `CLOUD_PUSHABLE`) — the exact "single source of truth" surfaces `CLAUDE.md`'s
-architecture contract calls out as high-risk — for a layer that is explicitly the *automatic fast
-path* on top of two mechanisms (bound invites, self-claim) that already deliver the stated goal
-(zero approvals in the happy path) on their own. It also risks colliding with the parallel agent's
-invite-creation lane, and the task explicitly sanctions skipping it with justification. Flagged as
-a follow-up task (see below) rather than built half-way.
+A later pass (2026-09-10) was asked to actually build path 2, on the explicit condition that
+"verified" means only a contact address the identity provider itself confirmed — the `email_verified`
+claim for a Google identity — never anything typed by a user (the two blocked branches,
+`codex/tier2-sql` @ `a7b8065` and `codex/tier2-client` @ `fa6f684`, matched on an email/phone stored
+on the guest row that nobody had verified, and were correctly blocked in security review for it).
+Full reasoning lives in `docs/backend/verified-link.sql`; summary:
+
+- **Where the verified claim lives — confirmed, not assumed.** `auth.jwt() -> 'user_metadata'`
+  (backed by `auth.users.raw_user_meta_data`) is what a Google sign-in's `email_verified` flag lands
+  in at first sign-in, but Supabase's own docs state plainly that `user_metadata` is writable by the
+  end user via `supabase.auth.updateUser()` — by the time a client can influence it, it is a
+  same-as-signup-time copy of the provider's claim, not the claim itself. The trustworthy field is
+  `auth.users.email_confirmed_at`, set only by the Auth service (never by a client call), reachable
+  from any `SECURITY DEFINER` function via `SELECT ... FROM auth.users WHERE id = auth.uid()` — the
+  same table `app_current_profile_id()`'s callers already sit behind. **Assumed, not confirmed:** no
+  SQL was run against the live project (task instruction), so nobody has spot-checked a real
+  Google-signed-in row's literal value here — `verified-link.sql`'s own verify block says to check it
+  once.
+- **Why the feature still cannot be built.** The caller's half can be trusted; the guest side cannot.
+  `guests` carries no email/phone column (confirmed again this pass — same finding as below), and the
+  obvious fix, a `guests.contact_email` typed by whoever adds the guest, reintroduces the exact bug
+  class the blocked branches shipped, just moved to the other side of the equals sign: anyone can add
+  a guest to a group the real person has never joined and type that person's real email as its
+  contact; when that person later signs up for any unrelated reason with their own, genuinely
+  verified address, an automatic matcher would silently attach someone else's group history and debts
+  to their new account, with no invite, no tap, and no standing check the person receiving the merge
+  ever sees. Verifying the sign-in side does not repair a hole on the data side — this is a missing-
+  authorization problem, not a missing-claim problem, and paths 1 and 3 both already solve it by
+  anchoring the guest side to a human's in-context decision (a member picking a specific guest; a
+  claimant already visible in a shared group) rather than to typed data.
+- **Duplicate address / zero-exposure / silent-vs-shown, answered on the hypothetical anyway** (the
+  task asked for a ruling even if the path doesn't ship): two guests sharing an address must refuse
+  rather than guess — a `contact_email` was never going to be unique, so two independently-wrong
+  matches are exactly as likely as one right one. Zero-exposure must NOT be overridden by
+  verification — the caller's own identity being well-proven says nothing about whether the guest
+  side was ever authorized, so any hypothetical path-2 would inherit `app_guest_has_zero_exposure`
+  unchanged. It would have to be shown, not silent — unlike path 1, its "authorization" would be an
+  inference from data rather than a witnessed action, so confirming it needs a person to see the
+  proposal, which reintroduces the very approval step this whole v2 design exists to remove. That
+  last point is why a safe contact model still would not clear the "zero approvals in the happy path"
+  bar paths 1 and 3 already clear.
+- **Recommended alternative, not built:** strengthen path 1 instead of adding a new path — let the
+  inviter optionally type the invitee's expected email next to the existing guest-chip picker, and
+  have `app_redeem_invite` require it to match the redeemer's own `email_confirmed_at`-backed address
+  as an *extra* check before the existing silent link, never as the sole authorization. The
+  authorizing act stays the same deliberate member choice path 1 already uses; verification only adds
+  a safety net on top of it. Left as a follow-up (needs `invites.expected_email` + RPC changes) rather
+  than folded into this pass.
+- **What shipped instead:** `docs/backend/verified-link.sql` — no new linking function (there is
+  nothing safe to link against), just the documented finding above and one regression tripwire: a
+  `DO` block that raises if `guests` ever gains an `email`/`contact_email`/`phone`/`contact_phone`
+  column, so a future automatic matcher cannot get built on top of it without first re-reading why
+  that was rejected twice. No client changes were needed in `kupa-sgura.html` for this path — no
+  feature ships, so the existing path-1/path-3 UI is untouched.
+
+**Original (pre-investigation) finding, kept for history:** `guests` stores no phone/email column,
+and — more importantly — **no local data model carries one either**: a guest is not a stored local
+collection at all (`kupa-sgura.html` has no `state.guests`; `grep` for it returns nothing). A guest's
+identity is derived implicitly from `displayName` + `guestId` wherever it appears in
+`groupMembers`/`players`, and the only creation path (`addMemberByName`, `renderStartGameAddGuest`)
+takes a typed name and nothing else. Adding contact capture would mean widening the
+`GroupMember`/`Player` pure data contracts (typedefs, `normalize*`, `*ToRow`/`rowTo*`,
+`CLOUD_PUSHABLE`) — the exact "single source of truth" surfaces `CLAUDE.md`'s architecture contract
+calls out as high-risk. The later investigation above found the deeper, structural reason this stays
+unbuilt even setting that risk aside.
 
 One relevant, adjacent fact found while reading `docs/backend/security-fixes.sql`: `profiles.email`
 is currently fully readable by any friend/group-mate via `profiles_select_friends`/
 `profiles_select_group_mates`, with a **documented, deferred** plan to lock it behind a narrow
-`app_lookup_profile_by_email` RPC. Anyone building path 2 later should route any email-matching
-logic through a similarly narrow `SECURITY DEFINER` function (never a raw `guests`/`profiles` join
-exposed to the client) — the caution that review already establishes for `profiles.email` applies
-equally to matching against it.
+`app_lookup_profile_by_email` RPC. Anyone building path 2's recommended alternative later should
+route any email-matching logic through a similarly narrow `SECURITY DEFINER` function (never a raw
+`guests`/`profiles` join exposed to the client) — the caution that review already establishes for
+`profiles.email` applies equally to matching against it.
+
+## What the controller must run, and in what order
+
+1. `docs/backend/link-guest.sql` — already applied to production (paths 1 and 3; unchanged by this
+   investigation).
+2. `docs/backend/verified-link.sql` — safe to paste any time after `link-guest.sql`; order relative to
+   anything else does not matter, since it defines no function that touches `guests`/`invites`/
+   `debts` and only adds the tripwire `DO` block. Re-running it is a no-op unless `guests` has since
+   gained a contact column, in which case it raises on purpose.
 
 ## Tests
 
@@ -149,6 +211,35 @@ redesigns):
 `node --test tests/*.test.cjs` → **565 pass, 0 fail** (563 baseline − 7 old guest-claim tests + 7
 new + 2 small additions above = 565). `git diff --check` clean. The last `<script>` body parses
 with `new Function` (360,696 chars).
+
+### Tests added for the path-2 investigation (2026-09-10)
+
+`tests/verified-link.test.cjs` — **10 tests**, none touching `kupa-sgura.html` (no client code
+shipped for this path):
+
+1. `guests` (schema.sql) still carries no `email`/`phone`/`contact` column — a duplicate verified
+   address is structurally impossible to match against, never guessed.
+2. `kupa-sgura.html`'s pure section defines no client-side email/contact-matching function — an
+   unverified address can never link because nothing attempts the match.
+3. `verified-link.sql`'s regression tripwire (`information_schema.columns` + `RAISE EXCEPTION`) is
+   present and names all four candidate column shapes.
+4. `verified-link.sql` is one idempotent, `BEGIN`/`COMMIT`-wrapped file with no bare `CREATE TABLE`.
+5. `verified-link.sql` grants nothing new and carries no `service_role`/`sb_secret_`.
+6. `verified-link.sql` defines no new `SECURITY DEFINER` linking function.
+7. `verified-link.sql` does not `CREATE OR REPLACE`/`ALTER` `app_link_guest_to_profile` or
+   `app_guest_has_zero_exposure` — the double-seat guard and the zero-exposure gate are untouched.
+8. `link-guest.sql` itself (re-verified, unchanged) still enforces
+   `app_guest_has_zero_exposure`/`GUEST_LINK_HAS_EXPOSURE` inside `app_self_claim_guest`, and the
+   `'double-seat'` guard inside `app_link_guest_to_profile`.
+9. `verified-link.sql` documents `auth.users.email_confirmed_at` (not the client-writable
+   `auth.jwt()` `user_metadata` copy) as the trustworthy source, and states explicitly what was
+   confirmed versus assumed.
+10. `verified-link.sql` states the zero-exposure-must-not-be-overridden and
+    duplicate-address-refused-not-guessed rulings in text.
+
+`node --test tests/*.test.cjs` (full suite, this pass) → **621 pass, 0 fail** (611 baseline + 10
+new). `git diff --check` clean. The last `<script>` body still parses with `new Function`
+(386,965 chars — unchanged from before this pass, since no client code was added for path 2).
 
 ## Manual verification plan (two accounts)
 
@@ -205,3 +296,10 @@ with `new Function` (360,696 chars).
 `python3 build.py` was not run, `index.html`/`sw.js` were not touched, no SQL was executed, no
 browser tools were used — all per the task's explicit instructions. `git merge main` (local) was
 run first, fast-forwarding cleanly before any of the above.
+
+**2026-09-10 addendum (path-2 investigation):** same constraints held — `python3 build.py` not
+run, `index.html`/`sw.js` untouched, no SQL executed against any project, `git merge main` (local)
+run first (fast-forward, no conflicts). `kupa-sgura.html` was read but not modified: no client
+change was needed because no new linking path ships. Deliverable was
+`docs/backend/verified-link.sql` (documentation + one regression tripwire, no new
+`SECURITY DEFINER` function), this report's "Path 2" section, and `tests/verified-link.test.cjs`.
