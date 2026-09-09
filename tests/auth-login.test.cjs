@@ -83,13 +83,27 @@ test('the resend countdown is exactly Supabase\'s 60-second rate window', () => 
 
 // ---------- legal / age copy: one placeholder pair, text-only swap ----------
 
-test('LOGIN_LEGAL_NOTE and LOGIN_AGE_NOTE exist as one marked constant pair and are wired to the markup', () => {
-  assert.match(appScript, /const LOGIN_LEGAL_NOTE = ".*docs\/legal-copy\.md/);
-  assert.match(appScript, /const LOGIN_AGE_NOTE = ".*docs\/legal-copy\.md/);
-  assert.match(appScript, /authLegalNote"\)\.textContent = LOGIN_LEGAL_NOTE/);
+test('the consent line links both documents, reads gender-neutrally, and is wired to the markup', () => {
+  const legal = appScript.match(/const LOGIN_LEGAL_NOTE = '([^']*)'/);
+  assert.ok(legal, 'LOGIN_LEGAL_NOTE is defined as a single-quoted string carrying markup');
+  // The links are the part that legally matters: a sign-in wrap is only enforceable when the
+  // terms are conspicuous and reachable BEFORE the action, so both must actually be linked.
+  assert.match(legal[1], /href="terms\.html"/, 'terms must be reachable from the consent line');
+  assert.match(legal[1], /href="privacy\.html"/, 'privacy must be reachable from the consent line');
+  assert.match(legal[1], /rel="noopener"/);
+  assert.match(appScript, /const LOGIN_AGE_NOTE = "[^"]*18[^"]*"/);
+  // Gender-neutral: no second-person address anywhere in either line.
+  for (const line of [legal[1], appScript.match(/const LOGIN_AGE_NOTE = "([^"]*)"/)[1]]) {
+    assert.doesNotMatch(line, /\b(אתה|את|אתם|אתן|מסכים|מאשר|מסכימה|מאשרת)\b/,
+      `second-person or gendered wording in: ${line}`);
+  }
+  // The legal line renders as markup so its links work; the age line has none to carry.
+  assert.match(appScript, /authLegalNote"\)\.innerHTML = LOGIN_LEGAL_NOTE/);
   assert.match(appScript, /authAgeNote"\)\.textContent = LOGIN_AGE_NOTE/);
   assert.match(login, /id="authLegalNote"/);
   assert.match(login, /id="authAgeNote"/);
+  // Those links need to be visible as links, not lost in --faint body text.
+  assert.match(html, /\.login-legal a \{[^}]*text-decoration: underline/);
 });
 
 // ---------- Google branding: exact colours per theme, no turquoise border ----------

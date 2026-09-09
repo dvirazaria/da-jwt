@@ -782,6 +782,11 @@
   .login-benefit { margin-top: -10px !important; }
   .login-legal { color: var(--faint); font-size: 11px; line-height: 1.5; margin: -2px 0 0; }
   .login-legal:empty { display: none; }
+  /* The terms and privacy links carry the legal weight of this line: enforceability of a
+     sign-in-wrap notice turns on the terms being conspicuous and reachable BEFORE the action,
+     so they are underlined and in --dim rather than blending into --faint body text. */
+  .login-legal a { color: var(--dim); text-decoration: underline; text-underline-offset: 2px; }
+  .login-legal a:active { color: var(--accent); }
 
   /* sign-in: the account block sits above, the existing local name flow stays below it, quieter */
   .auth-block, .auth-step, .auth-local { display: flex; flex-direction: column; gap: 14px; }
@@ -7626,12 +7631,14 @@
   });
 
   // ---------- login (who are you — asked once per device, on first open) ----------
-  // LOGIN_LEGAL_NOTE / LOGIN_AGE_NOTE are placeholders. Final copy is being drafted separately in
-  // docs/legal-copy.md (a parallel review, not this task) — swap these two strings when it lands;
-  // showLogin() below renders them as plain textContent, so that swap is text-only, no markup or
-  // layout change, and both #authLegalNote/#authAgeNote tolerate a two-line string (see CSS).
-  const LOGIN_LEGAL_NOTE = "בהמשך אתם מאשרים את תנאי השימוש ומדיניות הפרטיות."; // placeholder — docs/legal-copy.md
-  const LOGIN_AGE_NOTE = "השירות מיועד לבני 18 ומעלה."; // placeholder — docs/legal-copy.md
+  // Final copy, researched in docs/legal-copy.md. This is a sign-in wrap: continuing IS the
+  // consent, with no separate checkbox — judged proportionate for an app that holds no money,
+  // runs no game and charges nothing. The wording is impersonal on purpose (no second-person
+  // verb, so it reads the same for everyone), and short on purpose: a line that sits next to
+  // the button and fits on one glance is the version people actually read.
+  // LOGIN_LEGAL_NOTE carries markup because the two links are the part that legally matters.
+  const LOGIN_LEGAL_NOTE = 'הכניסה מהווה הסכמה ל<a href="terms.html" target="_blank" rel="noopener">תנאי השימוש</a> ול<a href="privacy.html" target="_blank" rel="noopener">מדיניות הפרטיות</a>.';
+  const LOGIN_AGE_NOTE = "השימוש מיועד מגיל 18 ומעלה."; // self-declaration, not an enforced gate
   function showLogin() {
     const box = document.getElementById("login");
     box.hidden = false;
@@ -7659,7 +7666,9 @@
       });
       chips.appendChild(chip);
     });
-    document.getElementById("authLegalNote").textContent = LOGIN_LEGAL_NOTE;
+    // innerHTML is safe here and only here: LOGIN_LEGAL_NOTE is a literal defined above and never
+    // touches user input. The age note stays textContent — it has no markup to carry.
+    document.getElementById("authLegalNote").innerHTML = LOGIN_LEGAL_NOTE;
     document.getElementById("authAgeNote").textContent = LOGIN_AGE_NOTE;
   }
   function confirmLogin() {
