@@ -374,7 +374,7 @@ test('the sync dot is never centered on the dashboard/group shell — same corne
   const idx = html.indexOf('\n  .eyebrow {');
   assert.ok(idx >= 0, '.eyebrow base rule not found');
   assert.doesNotMatch(html.slice(idx, html.indexOf('}', idx)), /justify-content/);
-  assert.match(html, /<div class="eyebrow"><span class="dot" id="syncDot"/);
+  assert.match(html, /<div class="eyebrow"><button type="button" class="dot" id="syncDot"/);
 });
 
 test('the settings gear shows on primary non-game views, not on the group page or the table', () => {

@@ -59,9 +59,22 @@
     display: flex; align-items: center; gap: 8px;
     font-size: 11px; letter-spacing: .06em; color: var(--dim); font-weight: 400;
   }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transition: background .4s, box-shadow .4s; }
+  /* Visually a 7px circle; ::before pads its tap target to 44px without shifting any layout. */
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--faint); position: relative;
+    transition: background .4s, box-shadow .4s, opacity .3s;
+  }
+  .dot::before { content: ""; position: absolute; inset-block-start: 50%; inset-inline-start: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
   .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: breathe 2.6s ease-in-out infinite; }
+  /* מסנכרן… — actively pushing, noticeably faster than the steady "synced" breathing. */
+  .dot.syncing { animation: syncPulse .9s ease-in-out infinite; }
+  /* ממתין לרשת — safe, just not confirmed yet. Muted on purpose: must not read as an error. */
+  .dot.waiting { background: var(--dim); box-shadow: none; animation: waitPulse 3.2s ease-in-out infinite; }
+  /* שגיאת שמירה — the one state red is earned for; steady (not pulsing) reads as "needs a look". */
+  .dot.error { background: var(--bad); box-shadow: 0 0 8px var(--bad); animation: none; }
   @keyframes breathe { 50% { box-shadow: 0 0 14px var(--accent); opacity: .7; } }
+  @keyframes syncPulse { 50% { box-shadow: 0 0 14px var(--accent); opacity: .5; } }
+  @keyframes waitPulse { 50% { opacity: .45; } }
   h1 {
     font-weight: 800; font-size: clamp(26px, 7vw, 34px); letter-spacing: -0.02em;
     margin: 14px 0 0; line-height: 1.05; color: var(--text);
@@ -1091,7 +1104,7 @@
     <img class="suits-mark-light" src="data:image/png;base64,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" alt="" draggable="false">
   </div>
   <header class="load-in">
-    <div class="eyebrow"><span class="dot" id="syncDot" title="מצב סנכרון"></span></div>
+    <div class="eyebrow"><button type="button" class="dot" id="syncDot" title="מצב סנכרון" aria-label="מצב סנכרון"></button></div>
     <div class="table-header" id="tableHeader" hidden></div>
   </header>
 
@@ -1385,6 +1398,12 @@
       invites: Array.isArray(s.invites) ? s.invites.map(normalizeInvite).filter(Boolean) : [],
       friendships: Array.isArray(s.friendships) ? s.friendships.map(normalizeFriendship).filter(Boolean) : [],
       leaderRef: s.leaderRef ? normalizeParticipantRef(s.leaderRef) : null,
+      // The durable cloud outbox: row ids written locally that the last confirmed push has not
+      // (yet) taken off the server's hands. Lives inside this one document on purpose -- it must
+      // survive refresh/tab-kill/cold-boot exactly like everything else here does, through the
+      // same normalize()/save() path, never a second localStorage key.
+      cloudPendingIds: Array.isArray(s.cloudPendingIds)
+        ? s.cloudPendingIds.filter(v => v !== null && v !== undefined && v !== "").map(String) : [],
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
     };
   }
@@ -1427,7 +1446,13 @@
 
   function setSync(on, label) {
     const d = document.getElementById("syncDot");
-    if (d) { d.classList.toggle("on", on); d.title = label; }
+    if (!d) return;
+    d.classList.toggle("on", on);
+    // The legacy (non-cloud) sync path only ever has two states; clear any leftover cloud-mode
+    // class so a sign-out (or the Claude-document fallback) never leaves a stale waiting/error dot.
+    d.classList.remove("syncing", "waiting", "error");
+    d.title = label;
+    d.setAttribute("aria-label", label);
   }
 
   function remoteBody() {
@@ -1503,8 +1528,10 @@
       return;
     }
     // Groups, members, invites, the open table and history all refresh when the tab comes back;
-    // between visits the realtime channel keeps the open table current on its own.
-    if (cloudMode()) pullCloud();
+    // between visits the realtime channel keeps the open table current on its own. cloudRetryNow
+    // flushes any outbox left over from before the tab was hidden first, so a stale server view
+    // can never win a race against a write that has not left the phone yet.
+    if (cloudMode()) cloudRetryNow();
   });
 
   // Applies a parked remote snapshot once it is safe: not during an active
@@ -1615,14 +1642,15 @@
   let cloudPullTimer = null;
   let cloudPulling = false;
   let cloudPushing = false;  // a push is in flight: its writes are not on the server YET
-  // Every local record id written since the last push that confirmed it. This is the ONLY thing
-  // that decides whether a pull may drop a local row — never an inference from the diff baseline,
-  // which says what the server held at some earlier moment and nothing about what we just wrote.
-  let cloudPendingIds = new Set();
   // Bumped on every local write. A pull carries the value it saw when its SELECTs went out; if it
   // changed by the time the payload lands, the payload is older than the device and is dropped.
   let cloudWriteSeq = 0;
-  let cloudPushRetried = false; // a failed push retries once before falling back to a pull
+  // How many consecutive retryable push failures in a row -- feeds cloudBackoffDelay. Reset to 0
+  // by a success, a non-retryable ("surface") failure, and by cloudRetryNow's fresh reconnect.
+  let cloudPushAttempt = 0;
+  // A non-retryable push failure (RLS/constraint/4xx) is showing on the dot until the next push or
+  // pull resolves it. In memory only -- after a refresh the app is going to try again regardless.
+  let cloudSurfaceError = false;
   let lastPushedRows = null; // the diff baseline: what the server is known to hold
   let cloudProfileIds = [];  // every profile id seen in a pulled row (see CloudCtx)
   let cloudGameCreators = {}; // gameId -> games.created_by, so a second device never rewrites it
@@ -1633,6 +1661,29 @@
 
   // `authUser` is declared further down, in the auth section; every caller here runs after boot.
   function cloudMode() { return !!(supabase && authUser); }
+
+  // The four honest sync-dot states, computed fresh from the current truth every time -- never a
+  // fifth ad-hoc label. See cloudSyncLabel (cloud mapping (pure)) for the branching itself.
+  function setCloudSync(kind, label) {
+    const d = document.getElementById("syncDot");
+    if (!d) return;
+    d.classList.toggle("on", kind === "synced" || kind === "syncing");
+    d.classList.toggle("syncing", kind === "syncing");
+    d.classList.toggle("waiting", kind === "waiting");
+    d.classList.toggle("error", kind === "error");
+    d.title = label;
+    d.setAttribute("aria-label", label);
+  }
+  function refreshSyncDot() {
+    if (!cloudMode()) return;
+    // cloudOutboxSignal, not the bare pending-id count: a buy-in waiting on a scheduled/backed-off
+    // push touches no group collection at all, so state.cloudPendingIds alone would undercount it
+    // and the dot would lie and say "synced" while a retry is still sitting on the clock.
+    const info = { syncing: cloudPushing, error: cloudSurfaceError, pendingCount: cloudOutboxSignal() };
+    const label = cloudSyncLabel(info);
+    const kind = info.syncing ? "syncing" : info.error ? "error" : info.pendingCount > 0 ? "waiting" : "synced";
+    setCloudSync(kind, label);
+  }
 
   // Games the server is already known to hold. A closed game only goes up when the server saw it
   // open first: games_insert_member has WITH CHECK (phase <> 'closed'), so old local history can
@@ -1687,26 +1738,57 @@
     return ids;
   }
   // Everything a pull must not delete: rows the baseline never confirmed, plus every id written
-  // locally since the last push that confirmed it (cloudPendingIds). The second half is the one
-  // that matters — a push confirms a row the instant its upsert returns, and a pull whose SELECTs
-  // went out before that upsert would otherwise "learn" the row does not exist.
+  // locally since the last push that confirmed it (state.cloudPendingIds). The second half is the
+  // one that matters — a push confirms a row the instant its upsert returns, and a pull whose
+  // SELECTs went out before that upsert would otherwise "learn" the row does not exist.
   function cloudKeepLocalIds() {
-    return keepLocalIdsFor(cloudPendingIds, cloudUnconfirmedIds());
+    return keepLocalIdsFor(state.cloudPendingIds, cloudUnconfirmedIds());
   }
-  // Marks every group-collection record as pending. Called on each local write, before the push:
-  // over-marking only ever costs a row that a pull leaves alone for one round trip.
+  // Marks every group-collection record as pending, directly on state -- the durable outbox, not a
+  // second in-memory copy. Called on each local write, before the push: over-marking only ever
+  // costs a row that a pull leaves alone for one round trip.
   function markCloudPending() {
-    cloudPendingIds = markPendingIds(cloudPendingIds, cloudCollections());
+    state.cloudPendingIds = Array.from(markPendingIds(state.cloudPendingIds, cloudCollections()));
   }
   // A push confirmed these rows: they are on the server, so they no longer need protecting.
   function clearCloudPending(confirmedRows) {
-    cloudPendingIds = clearPendingIds(cloudPendingIds, confirmedRows);
+    state.cloudPendingIds = Array.from(clearPendingIds(state.cloudPendingIds, confirmedRows));
   }
+  // How much is sitting in the outbox right now, counting both the durable pending-id list and any
+  // push that is currently scheduled or in flight (which has not updated that list yet). Feeds
+  // cloudReconnectOrder so a reconnect never pulls a stale server view on top of an unsent write.
+  function cloudOutboxSignal() {
+    return (state.cloudPendingIds || []).length + (cloudPushTimer || cloudPushing ? 1 : 0);
+  }
+  // Flushes the outbox (if there is one) before pulling -- the same "push wins the race" rule
+  // enterCloudMode uses unconditionally at boot, applied here as the cheaper, conditional version
+  // for a session that is already live: an empty outbox has nothing to protect, so the plain pull
+  // this replaced stays the fast path. Used by the online event, visibilitychange -> visible, and
+  // a tap on the sync dot -- exactly where "retry immediately" (DESIGN.md's honest-states ask) and
+  // "push before pull on reconnect" both point.
+  function cloudRetryNow() {
+    if (!cloudMode()) return;
+    if (cloudReconnectOrder(cloudOutboxSignal()) === "pull-then-push") { pullCloud(); return; }
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = null;
+    cloudPushAttempt = 0; // a fresh reconnect signal: give the backoff a clean start
+    pushCloud().then(() => { if (cloudMode()) return pullCloud(); }).catch(() => {});
+  }
+  // The network coming back is worth acting on immediately rather than waiting out whatever is
+  // left of the current backoff delay -- a table's whole point is that everyone converges fast.
+  window.addEventListener("online", cloudRetryNow);
+  // Tap the sync dot to force a retry -- a no-op in every other mode (cloudRetryNow itself is the
+  // only guard needed) and harmless mid-sync since pushCloud/pullCloud are already re-entrant.
+  const syncDotEl = document.getElementById("syncDot");
+  if (syncDotEl) syncDotEl.addEventListener("click", cloudRetryNow);
 
   function scheduleCloudPush() {
     if (!supabase || !authUser) return;
     cloudWriteSeq++;
     markCloudPending();
+    // The outbox itself must survive a refresh, not wait for whatever save() call happens next --
+    // this is what makes it durable rather than just another in-memory retry flag.
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     dirtyUntil = Date.now() + 6000; // a fresh local edit outranks an incoming pull, as before
     syncCloudGameChannel(); // starting or closing a table changes which game we listen to
     clearTimeout(cloudPushTimer);
@@ -1724,7 +1806,8 @@
     // never sent. The second caller simply becomes the next scheduled push.
     if (cloudPushing) { clearTimeout(cloudPushTimer); cloudPushTimer = setTimeout(() => { cloudPushTimer = null; pushCloud(); }, 400); return; }
     cloudPushing = true;
-    try { await pushCloudRun(); } finally { cloudPushing = false; }
+    refreshSyncDot(); // "מסנכרן…" -- an in-flight push always wins the label
+    try { await pushCloudRun(); } finally { cloudPushing = false; refreshSyncDot(); }
   }
   async function pushCloudRun() {
     if (!supabase || !authUser) return;
@@ -1741,7 +1824,6 @@
     // server's rows with it.
     const editable = new Set((next.games || []).map(row => String(row.id)));
     const isEditable = row => editable.has(String(row.game_id || ""));
-    setSync(true, "מסנכרן…");
     try {
       for (const pair of CLOUD_TABLES) {
         // gamesClosed IS the frozen set, so it keeps its rows; everything else drops the rows of
@@ -1813,29 +1895,33 @@
         if (row.created_by) cloudGameCreators[String(row.id)] = row.created_by;
       });
     } catch (e) {
-      // An RLS refusal (editing a group I no longer administer, or a close the server rejects) is
-      // not a retry: the server is right and the next pull brings its version back — the local
-      // history entry stays exactly where it is. A network failure retries on the next save.
       lastPushedRows = confirmed;
       clearCloudPending(confirmed); // whatever DID land stops being pending; the rest stays protected
-      setSync(false, "שגיאת שמירה — נשמר מקומית");
-      // One retry of the whole payload (the failed collection included) before falling back to a
-      // pull: a transient network failure must not leave the row waiting for the next local edit.
-      if (!cloudPushRetried) {
-        cloudPushRetried = true;
+      // Network/timeout/5xx is the server's problem (or no server reached at all) and is worth
+      // retrying with bounded exponential backoff + full jitter — nothing here ever gives up, it
+      // only waits longer, so a buy-in typed on a flaky connection keeps trying on its own even if
+      // nobody reopens the app. An RLS refusal or a constraint violation (4xx) is the payload's
+      // problem: retrying the exact same rows would just fail again, so this stops looping,
+      // surfaces the error, and lets the next pull bring the server's version back — the local
+      // history entry stays exactly where it is, same "server wins" rule as always.
+      if (classifyCloudError(e) === "retry") {
+        cloudSurfaceError = false;
+        const delay = cloudBackoffDelay(cloudPushAttempt, Math.random());
+        cloudPushAttempt++;
         clearTimeout(cloudPushTimer);
-        cloudPushTimer = setTimeout(() => { cloudPushTimer = null; pushCloud(); }, 900);
+        cloudPushTimer = setTimeout(() => { cloudPushTimer = null; pushCloud(); }, delay);
         return;
       }
-      cloudPushRetried = false;
+      cloudPushAttempt = 0;
+      cloudSurfaceError = true;
       scheduleCloudPull(1200);
       return;
     }
-    cloudPushRetried = false;
+    cloudPushAttempt = 0;
+    cloudSurfaceError = false;
     lastPushedRows = confirmed;
     clearCloudPending(confirmed);
     dirtyUntil = 0;
-    setSync(true, "מסונכרן לחשבון");
     syncCloudGameChannel();
   }
 
@@ -2030,8 +2116,9 @@
         .concat(history.map(gameSnapshotFromHistory)),
       debts: pulled.debts,
     }, cloudContext());
-    setSync(true, "מסונכרן לחשבון");
+    cloudSurfaceError = false; // the server's view just landed and superseded whatever was refused
     render();
+    refreshSyncDot();
     syncCloudGameChannel();
   }
 
@@ -2110,12 +2197,23 @@
     if (!merged) return;
     state = merged;
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
-    setSync(true, "מסונכרן לחשבון");
+    cloudSurfaceError = false;
     render();
+    refreshSyncDot();
   }
 
   // A session has arrived: hand ownership over once, seed the server with whatever this device
   // has that it does not, and stop the Claude-document sync for good.
+  //
+  // Push before pull, unconditionally: after a cold boot (or a fresh sign-in) there is no live
+  // in-memory signal left for "is the open game actually confirmed" -- cloudPendingIds only ever
+  // tracked the four group collections, never entries/buy-ins, and dirtyUntil/cloudPushTimer are
+  // gone the moment the tab was refreshed. A pull that ran first could load the server's still-old
+  // copy of the open game right on top of a buy-in that never reached it (pickCloudOpenGame sees
+  // the same gameId and "load"s the server's row) -- silently, with no error, because the push
+  // that follows would just confirm the now-corrupted state. Pushing first can never do that: it
+  // only ever sends what THIS device has. cloudRetryNow (below) is the cheaper, conditional
+  // version used once the session is already live and the in-memory guards are trustworthy again.
   function enterCloudMode() {
     if (!supabase || !authUser) return;
     clearTimeout(saveTimer);
@@ -2124,7 +2222,9 @@
     pendingRemote = null;
     lastPushedRows = null;
     cloudGameCreators = {};
-    pullCloud().then(() => { if (cloudMode()) return pushCloud(); }).catch(() => {});
+    cloudPushAttempt = 0;
+    cloudSurfaceError = false;
+    pushCloud().then(() => { if (cloudMode()) return pullCloud(); }).catch(() => {});
   }
   // Signed out: keep every local record exactly as it is and simply stop talking to the server.
   function exitCloudMode() {
@@ -2134,8 +2234,10 @@
     cloudPullTimer = null;
     cloudPulling = false;
     cloudPushing = false;
-    cloudPushRetried = false;
-    cloudPendingIds = new Set();
+    cloudPushAttempt = 0;
+    cloudSurfaceError = false;
+    state.cloudPendingIds = [];
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     lastPushedRows = null;
     cloudProfileIds = [];
     cloudGameCreators = {};
@@ -4237,6 +4339,53 @@
     const ids = new Set((Array.isArray(unconfirmedIds) ? unconfirmedIds : []).map(String));
     (pending || []).forEach(id => ids.add(String(id)));
     return Array.from(ids);
+  }
+
+  // ---- retry: bounded exponential backoff with full jitter, and error classification ----
+  // Full jitter (the well-known "Exponential Backoff And Jitter" shape): the delay is chosen
+  // uniformly between 0 and the attempt's own ceiling, so a whole table of phones that dropped
+  // together do not all retry in the same instant. The ceiling doubles every attempt and never
+  // grows past CLOUD_BACKOFF_CAP_MS, so the wait is bounded even if the network never recovers.
+  const CLOUD_BACKOFF_BASE_MS = 1000;
+  const CLOUD_BACKOFF_CAP_MS = 15000;
+  function cloudBackoffDelay(attempt, randomUnit) {
+    const n = Math.max(0, Math.floor(Number(attempt) || 0));
+    const r = Math.min(1, Math.max(0, Number(randomUnit) || 0));
+    const ceiling = Math.min(CLOUD_BACKOFF_CAP_MS, CLOUD_BACKOFF_BASE_MS * Math.pow(2, n));
+    return Math.round(ceiling * r);
+  }
+  // A network hiccup, a timeout, or a 5xx is the server's problem (or no server reached at all)
+  // and is always worth retrying. An RLS refusal or a constraint violation was rejected on its
+  // merits — retrying the identical payload only wastes another round trip, so the caller surfaces
+  // it once and re-pulls so the server's version wins, the same rule pushCloudRun already used.
+  const CLOUD_SURFACE_CODES = { "22P02": 1, "23502": 1, "23503": 1, "23505": 1, "42501": 1, "42883": 1 };
+  function classifyCloudError(error) {
+    const e = error || {};
+    const status = Number(e.status || e.httpStatus || e.statusCode || 0);
+    if (status === 408 || status === 429 || status >= 500) return "retry";
+    if (status >= 400) return "surface";
+    const code = String(e.code || "");
+    if (code && (CLOUD_SURFACE_CODES[code] || /^(23|42)/.test(code))) return "surface"; // integrity / access-rule classes
+    const text = String(e.message || e.name || "");
+    if (/network|fetch|timeout|abort|offline/i.test(text)) return "retry";
+    return "retry"; // an unrecognized shape defaults to safety, same as the old universal retry
+  }
+  // The four honest sync-dot states, and nothing else — an in-flight push always wins the label
+  // (something is visibly happening), then a surfaced error (needs the next push/pull to clear
+  // it), then a non-empty outbox (safe, just not on the server yet), and only then "all confirmed".
+  function cloudSyncLabel(info) {
+    const s = info || {};
+    const pending = Math.max(0, Math.floor(Number(s.pendingCount) || 0));
+    if (s.syncing) return "מסנכרן…";
+    if (s.error) return "שגיאת שמירה";
+    if (pending > 0) return "ממתין לרשת (" + pending + " שינויים)";
+    return "מסונכרן";
+  }
+  // On reconnect (network back, tab visible again, a tap on the dot) a stale pull must never win a
+  // race against a write that has not left the phone: flush the outbox first, then pull. An empty
+  // outbox has nothing to protect, so the cheaper pull-first order is kept for the common case.
+  function cloudReconnectOrder(pendingCount) {
+    return (Math.floor(Number(pendingCount) || 0) > 0) ? "push-then-pull" : "pull-then-push";
   }
 
   // Self-heal for the membership row this bug used to lose. Opening a group that I created and
