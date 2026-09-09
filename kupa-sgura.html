@@ -6092,6 +6092,19 @@
     return { id: user.id, email: user.email || "", displayName };
   }
 
+  async function updateProfileDisplayName(name) {
+    if (!supabase || !authUser) return false;
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ display_name: name })
+        .eq("id", authUser.id);
+      if (error) return false;
+      authUser.displayName = name;
+      return true;
+    } catch (e) { return false; }
+  }
+
   async function applySession(session) {
     const user = session && session.user;
     if (!user) {
@@ -6798,15 +6811,15 @@
     account.textContent = (authUser && authUser.email) || "";
     account.hidden = !account.textContent;
     // No session but a client is reachable: offer a way back in without wiping the local name/
-    // history. Local names are edited beside the displayed name; this button stays sign-out only.
+    // history. The pencil edits either the local name or the signed-in profiles row; this button
+    // stays sign-out only.
     const canSignIn = !authUser && !!supabase;
     document.getElementById("setSignInNote").hidden = !canSignIn;
     document.getElementById("setSignInBtn").hidden = !canSignIn;
     document.getElementById("setSwapBtn").hidden = !authUser;
     document.getElementById("setSwapBtn").textContent = "התנתקות";
-    const canEditName = !authUser;
-    document.getElementById("setNameEdit").hidden = !canEditName;
-    document.getElementById("setNameEditor").hidden = !canEditName || !setNameEditing;
+    document.getElementById("setNameEdit").hidden = false;
+    document.getElementById("setNameEditor").hidden = !setNameEditing;
     document.getElementById("setNameInput").value = me || "";
     const c = loadContact();
     document.getElementById("setPhone").value = c.phone || "";
@@ -6841,10 +6854,11 @@
     setNameEditing = false;
     refreshSettings();
   }
-  function saveSetName() {
+  async function saveSetName() {
     const input = document.getElementById("setNameInput");
     const name = input.value.trim();
     if (!name) { shakeEl(input); return; }
+    if (authUser && !(await updateProfileDisplayName(name))) { shakeEl(input); return; }
     me = name;
     saveMe();
     setNameEditing = false;

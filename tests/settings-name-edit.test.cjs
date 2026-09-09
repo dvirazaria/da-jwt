@@ -23,11 +23,25 @@ test('the inline editor reuses the existing local name persistence and never ope
   assert.doesNotMatch(body, /\b(alert|confirm)\s*\(/);
 });
 
-test('signed-in accounts keep sign-out while only the supported local-name model exposes editing', () => {
+test('signed-in accounts can edit their persisted profile name without losing the sign-out action', () => {
   const start = appScript.indexOf('function refreshSettings()');
   const close = appScript.indexOf('\n  }', start);
   const body = appScript.slice(start, close);
-  assert.match(body, /const canEditName = !authUser/);
-  assert.match(body, /setNameEdit"\)\.hidden = !canEditName/);
-  assert.match(body, /setNameEditor"\)\.hidden = !canEditName \|\| !setNameEditing/);
+  assert.match(body, /setNameEdit"\)\.hidden = false/);
+  assert.match(body, /setNameEditor"\)\.hidden = !setNameEditing/);
+
+  const updateStart = appScript.indexOf('async function updateProfileDisplayName(name)');
+  const updateClose = appScript.indexOf('\n  }', updateStart);
+  const updateBody = appScript.slice(updateStart, updateClose);
+  assert.ok(updateStart >= 0, 'the signed-in profile update helper is missing');
+  assert.match(updateBody, /if \(!supabase \|\| !authUser\) return false/);
+  assert.match(updateBody, /\.from\("profiles"\)[\s\S]*?\.update\(\{ display_name: name \}\)[\s\S]*?\.eq\("id", authUser\.id\)/);
+  assert.match(updateBody, /authUser\.displayName = name/);
+
+  const saveStart = appScript.indexOf('async function saveSetName()');
+  const saveClose = appScript.indexOf('\n  document.getElementById("setNameEdit")', saveStart);
+  const saveBody = appScript.slice(saveStart, saveClose);
+  assert.match(saveBody, /if \(authUser && !\(await updateProfileDisplayName\(name\)\)\)/);
+  assert.ok(saveBody.indexOf('await updateProfileDisplayName(name)') < saveBody.indexOf('me = name'),
+    'the cloud profile must succeed before the visible local identity changes');
 });
