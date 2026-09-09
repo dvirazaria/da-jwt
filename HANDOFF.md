@@ -343,10 +343,72 @@ when the slot holds a *different* open game the local one wins and the server's 
 whose push failed is retried rather than undone.
 
 **What is still not there.** `?join=` invite redemption (needs an RPC — the joiner is not a member
-yet, so no SELECT policy can see the invite), friend requests have no UI, guest→account linking
-(`guests.linked_profile_id`), more than one open game slot per device, avatar object storage, and
-bulk-uploading a device's pre-existing local history (a closed game can only reach the server by
-being opened there first).
+yet, so no SELECT policy can see the invite), friend requests have no UI, more than one open game
+slot per device, avatar object storage, and bulk-uploading a device's pre-existing local history (a
+closed game can only reach the server by being opened there first). Guest→account linking is
+covered next.
+
+## Guest → account linking ("קישור אורח לחשבון")
+
+Closes the identity gap phase 2b left open: a guest played real games, owes/is owed real debts and
+sits in a group's roster under `guest_id`, then signs in and gets an empty new `profiles` row with
+none of it visible. Never auto-merged by name — `docs/backend/link-guest.sql` (paste-ready, not yet
+run against the project) adds a two-party consent flow: `app_request_guest_claim(p_guest_id)` (the
+signing-in user, acting only as their own `auth.uid()` — never a spoofable target id) creates a
+`guest_claims` row; `app_approve_guest_claim(p_claim_id)` (only the guest's creator or an active
+admin of one of its groups — never the claimant) does the actual merge, re-pointing
+`game_participants`, `debts` (`debtor_*` and `creditor_*` independently) and `games.leader_*` from
+`guest_id` to `profile_id`, and skipping a `group_members` row only where the claimant already
+holds an independent active membership in that same group (the common real path: the claimant
+usually has to join a group under their own account before `guests_select` even lets them see the
+old guest there to claim it). `transfers`/`entries` need no change at all — they reference
+`game_participants.id`, not an identity column, so they follow automatically. Refuses and rolls
+back (`GUEST_CLAIM_DOUBLE_SEAT`) if the claim would seat the same person twice in one game;
+idempotent on a retried/already-resolved call. `app_decline_guest_claim` lets either the claimant
+withdraw their own request or the approver say no.
+
+**Frontend, cloud mode only — everything below is a no-op when `cloudMode()` is false.** A pull now
+also reads `guests`/`guest_claims` (RLS-narrowed, same as every other table) into
+`cloudGuestRows`/`cloudGuestClaims` — in-memory only, the same pattern as `cloudProfileIds`/
+`cloudGameCreators`, no new localStorage key. `guestClaimCandidatesInGroup` / `guestClaimsForGroup`
+(cloud mapping (pure)) and `seatsGuestAndUser` / `applyGuestClaimLocally` (groups domain (pure)) are
+the new pure helpers, tested in `tests/guest-claim.test.cjs`. `renderGroupGuestClaims()` renders on
+both the group page and the group-preview overlay: a calm "שיחקת כאן בעבר בשם X?" / "זה אני" / "לא"
+row per candidate, the claimant's own honest "ממתין לאישור", and the approver's "אשר"/"דחה" entry —
+all reusing `renderFriendGroup`, the exact rows friend requests already use, rather than a new
+component. Nothing here touches `settle()`, `tableBalance()`, `buildHistoryEntry()`,
+`buildDebtRecords()` or the close-table flow: the merge is entirely server-side, and the next
+`pullCloud()` after an approval already shows it merged, because every reader (RLS policies, the
+leaderboard views, `buildHistoryEntryFromCloud`) already keys off `profile_id`/`guest_id` exactly as
+it always did.
+
+**Known gap, documented rather than patched blind:** `guests_update_creator` in `rls-policies.sql`
+technically still lets a guest's creator `UPDATE` `linked_profile_id`/`linked_at` directly — RLS
+cannot express "every column except these two". The obvious fix
+(`GRANT UPDATE (display_name, created_by) ON guests`) needs verifying against a real
+`ON CONFLICT DO UPDATE` upsert's generated column list first (the existing guest push in
+`guestToRow` always re-sends `created_by`, even unchanged, and this repo cannot run SQL to check),
+so it was documented instead of applied unverified — see the comment in `link-guest.sql`.
+
+## Account deletion
+
+A signed-in account can delete itself from Settings → "אזור מסוכן" → "מחיקת חשבון" (an inline
+grid-collapse confirm panel, then the same cancellable one-second pointer hold as `סגור שולחן`/
+`סיים משחק` — never `alert`/`confirm`). The client calls the `SECURITY DEFINER` RPC
+`app_delete_my_account()` (`docs/backend/delete-account.sql`, paste-ready, never executed by this
+repo or its tests). It scrubs `profiles` to a neutral "משתמש שנמחק" instead of deleting the row
+(`groups.created_by_profile_id`/`games.created_by` are `NOT NULL` + `ON DELETE RESTRICT`, and
+`guests.created_by` is `ON DELETE CASCADE` into a further `RESTRICT` — a hard delete would abort or
+cascade-destroy other people's history), repoints every identity-bearing row it is allowed to touch
+(`group_members`, an open game's `game_participants`/`entries`, `debts`) to one fresh `guests` row
+while leaving a closed game's rows untouched (the schema's own immutability triggers block them —
+schema.sql section 7 — so a closed game's balances cannot move by construction), hands a sole-admin
+group to its longest-standing active member or archives it, revokes the caller's outstanding
+invites, and finally deletes `auth.users`. `pickAccountDeletionSuccessor` and `scrubLocalIdentity`
+in `kupa-sgura.html`'s groups-domain (pure) section mirror the succession and identity-scrub logic
+respectively and must stay in sync with the SQL if either ever changes. On success the client
+applies `scrubLocalIdentity` to the local document, signs out, and returns to the login screen with
+a short confirmation line; on failure nothing local is touched and the panel shows an inline error.
 
 ## Next milestone (the reason for this handoff): real users
 

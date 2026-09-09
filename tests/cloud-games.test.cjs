@@ -634,10 +634,16 @@ test('a DELETE only ever reaches the current open table, never a game that left 
   assert.match(storeSource, /\.delete\(\)\.in\("id", ids\)/);
 });
 
-test('the sync dot says it is syncing during a push and never leaks a secret key', () => {
-  assert.ok(storeSource.includes('setSync(true, "מסנכרן…")'));
-  assert.ok(storeSource.includes('setSync(true, "מסונכרן לחשבון")'));
-  assert.ok(storeSource.includes('setSync(false, "שגיאת שמירה — נשמר מקומית")'));
+// 2026-09-09: the sync dot's four labels (tests/cloud-resilience.test.cjs: cloudSyncLabel) are
+// computed once, in the pure cloud-mapping section, and rendered through refreshSyncDot -- pushCloud
+// no longer writes a hardcoded setSync() string at every call site.
+test('the sync dot says it is syncing during a push, via the honest four-state label, and never leaks a secret key', () => {
+  assert.match(storeSource, /cloudPushing = true;\n {4}refreshSyncDot\(\);/, 'an in-flight push shows "syncing" immediately');
+  assert.match(storeSource, /finally \{ cloudPushing = false; refreshSyncDot\(\); \}/, 'and the dot is recomputed the instant it is not');
+  assert.match(pureSource, /function cloudSyncLabel\(info\) \{/);
+  assert.ok(pureSource.includes('"מסנכרן…"'));
+  assert.ok(pureSource.includes('"מסונכרן"'));
+  assert.ok(pureSource.includes('"שגיאת שמירה"'));
   assert.ok(!html.includes('sb_secret_'));
   assert.ok(!html.includes('service_role'));
   assert.ok(!/userId: (authUser|session|user)\b/.test(appScript), 'a userId only ever arrives as profile_id');

@@ -174,11 +174,15 @@ test('a pull never starts while a push is pending or in flight', (t) => {
   assert.match(storeSource, /if \(cloudPushing\) \{[\s\S]*?pushCloud\(\)/, 'two pushes never run at once');
 });
 
-test('a push failure stays visible and retries the payload once before falling back to a pull', (t) => {
+// 2026-09-09: the one-shot retry (cloudPushRetried) was replaced by bounded exponential backoff
+// with full jitter plus error classification (tests/cloud-resilience.test.cjs covers the pure
+// helpers). This test now pins that the catch block actually calls them instead of guessing.
+test('a push failure retries a retryable error with backoff and surfaces the rest to a pull', (t) => {
   const catchBlock = storeSource.slice(storeSource.indexOf('    } catch (e) {'));
-  assert.match(catchBlock, /setSync\(false, "שגיאת שמירה — נשמר מקומית"\)/);
-  assert.match(catchBlock, /if \(!cloudPushRetried\) \{[\s\S]*?cloudPushRetried = true;[\s\S]*?pushCloud\(\)/);
-  assert.match(catchBlock, /cloudPushRetried = false;\n      scheduleCloudPull\(1200\)/);
+  assert.match(catchBlock, /if \(classifyCloudError\(e\) === "retry"\) \{[\s\S]*?cloudBackoffDelay\(cloudPushAttempt, Math\.random\(\)\)[\s\S]*?cloudPushAttempt\+\+;[\s\S]*?pushCloud\(\)/,
+    'a retryable failure schedules the next attempt from the bounded/jittered helper');
+  assert.match(catchBlock, /cloudSurfaceError = true;\n {6}scheduleCloudPull\(1200\)/,
+    'a non-retryable failure surfaces on the dot and re-pulls so the server wins, without looping');
   assert.match(storeSource, /clearCloudPending\(confirmed\)/, 'only the rows that landed stop being pending');
 });
 
