@@ -2265,15 +2265,24 @@
     // membership the server just sent, not the one this device had a moment ago.
     const pulledMembers = memberRows.map(row => rowToGroupMember(row, ctx));
     const gameCtx = { ...ctx, groupMembers: pulledMembers };
-    const history = (payload.closedGames || []).map(row => {
-      const kids = cloudChildrenOf(row.id, payload);
-      return buildHistoryEntryFromCloud(row, kids.participants, kids.entries, kids.transfers, gameCtx);
-    });
+    // F3 (docs/backend/player-boundary.sql): entries_select/game_participants_select now deny a
+    // closed game's rows entirely to a group member who did not play in it — a real closed game
+    // always has at least one participant, so an empty participants array here means "denied",
+    // not "empty". Drop it rather than rendering a corrupted zero-player ghost row into group
+    // history; this device simply does not carry that game's detail locally. See the SQL file's
+    // header for the tradeoff (group history briefly omits games this viewer did not play in).
+    const history = (payload.closedGames || [])
+      .filter(row => cloudGameChildrenAreTrustworthy(row, cloudChildrenOf(row.id, payload).participants, authUser.id))
+      .map(row => {
+        const kids = cloudChildrenOf(row.id, payload);
+        return buildHistoryEntryFromCloud(row, kids.participants, kids.entries, kids.transfers, gameCtx);
+      });
     // A game this device already closed is never reopened by a pull: the close may simply not
     // have reached the server yet (a failed push retries it), and history is the local truth.
     const closedHere = new Set((state.history || []).map(entry => String(entry && entry.gameId)));
     const openCandidates = (payload.openGames || [])
       .filter(row => row && !closedHere.has(String(row.id)))
+      .filter(row => cloudGameChildrenAreTrustworthy(row, cloudChildrenOf(row.id, payload).participants, authUser.id))
       .map(row => {
         const kids = cloudChildrenOf(row.id, payload);
         return buildOpenGameFromCloud(row, kids.participants, kids.entries, kids.transfers, gameCtx);
@@ -4155,6 +4164,26 @@
       })),
       transfers: Array.isArray(h.transfers) ? h.transfers : [],
     };
+  }
+
+  // F3 (docs/backend/player-boundary.sql): entries_select/game_participants_select now return
+  // every row of a game to a participant/creator, or NO rows at all to anyone else — never a
+  // partial set. So an empty participantRows pull is ambiguous from the client's side alone: it
+  // is either a real empty-shell game (nobody added yet, gameRow.created_by is this device) or a
+  // game this viewer was denied outright. This is the one pure predicate both call sites (closed
+  // history and open-game adoption) share, so the two paths cannot silently disagree.
+  //   - non-empty participantRows: the pull succeeded (viewer is a participant or the creator) —
+  //     always safe to use.
+  //   - empty participantRows and viewerProfileId === gameRow.created_by: a genuinely empty
+  //     game-in-progress this device itself created — safe to use.
+  //   - empty participantRows and viewerProfileId !== gameRow.created_by: RLS denied the read —
+  //     must NOT be treated as "an empty game", or a game the viewer never played in renders as a
+  //     corrupted zero-player ghost (closed history) or gets silently adopted as this device's
+  //     current table (open games).
+  function cloudGameChildrenAreTrustworthy(gameRow, participantRows, viewerProfileId) {
+    if (Array.isArray(participantRows) && participantRows.length > 0) return true;
+    const g = gameRow || {};
+    return !!viewerProfileId && String(g.created_by || "") === String(viewerProfileId);
   }
 
   // ----- rows -> local model -----
