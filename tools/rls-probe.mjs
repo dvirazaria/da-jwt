@@ -212,12 +212,104 @@ async function runDestructiveProbes() {
   else warn("cleanup", `could not delete the throwaway game (HTTP ${cleanupStatus}) — it and any rows created above belong to the two throwaway accounts only`);
 }
 
+// ---------------------------------------------------------------------
+// F3 demonstration (--destructive only): within-group per-player exposure.
+//
+// Account A creates a group and (as its admin) directly adds account B as an active member —
+// group_members_insert_admin allows this with no consent from B, a separate, already-known gap,
+// used here only as test scaffolding. A then plays a solo game INSIDE that group — B never sits
+// at this table. Before docs/backend/player-boundary.sql: B, as an active group member, can still
+// read A's game_participants/entries rows for that game via the old app_can_read_game(game_id)
+// (group-wide) gate and compute A's exact net. After: B's read returns zero rows, because B is
+// neither a participant of THIS game nor its creator.
+// ---------------------------------------------------------------------
+async function runF3Probe() {
+  section("5. Within-group per-player exposure demonstration (--destructive) — F3");
+  if (!TOKEN_A || !TOKEN_B) {
+    bad("F3 probe requires RLS_PROBE_TOKEN_A and RLS_PROBE_TOKEN_B", "see the header comment for how to obtain them from two THROWAWAY accounts");
+    return;
+  }
+  const idA = decodeJwtSub(TOKEN_A);
+  const idB = decodeJwtSub(TOKEN_B);
+  if (!idA || !idB) { bad("could not decode a profile id from TOKEN_A/TOKEN_B"); return; }
+
+  const groupId = crypto.randomUUID();
+  const { status: groupStatus } = await rest("/rest/v1/groups", {
+    method: "POST", token: TOKEN_A, prefer: "return=minimal",
+    body: { id: groupId, name: "rls-probe F3 scratch group", created_by_profile_id: idA },
+  });
+  if (groupStatus !== 201 && groupStatus !== 200 && groupStatus !== 204) {
+    bad("account A could not create a throwaway group to run the F3 demo on", `HTTP ${groupStatus}`);
+    return;
+  }
+  const { status: adminRowStatus } = await rest("/rest/v1/group_members", {
+    method: "POST", token: TOKEN_A, prefer: "return=minimal",
+    body: { id: crypto.randomUUID(), group_id: groupId, profile_id: idA, role: "admin", status: "active" },
+  });
+  const { status: memberBStatus } = await rest("/rest/v1/group_members", {
+    method: "POST", token: TOKEN_A, prefer: "return=minimal",
+    body: { id: crypto.randomUUID(), group_id: groupId, profile_id: idB, role: "member", status: "active" },
+  });
+  if (adminRowStatus >= 300 || memberBStatus >= 300) {
+    bad("could not seed group membership for the F3 demo", `admin row HTTP ${adminRowStatus}, B's row HTTP ${memberBStatus}`);
+    return;
+  }
+  ok("account A created a throwaway group and added B as an active member (unrelated known gap, used only as scaffolding)", groupId);
+
+  const gameId = crypto.randomUUID();
+  const participantId = crypto.randomUUID();
+  const { status: gameStatus } = await rest("/rest/v1/games", {
+    method: "POST", token: TOKEN_A, prefer: "return=minimal",
+    body: { id: gameId, group_id: groupId, created_by: idA, phase: "active", started_at: new Date().toISOString() },
+  });
+  const { status: partStatus } = await rest("/rest/v1/game_participants", {
+    method: "POST", token: TOKEN_A, prefer: "return=minimal",
+    body: { id: participantId, game_id: gameId, profile_id: idA, guest_id: null, display_name_snapshot: "A (rls-probe)", status: "active" },
+  });
+  const { status: entryStatus } = await rest("/rest/v1/entries", {
+    method: "POST", token: TOKEN_A, prefer: "return=minimal",
+    body: { id: crypto.randomUUID(), game_id: gameId, participant_id: participantId, amount: 100 },
+  });
+  if (gameStatus >= 300 || partStatus >= 300 || entryStatus >= 300) {
+    bad("could not seed A's solo game for the F3 demo", `game HTTP ${gameStatus}, participant HTTP ${partStatus}, entry HTTP ${entryStatus}`);
+  } else {
+    ok("account A played a solo game inside the group (B never sat at this table)", gameId);
+
+    const { status: seenPartStatus, data: seenPart } = await rest(`/rest/v1/game_participants?game_id=eq.${gameId}&select=id,profile_id,cashout`, { token: TOKEN_B });
+    const { status: seenEntryStatus, data: seenEntry } = await rest(`/rest/v1/entries?game_id=eq.${gameId}&select=id,amount`, { token: TOKEN_B });
+    const leakedParticipants = seenPartStatus === 200 && Array.isArray(seenPart) && seenPart.length > 0;
+    const leakedEntries = seenEntryStatus === 200 && Array.isArray(seenEntry) && seenEntry.length > 0;
+    if (leakedParticipants || leakedEntries) {
+      bad("F3 CONFIRMED", `B (a group member who never played this game) can read A's game_participants (${JSON.stringify(seenPart)}) and/or entries (${JSON.stringify(seenEntry)}) — player-boundary.sql not applied, or not effective`);
+    } else {
+      ok("F3: B's read of A's game_participants/entries for a game B never played in returned zero rows", `game_participants HTTP ${seenPartStatus}, entries HTTP ${seenEntryStatus} — player-boundary.sql appears to be applied`);
+    }
+  }
+
+  // --- best-effort cleanup ---
+  const { status: cleanupGameStatus } = await rest(`/rest/v1/games?id=eq.${gameId}`, { method: "DELETE", token: TOKEN_A, prefer: "return=minimal" });
+  const { status: cleanupMemberStatus } = await rest(`/rest/v1/group_members?group_id=eq.${groupId}&profile_id=eq.${idB}`, { method: "DELETE", token: TOKEN_A, prefer: "return=minimal" });
+  const { status: cleanupGroupStatus } = await rest(`/rest/v1/groups?id=eq.${groupId}`, { method: "DELETE", token: TOKEN_A, prefer: "return=minimal" });
+  if ([cleanupGameStatus, cleanupMemberStatus, cleanupGroupStatus].every(s => s === 200 || s === 204)) {
+    ok("cleanup", "throwaway game, B's membership row, and group deleted");
+  } else {
+    warn("cleanup", `game HTTP ${cleanupGameStatus}, B's membership HTTP ${cleanupMemberStatus}, group HTTP ${cleanupGroupStatus} — groups has no DELETE policy (soft-delete only); a leftover throwaway group/membership belongs to the two throwaway accounts only`);
+  }
+}
+
 async function main() {
   console.log(`rls-probe.mjs — ${SUPABASE_URL}`);
   console.log(DESTRUCTIVE ? "mode: read-only + DESTRUCTIVE (write-path demos enabled)" : "mode: read-only (pass --destructive to also run F1/F2 write-path demos)");
   await runReadOnlyProbes();
-  if (DESTRUCTIVE) await runDestructiveProbes();
-  else { section("4. Write-path demonstrations (F1, F2)"); console.log("  SKIPPED — re-run with --destructive (see header comment) to exercise these."); }
+  if (DESTRUCTIVE) {
+    await runDestructiveProbes();
+    await runF3Probe();
+  } else {
+    section("4. Write-path demonstrations (F1, F2)");
+    console.log("  SKIPPED — re-run with --destructive (see header comment) to exercise these.");
+    section("5. Within-group per-player exposure demonstration (F3)");
+    console.log("  SKIPPED — re-run with --destructive (see header comment) to exercise this.");
+  }
 
   console.log(`\n${failures} finding(s) confirmed live, ${warnings} warning(s)/vulnerable-and-expected result(s).`);
   process.exit(failures > 0 ? 1 : 0);
