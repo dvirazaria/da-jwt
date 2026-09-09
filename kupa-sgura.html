@@ -2885,6 +2885,23 @@
     const t = String(token || "");
     return t.slice(0, 4) + "-" + t.slice(4, 8);
   }
+  // The WhatsApp-ready invite message: one line naming the app, an invitation line that folds in
+  // the group name when known (same "base line, name appended only if present" shape as
+  // joinNoticeMessage below), the join link on its own line, and the formatted code as a fallback
+  // for typing by hand. Each part degrades on its own missing input — a groupless or codeless call
+  // never renders the literal string "undefined" and still reads as one short, complete message.
+  function buildInviteShareText(groupName, inviteCode, url) {
+    const name = String(groupName == null ? "" : groupName).trim();
+    const code = String(inviteCode == null ? "" : inviteCode).trim();
+    const link = String(url == null ? "" : url).trim();
+    const lines = [
+      "סוגרים קופה — אפליקציה לניהול קופת פוקר",
+      name ? "הצטרפו לקבוצת " + name : "הצטרפו לקבוצת הפוקר שלנו",
+    ];
+    if (link) lines.push(link);
+    if (code) lines.push("קוד: " + code);
+    return lines.join("\n");
+  }
   // The one normalization for a token that arrives from outside (a URL, a paste, a hand-typed
   // code): uppercase, dashes and whitespace removed. app_redeem_invite() in
   // docs/backend/join-invite.sql normalizes with upper(regexp_replace(..., '[[:space:]-]', ''))
@@ -5737,6 +5754,24 @@
       });
       actions.appendChild(shareBtn);
     }
+
+    // Dedicated WhatsApp action: group invites in Israel travel over WhatsApp, and a ready-made
+    // Hebrew message beats pasting a bare link into a chat. Prefers the native share sheet when the
+    // platform has one (it already surfaces WhatsApp, plus everything else, for free); falls back to
+    // a wa.me deep link — WhatsApp's own no-recipient "click to chat" URL — where navigator.share
+    // does not exist (desktop web).
+    const whatsappBtn = el("button", "games-invite-action", "וואטסאפ");
+    whatsappBtn.type = "button";
+    whatsappBtn.addEventListener("click", () => {
+      const link = inviteLink(invite.token, location.origin, location.pathname);
+      const message = buildInviteShareText(summary.name, formatInviteCode(invite.token), link);
+      if (typeof navigator.share === "function") {
+        navigator.share({ title: summary.name, text: message }).catch(() => {});
+      } else {
+        window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank", "noopener");
+      }
+    });
+    actions.appendChild(whatsappBtn);
     card.appendChild(actions);
 
     // The QR carries the same link as "העתק קישור" — scanning it opens the join notice.
