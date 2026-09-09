@@ -393,6 +393,18 @@
     font-size: 13px; font-weight: 600; transition: color .2s, opacity .2s;
   }
   .games-create-group-inline:hover { color: var(--accent-press); }
+  /* Group page: "חברים" section heading gets the same trailing action-row treatment as
+     "הקבוצות שלי" above — the direct, always-reachable invite entry point (vs. the full invite
+     management surface, still in the group settings overlay only). Same values as
+     .games-groups-heading/.games-create-group-inline on purpose, just honestly named for their
+     own section, so the two header rows read as one consistent pattern. */
+  .games-members-heading { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+  .games-members-heading .games-section-title { margin: 0; }
+  .games-member-invite-btn {
+    min-height: 44px; padding: 8px 4px; color: var(--accent);
+    font-size: 13px; font-weight: 600; transition: color .2s, opacity .2s;
+  }
+  .games-member-invite-btn:hover { color: var(--accent-press); }
   .games-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .games-quick-actions.single { grid-template-columns: 1fr; }
   .games-quick-action {
@@ -1110,6 +1122,18 @@
       <button type="button" class="btn-primary" id="joinNoticeJoinBtn" hidden>הצטרף לקבוצה</button>
       <button type="button" class="btn-primary" id="joinNoticeContinueBtn">המשך</button>
       <button type="button" class="btn-skip" id="joinNoticeLaterBtn">לא עכשיו</button>
+    </div>
+  </div>
+</div>
+
+<div class="login" id="friendNotice" hidden>
+  <div class="login-in">
+    <h2>הוזמנת להיות חבר</h2>
+    <p class="games-invite-code" id="friendNoticeCode" dir="ltr"></p>
+    <p class="join-notice-status" id="friendNoticeStatus" role="status" aria-live="polite" hidden></p>
+    <div class="join-notice-actions">
+      <button type="button" class="btn-primary" id="friendNoticeAcceptBtn">אשר בקשה</button>
+      <button type="button" class="btn-skip" id="friendNoticeLaterBtn">לא עכשיו</button>
     </div>
   </div>
 </div>
@@ -3222,6 +3246,45 @@
     if (code) lines.push("קוד: " + code);
     return lines.join("\n");
   }
+
+  // ---------- friend invite (pure) ----------
+  // "הוסף אותי כחבר": a personal, shareable link modeled on the group invite above — same token
+  // shape (generateInviteToken/INVITE_TOKEN_ALPHABET, reused as-is), same URL-with-query idea,
+  // its own distinct query param so it never shadows ?join= (tests/friend-invite.test.cjs pins
+  // this). There is no server-side redemption yet: no RPC resolves a friend token to the person
+  // who shared it, so nothing here stores a token→identity mapping. The share button (friends
+  // screen) mints one fresh each time it is tapped — enough to prove the URL/notice shape
+  // end-to-end — and the notice's accept action surfaces SERVER_NOTE instead of a fake success.
+  // See the share-links report for the RPC a follow-up needs to add.
+  function friendInviteLink(token, origin, pathname) {
+    return origin + pathname + "?friend=" + token;
+  }
+  // The WhatsApp-ready "add me as a friend" message: the same app-name line buildInviteShareText
+  // opens with (one recognizable message family), then who is inviting — falling back to a
+  // nameless line when this device has no name yet, never the literal "undefined" — and the
+  // personal link on its own line. Short on purpose: a handful of lines, chat-preview sized.
+  function buildFriendShareText(myName, url) {
+    const name = String(myName == null ? "" : myName).trim();
+    const link = String(url == null ? "" : url).trim();
+    const lines = [
+      "סוגרים קופה — אפליקציה לניהול קופת פוקר",
+      name ? name + " מזמין/ה אותך להצטרף כחבר/ה" : "מישהו מזמין אותך להצטרף כחבר/ה",
+    ];
+    if (link) lines.push(link);
+    return lines.join("\n");
+  }
+  // Reads a ?friend= token out of a location.search string — same normalization and alphabet
+  // check as parseJoinToken below, on the distinct "friend" param, so a URL carrying both never
+  // confuses one for the other.
+  function parseFriendToken(search) {
+    const match = String(search || "").match(/[?&]friend=([^&]*)/);
+    if (!match) return null;
+    let raw = "";
+    try { raw = decodeURIComponent(match[1]); } catch (e) { raw = match[1]; }
+    const token = normalizeInviteToken(raw);
+    return new RegExp("^[" + INVITE_TOKEN_ALPHABET + "]{8}$").test(token) ? token : null;
+  }
+
   // The one normalization for a token that arrives from outside (a URL, a paste, a hand-typed
   // code): uppercase, dashes and whitespace removed. app_redeem_invite() in
   // docs/backend/join-invite.sql normalizes with upper(regexp_replace(..., '[[:space:]-]', ''))
@@ -5392,7 +5455,7 @@
     const previewClaimsSection = renderGroupGuestClaims(currentGroupId);
     if (previewClaimsSection) inner.appendChild(previewClaimsSection);
     const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
-    inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
+    inner.appendChild(renderGroupMembers(summary, activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
     box.appendChild(inner);
   }
@@ -5747,14 +5810,50 @@
   // Flat member rows, name + a quiet "מנהל" tag for admins. For an admin each row is tappable
   // and opens an inline action strip (D3); "+ הוסף חבר" moved to the settings overlay (D1).
   // Former members appear collapsed under a toggle, shown only when there are any.
-  function renderGroupMembers(members, former, isAdmin) {
+  //
+  // The "חברים" title row also carries the group page's direct invite entry point (any active
+  // member, not just admins — same reach as renderGroupInvite in the settings overlay) — see
+  // renderGroupInviteButton just below. That overlay stays the full invite management surface
+  // (create, revoke, code, QR); this is the one-tap "invite someone" path so getting there no
+  // longer requires opening it at all.
+  function renderGroupMembers(summary, members, former, isAdmin) {
     const section = el("section", "games-section");
-    section.appendChild(el("h3", "games-section-title", "חברים"));
+    const heading = el("div", "games-members-heading");
+    heading.appendChild(el("h3", "games-section-title", "חברים"));
+    if (summary && summary.isMember) heading.appendChild(renderGroupInviteButton(summary));
+    section.appendChild(heading);
     const list = Array.isArray(members) ? members : [];
     list.forEach(member => section.appendChild(renderMemberRow(member, list, isAdmin)));
     const formerList = Array.isArray(former) ? former : [];
     if (formerList.length) section.appendChild(renderFormerMembers(formerList));
     return section;
+  }
+
+  // The group page's prominent, always-reachable invite entry point (Problem 1 of the share-links
+  // work): one tap reuses the group's active invite if there is one, otherwise creates it on
+  // demand (createGroupInvite already saves + re-renders both this page and the settings overlay
+  // — Lane: creation behaviour stays theirs, this only calls it), then shares immediately with the
+  // exact navigator.share-first / wa.me-fallback pattern the "וואטסאפ" action in renderGroupInvite
+  // already uses, so the two entry points read identically once a chat opens.
+  function renderGroupInviteButton(summary) {
+    const btn = el("button", "games-member-invite-btn", "+ הזמן לקבוצה");
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      let invite = activeInvite(state.invites, summary.groupId);
+      if (!invite) {
+        createGroupInvite(summary.groupId);
+        invite = activeInvite(state.invites, summary.groupId);
+      }
+      if (!invite) return; // defensive: creation refused for a reason renderGroupInvite would also hit
+      const link = inviteLink(invite.token, location.origin, location.pathname);
+      const message = buildInviteShareText(summary.name, formatInviteCode(invite.token), link);
+      if (typeof navigator.share === "function") {
+        navigator.share({ title: summary.name, text: message }).catch(() => {});
+      } else {
+        window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank", "noopener");
+      }
+    });
+    return btn;
   }
 
   // D3: a member row shows name + role tag only. For an admin the row itself is the control
@@ -6232,7 +6331,7 @@
     const guestClaimsSection = renderGroupGuestClaims(currentGroupId);
     if (guestClaimsSection) inner.appendChild(guestClaimsSection);
     const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
-    inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
+    inner.appendChild(renderGroupMembers(summary, activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
     // D1: the invite block and "+ הוסף חבר" live in the group settings overlay now — this page
     // stays short (header, primary action, דירוג, חברים, היסטוריה).
@@ -7397,6 +7496,22 @@
     renderFriendsPage();
   }
 
+  // "הוסף אותי כחבר": the reverse of "הוסף חבר" — instead of searching for someone, share a
+  // personal link that lets them add themselves. Works with or without an account, same as the
+  // group invite's share actions, because it never calls the server: it mints a token (friend
+  // invite (pure), above), builds the WhatsApp-ready message and shares it, exactly the
+  // navigator.share-first / wa.me-fallback pattern renderGroupInvite's "וואטסאפ" action uses.
+  function shareFriendInvite() {
+    const token = generateInviteToken(randomInviteBytes());
+    const link = friendInviteLink(token, location.origin, location.pathname);
+    const message = buildFriendShareText(me, link);
+    if (typeof navigator.share === "function") {
+      navigator.share({ title: "סוגרים קופה", text: message }).catch(() => {});
+    } else {
+      window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank", "noopener");
+    }
+  }
+
   function resetAddFriendPanel() {
     addFriendOpen = false;
     addFriendJustOpened = false;
@@ -7540,6 +7655,20 @@
     friendsSec.appendChild(addFriendBtn);
     if (online) renderAddFriendPanel(friendsSec);
     if (!online) friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
+    // The reverse direction — "הוסף אותי כחבר" shares a personal link instead of searching for
+    // someone (Problem 2 of the share-links work). Unlike "הוסף חבר" this never calls the server,
+    // so it works with or without an account; it only needs a name to invite as (me).
+    if (me) {
+      const inviteMeBtn = el("button", "games-invite-action", "הוסף אותי כחבר");
+      inviteMeBtn.type = "button";
+      inviteMeBtn.style.marginTop = "14px";
+      // .games-invite-action's documented 40px (DESIGN.md) matches its three existing siblings
+      // ("העתק קישור"/"שתף"/"וואטסאפ") on the group invite card; this one stands alone on the
+      // friends screen, so it gets the full 44px touch target on top of that shared style.
+      inviteMeBtn.style.minHeight = "44px";
+      inviteMeBtn.addEventListener("click", shareFriendInvite);
+      friendsSec.appendChild(inviteMeBtn);
+    }
     box.appendChild(friendsSec);
   }
 
@@ -8379,6 +8508,58 @@
     showJoinNotice(token, true);
   }
 
+  // ---------- friend invite ----------
+  // Opening ?friend=TOKEN shows #friendNotice — the personal counterpart of #joinNotice above.
+  // ?friend= is a distinct param from ?join= (parseFriendToken, friend invite (pure) section) so
+  // the two never shadow each other; both are read independently at boot, below.
+  //
+  // Unlike group joins there is no redemption RPC yet at all (see the friend invite (pure) note
+  // and the share-links report for what a follow-up needs to add), so this has exactly one shape,
+  // not three: the notice always shows the code, and "אשר בקשה" is a real, tappable action that
+  // answers honestly — SERVER_NOTE inline — instead of a fake success. "לא עכשיו" always closes it.
+  let pendingFriendToken = null; // in memory only, mirrors pendingJoinToken — no new storage key
+  let friendNoticeBound = false;
+
+  function stripFriendFromUrl() {
+    const params = new URLSearchParams(location.search);
+    if (!params.has("friend")) return;
+    params.delete("friend");
+    const qs = params.toString();
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
+  }
+
+  function friendNoticeParts() {
+    return {
+      notice: document.getElementById("friendNotice"),
+      code: document.getElementById("friendNoticeCode"),
+      status: document.getElementById("friendNoticeStatus"),
+      acceptBtn: document.getElementById("friendNoticeAcceptBtn"),
+      laterBtn: document.getElementById("friendNoticeLaterBtn"),
+    };
+  }
+
+  function closeFriendNotice() {
+    pendingFriendToken = null;
+    friendNoticeParts().notice.hidden = true;
+    stripFriendFromUrl();
+  }
+
+  function showFriendNotice(token) {
+    const ui = friendNoticeParts();
+    ui.code.textContent = formatInviteCode(token);
+    ui.status.hidden = true;
+    pendingFriendToken = token;
+    ui.notice.hidden = false;
+    if (!friendNoticeBound) {
+      friendNoticeBound = true;
+      ui.acceptBtn.addEventListener("click", () => {
+        ui.status.textContent = SERVER_NOTE;
+        ui.status.hidden = false;
+      });
+      ui.laterBtn.addEventListener("click", closeFriendNotice);
+    }
+  }
+
   // ---------- iOS Safari install hint ----------
   // Quiet, dismissible "Add to Home Screen" tip for iOS Safari users who have not installed the
   // app yet — iOS never offers a native install prompt, so without this an iPhone/iPad user simply
@@ -8580,8 +8761,15 @@
   // After the auth section, so initSync() can ask cloudMode() whether a session already owns the
   // data. A restored session arrives asynchronously and tears this down again (enterCloudMode).
   initSync();
+  // ?friend= and ?join= are distinct params (friend invite (pure) / join-by-invite sections) and
+  // are read independently here, so a URL can never confuse one for the other. A friend token
+  // takes the boot-time slot first — it is the simpler, always-resolvable notice (one shape, no
+  // server round trip) — before falling back to the group join flow, then the login screen.
+  const friendToken = parseFriendToken(location.search);
   const joinToken = parseJoinToken(location.search);
-  if (joinToken) {
+  if (friendToken) {
+    showFriendNotice(friendToken);
+  } else if (joinToken) {
     // The notice decides for itself what it can offer (join / sign in / nothing yet) and keeps
     // ?join= in the address bar until the flow resolves — see the join-by-invite section.
     showJoinNotice(joinToken, false);

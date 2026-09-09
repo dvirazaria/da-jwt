@@ -113,7 +113,7 @@ test('renderGroupPage calls each of the five sub-renderers', () => {
   assert.match(source, /renderGroupHeader\(summary\)/);
   assert.match(source, /renderGroupPrimaryAction\(summary, canStartGroupGame\(/);
   assert.match(source, /renderGroupLeaders\(buildLeaderboard\(/);
-  assert.match(source, /renderGroupMembers\(activeMembers\(/);
+  assert.match(source, /renderGroupMembers\(summary, activeMembers\(/);
   assert.match(source, /renderGroupHistory\(gameSummaries\)/);
   assert.doesNotMatch(source, /renderGroupLastGame/);
   // bails out to the dashboard rather than stranding the user on a deleted group

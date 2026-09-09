@@ -156,7 +156,7 @@ test('renderGroupPage no longer renders the invite block or the add-member panel
   const source = sourceBetween('  function renderGroupPage() {', '  function renderAddRowChips() {');
   assert.doesNotMatch(source, /renderGroupInvite/);
   assert.doesNotMatch(source, /renderAddMemberPanel/);
-  const membersSource = sourceBetween('  function renderGroupMembers(members, former, isAdmin) {', '  function renderMemberRow(');
+  const membersSource = sourceBetween('  function renderGroupMembers(summary, members, former, isAdmin) {', '  function renderMemberRow(');
   assert.doesNotMatch(membersSource, /renderAddMemberPanel/);
 });
 
