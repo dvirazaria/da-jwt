@@ -62,7 +62,12 @@
     width: 100%; height: 40px; margin: 0 auto 8px;
     pointer-events: none;
   }
-  .suits-mark img { display: block; width: 150px; height: auto; }
+  /* Optical centring. The image box is already centred to the pixel, and the artwork's outer
+     edges are symmetric on its 408px canvas — but the four glyphs grow left→right (67/70/75/79px
+     wide), so the mean of their centres lands 4.99 canvas px = 1.8 css px left of the middle at
+     this width. The eye reads a row of discrete symbols by their centres, which is why the group
+     looks pulled to the start edge. Nudge it back. Re-measure if `width` here ever changes. */
+  .suits-mark img { display: block; width: 150px; height: auto; transform: translateX(1.8px); }
   .suits-mark .suits-mark-light { display: none; }
   :root[data-theme="light"] .suits-mark-dark { display: none; }
   :root[data-theme="light"] .suits-mark-light { display: block; }
@@ -659,6 +664,9 @@
   .friend-action.primary { color: var(--accent); border-color: var(--accent); font-weight: 700; }
   .friend-error { color: var(--bad); font-size: 13px; font-weight: 500; margin: 0; text-align: center; animation: rise .25s ease both; }
   .empty-note { color: var(--dim); font-size: 14px; font-weight: 300; margin-top: 10px; }
+  .legal-links { color: var(--dim); font-size: 12px; font-weight: 300; margin-top: 8px; }
+  .legal-links a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .legal-links a:hover { color: var(--text); }
   .pid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .pname-big { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
   .pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; margin-top: 16px; }
@@ -796,6 +804,15 @@
   .set-name-editor-actions { display: flex; align-items: center; justify-content: center; gap: 12px; }
   .set-name-editor-actions button { min-height: 44px; padding: 8px 12px; font-size: 14px; font-weight: 700; }
   .set-name-save { color: var(--accent); }
+  /* contact details: read-only text until the pencil is tapped, then the same inline editor
+     pattern as the name above it. Google-linked accounts never get the pencil. */
+  .set-contact { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .set-contact-row { display: flex; align-items: center; justify-content: center; gap: 2px; }
+  .set-contact-view { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .set-contact-line { margin: 0; color: var(--dim); font-size: 14px; overflow-wrap: anywhere; }
+  .set-contact-empty { margin: 0; color: var(--faint); font-size: 14px; }
+  .set-contact-edit { flex: 0 0 44px; }
+  .set-contact-editor { width: 100%; max-width: 260px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .set-in input { max-width: 260px; text-align: center; font-size: 16px; }
   .theme-row { display: flex; align-items: center; gap: 14px; color: var(--dim); margin-top: 4px; }
   .theme-row svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -935,8 +952,27 @@
       </div>
     </div>
     <p class="set-account" id="setAccount" dir="ltr" hidden></p>
-    <input type="tel" id="setPhone" inputmode="tel" placeholder="טלפון" autocomplete="tel" aria-label="טלפון">
-    <input type="email" id="setEmail" inputmode="email" placeholder="מייל" autocomplete="email" aria-label="מייל">
+    <div class="set-contact" id="setContact">
+      <div class="set-contact-row">
+        <div class="set-contact-view" id="setContactView">
+          <p class="set-contact-line" id="setPhoneText" dir="ltr"></p>
+          <p class="set-contact-line" id="setEmailText" dir="ltr"></p>
+          <p class="set-contact-empty" id="setContactEmpty" hidden>לא הוזנו פרטי קשר</p>
+        </div>
+        <button type="button" class="set-name-edit set-contact-edit" id="setContactEdit" aria-label="עריכת פרטי קשר">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10.5-10.5a2.83 2.83 0 0 0-4-4L4 16v4Z"></path><path d="m13.5 6.5 4 4"></path></svg>
+        </button>
+      </div>
+      <div class="set-contact-editor" id="setContactEditor" hidden>
+        <input type="tel" id="setPhone" inputmode="tel" placeholder="טלפון" autocomplete="tel" aria-label="טלפון">
+        <input type="email" id="setEmail" inputmode="email" placeholder="מייל" autocomplete="email" aria-label="מייל">
+        <div class="set-name-editor-actions">
+          <button type="button" class="set-name-save" id="setContactSave">שמור</button>
+          <button type="button" id="setContactCancel">ביטול</button>
+        </div>
+      </div>
+      <p class="games-primary-reason" id="setContactNote" hidden>פרטי הקשר מגיעים מחשבון Google.</p>
+    </div>
     <div class="theme-row">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19"></path></svg>
       <button type="button" class="switch" id="setThemeSwitch" role="switch" aria-label="החלף בין מצב כהה למצב בהיר"></button>
@@ -947,6 +983,7 @@
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
     <p class="empty-note" style="margin-top:6px">גרסה 60</p>
+    <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
 </div>
 
@@ -1199,6 +1236,7 @@
   let profileTab = "balance";
   let debtTab = "owed";
   let setNameEditing = false;
+  let setContactEditing = false;     // phone/mail in settings: read-only until the pencil is tapped
 
   // ---------- theme (default: dark), floating sun/moon toggle ----------
   const SUN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19"></path></svg>';
@@ -6571,7 +6609,7 @@
   // Phase 1 wires identity only: a real session, a `profiles` row, and `me` fed from it. No game
   // data moves to the server yet — save()/initSync()/remoteBody() are untouched, and nothing here
   // invents a `userId` on a participant ref (that is phase 2).
-  let authUser = null;          // null | { id, email, displayName }
+  let authUser = null;          // null | { id, email, displayName, app_metadata, identities }
   let authAppliedUserId = null; // last session already turned into a profile — avoids double upserts
   let authEmailPending = "";    // address a code was sent to; "" while the email step is showing
   let authRedirectError = "";   // an error the OAuth redirect came back with, shown on the login screen
@@ -6636,6 +6674,9 @@
     authAppliedUserId = user.id;
     const profile = await ensureProfile(user);
     authUser = profile || { id: user.id, email: user.email || "", displayName: me || "" };
+    // Read-only passthrough of the provider fields so the settings contact block can lock itself
+    // for Google-linked accounts (isGoogleAccount). Nothing in auth reads these back.
+    Object.assign(authUser, { app_metadata: user.app_metadata || null, identities: user.identities || null });
     if (authUser.displayName && authUser.displayName !== me) { me = authUser.displayName; saveMe(); }
     stripAuthParamsFromUrl();
     document.getElementById("login").hidden = true;
@@ -7492,6 +7533,17 @@
   function loadContact() {
     try { return JSON.parse(localStorage.getItem(CONTACT_KEY)) || {}; } catch (e) { return {}; }
   }
+  // A Google-linked account gets its address from the provider, so the local contact block is
+  // read-only for it — editing here would only create a second, conflicting truth. Supabase puts
+  // the provider in two places depending on how the session was created; either one counts.
+  function isGoogleAccount(user) {
+    if (!user) return false;
+    const meta = user.app_metadata || {};
+    if (meta.provider === "google") return true;
+    if (Array.isArray(meta.providers) && meta.providers.indexOf("google") >= 0) return true;
+    const identities = Array.isArray(user.identities) ? user.identities : [];
+    return identities.some(i => i && i.provider === "google");
+  }
   function refreshSettings() {
     document.getElementById("setAvatar").textContent = me ? me.trim()[0] : "?";
     document.getElementById("setName").textContent = me || "אורח";
@@ -7511,25 +7563,64 @@
     document.getElementById("setNameEdit").hidden = false;
     document.getElementById("setNameEditor").hidden = !setNameEditing;
     document.getElementById("setNameInput").value = me || "";
-    const c = loadContact();
-    document.getElementById("setPhone").value = c.phone || "";
-    document.getElementById("setEmail").value = c.email || "";
+    refreshContact();
     const isLight = document.documentElement.dataset.theme === "light";
     const sw = document.getElementById("setThemeSwitch");
     sw.classList.toggle("on", isLight);
     sw.setAttribute("aria-checked", isLight ? "true" : "false");
   }
+  // Read-only by default: the stored phone/mail render as quiet lines, and only the pencil opens
+  // the inputs. A Google-linked account never gets the pencil — its details come from the
+  // provider, and the account address above is already the authoritative one.
+  function refreshContact() {
+    const c = loadContact();
+    const locked = isGoogleAccount(authUser);
+    if (locked) setContactEditing = false;
+    const phone = document.getElementById("setPhoneText");
+    const email = document.getElementById("setEmailText");
+    phone.textContent = c.phone || "";
+    email.textContent = c.email || "";
+    phone.hidden = !phone.textContent;
+    email.hidden = !email.textContent;
+    document.getElementById("setContactEmpty").hidden = !!(c.phone || c.email);
+    document.getElementById("setContactView").hidden = setContactEditing;
+    document.getElementById("setContactEdit").hidden = setContactEditing || locked;
+    document.getElementById("setContactEditor").hidden = !setContactEditing;
+    document.getElementById("setContactNote").hidden = !locked;
+    document.getElementById("setPhone").value = c.phone || "";
+    document.getElementById("setEmail").value = c.email || "";
+  }
+  function closeSetContactEditor() {
+    setContactEditing = false;
+    refreshContact(); // re-reads storage, so an abandoned edit leaves nothing behind
+  }
   function saveContact() {
+    if (isGoogleAccount(authUser)) return; // the pencil is hidden for them; this is the belt
     try {
       localStorage.setItem(CONTACT_KEY, JSON.stringify({
         phone: document.getElementById("setPhone").value.trim(),
         email: document.getElementById("setEmail").value.trim(),
       }));
     } catch (e) {}
+    setContactEditing = false;
+    refreshContact();
   }
-  document.getElementById("setPhone").addEventListener("change", saveContact);
-  document.getElementById("setEmail").addEventListener("change", saveContact);
+  document.getElementById("setContactEdit").addEventListener("click", () => {
+    if (isGoogleAccount(authUser)) return;
+    setContactEditing = true;
+    refreshContact();
+    requestAnimationFrame(() => document.getElementById("setPhone").focus());
+  });
+  document.getElementById("setContactSave").addEventListener("click", saveContact);
+  document.getElementById("setContactCancel").addEventListener("click", closeSetContactEditor);
+  for (const id of ["setPhone", "setEmail"]) {
+    document.getElementById(id).addEventListener("keydown", (e) => {
+      if (e.key === "Enter") saveContact();
+      if (e.key === "Escape") closeSetContactEditor();
+    });
+  }
   document.getElementById("settingsBtn").addEventListener("click", () => {
+    setContactEditing = false; // the overlay always opens on the read-only view
     refreshSettings();
     document.getElementById("settings").hidden = false;
   });
