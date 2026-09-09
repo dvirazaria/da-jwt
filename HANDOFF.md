@@ -464,6 +464,25 @@ history still contains the dead key). Only the `sb_publishable_...` key is meant
 screen (name only) becomes the real auth screen; `me`/contact fields in settings were built as
 placeholders for this, and `ParticipantRef.userId` starts getting real values instead of `null`.
 
+## Friend-invite backend — manual SQL order
+
+The friend-link client now requires the secure server flow; it intentionally creates no offline
+fallback token. In the Supabase SQL editor, run these files in this exact order, each as its own
+successful transaction, and do not run them from the app:
+
+1. `docs/backend/schema.sql`
+2. `docs/backend/rls-policies.sql`
+3. `docs/backend/join-invite.sql`
+4. `docs/backend/link-guest.sql` (if guest-linking is enabled)
+5. `docs/backend/friend-invites.sql`
+
+`friend-invites.sql` creates the dedicated RLS-protected `friend_invites` table and grants only
+authenticated callers access to `app_create_friend_invite()` and
+`app_accept_friend_invite(text)`. It must follow the first two files because it depends on
+`profiles`, `friendships`, `app_set_updated_at()`, and `app_current_profile_id()`. Never add the
+token to `profiles` or a profile SELECT response: profile policies can expose a profile to an
+existing friend or group-mate, while a friend-invite token remains secret by design.
+
 ## Release process
 1. Edit `kupa-sgura.html` only.
 2. Bump `VERSION` in `build.py`, run `python3 build.py`.

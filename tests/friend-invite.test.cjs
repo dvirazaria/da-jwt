@@ -30,7 +30,8 @@ function freshContext() {
 }
 const run = (code, context) => vm.runInContext(code, context || freshContext());
 
-const SAMPLE_LINK = 'https://poker-tau-pink.vercel.app/?friend=ABCDEFGH';
+const SAMPLE_TOKEN = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const SAMPLE_LINK = 'https://poker-tau-pink.vercel.app/?friend=' + SAMPLE_TOKEN;
 
 function buildFriendText(context, myName, url) {
   Object.assign(context, { myName, url });
@@ -76,25 +77,25 @@ test('the message survives encodeURIComponent for wa.me/?text= and decodes back 
 
 // ---------- parseFriendToken / non-shadowing with parseJoinToken ----------
 
-test('parseFriendToken reads ?friend= with the same normalization and alphabet rules as parseJoinToken', () => {
+test('parseFriendToken accepts the server-issued 256-bit hex token and rejects short or malformed values', () => {
   const context = freshContext();
-  assert.equal(run('parseFriendToken("?friend=abcd-2345")', context), 'ABCD2345');
-  assert.equal(run('parseFriendToken("?friend=abcd2345&x=1")', context), 'ABCD2345');
+  assert.equal(run(`parseFriendToken('?friend=${SAMPLE_TOKEN.toUpperCase()}')`, context), SAMPLE_TOKEN);
+  assert.equal(run(`parseFriendToken('?friend=${SAMPLE_TOKEN}&x=1')`, context), SAMPLE_TOKEN);
+  assert.equal(run('parseFriendToken("?friend=abcd2345")', context), null);
   assert.equal(run('parseFriendToken("?friend=short")', context), null);
   assert.equal(run('parseFriendToken("?nothing=1")', context), null);
-  // 0/O/1/I are not in the alphabet, so a lookalike code is still refused (same rule as ?join=).
-  assert.equal(run('parseFriendToken("?friend=ABCD2O45")', context), null);
+  assert.equal(run(`parseFriendToken('?friend=${'g'.repeat(64)}')`, context), null);
 });
 
 test('?join= and ?friend= never shadow each other when both are present in the same URL', () => {
   const context = freshContext();
-  const combined = '?join=ABCD2345&friend=WXYZ6789';
+  const combined = '?join=ABCD2345&friend=' + SAMPLE_TOKEN;
   assert.equal(run(`parseJoinToken(${JSON.stringify(combined)})`, context), 'ABCD2345');
-  assert.equal(run(`parseFriendToken(${JSON.stringify(combined)})`, context), 'WXYZ6789');
+  assert.equal(run(`parseFriendToken(${JSON.stringify(combined)})`, context), SAMPLE_TOKEN);
   // Order in the query string must not matter either.
-  const reversed = '?friend=WXYZ6789&join=ABCD2345';
+  const reversed = '?friend=' + SAMPLE_TOKEN + '&join=ABCD2345';
   assert.equal(run(`parseJoinToken(${JSON.stringify(reversed)})`, context), 'ABCD2345');
-  assert.equal(run(`parseFriendToken(${JSON.stringify(reversed)})`, context), 'WXYZ6789');
+  assert.equal(run(`parseFriendToken(${JSON.stringify(reversed)})`, context), SAMPLE_TOKEN);
 });
 
 // ---------- structure: entry points and share handlers ----------
@@ -113,8 +114,11 @@ test('the group page carries a direct invite entry point beside "חברים", no
   assert.match(btnSource, /buildInviteShareText\(/);
 });
 
-test("the friend-invite share handler prefers navigator.share and falls back to wa.me, like the group invite's", () => {
-  const handler = sourceBetween('  function shareFriendInvite() {', '  function resetAddFriendPanel() {');
+test('the friend-invite share handler requires a cloud session and gets its token from the create RPC', () => {
+  const handler = sourceBetween('  async function shareFriendInvite() {', '  function resetAddFriendPanel() {');
+  assert.match(handler, /if \(!cloudMode\(\) \|\| friendInviteSharing\) return;/);
+  assert.match(handler, /supabase\.rpc\("app_create_friend_invite"\)/);
+  assert.doesNotMatch(handler, /generateInviteToken\(/);
   assert.match(
     handler,
     /typeof navigator\.share === "function"[\s\S]*navigator\.share\([\s\S]*?\)[\s\S]*else[\s\S]*wa\.me\/\?text=/,
@@ -122,4 +126,25 @@ test("the friend-invite share handler prefers navigator.share and falls back to 
   );
   assert.match(handler, /encodeURIComponent\(message\)/);
   assert.match(handler, /window\.open\([\s\S]*?"_blank", "noopener"\)/);
+});
+
+test('the friend notice redeems only through the accept RPC, has busy state, pulls cloud data and cleans the URL', () => {
+  const notice = sourceBetween('  // ---------- friend invite ----------', '  // ---------- iOS Safari install hint ----------');
+  assert.match(notice, /supabase\.rpc\("app_accept_friend_invite", \{ p_token: token \}\)/);
+  assert.match(notice, /friendNoticeRedeeming/);
+  assert.match(notice, /await pullCloud\(\)/);
+  assert.match(notice, /stripFriendFromUrl\(\)/);
+  assert.doesNotMatch(notice, /\.from\("friend_invites"\)/);
+});
+
+test('friend-invites SQL keeps tokens out of profile reads and confines both RPCs to authenticated callers', () => {
+  const sql = fs.readFileSync('docs/backend/friend-invites.sql', 'utf8');
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS friend_invites/);
+  assert.doesNotMatch(sql, /ALTER TABLE profiles[\s\S]*friend_invite/);
+  assert.match(sql, /ALTER TABLE friend_invites ENABLE ROW LEVEL SECURITY/);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION app_create_friend_invite\(\)/);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION app_accept_friend_invite\(p_token text\)/);
+  assert.match(sql, /gen_random_bytes\(32\)/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION app_create_friend_invite\(\) FROM public/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION app_accept_friend_invite\(text\) TO authenticated/);
 });

@@ -876,6 +876,7 @@
     font-size: 28px; font-weight: 800; letter-spacing: .12em;
     font-variant-numeric: tabular-nums;
   }
+  .friend-invite-code { font-size: 16px; letter-spacing: .06em; overflow-wrap: anywhere; }
   /* D6: the join-notice's own code display reads quieter than the group settings invite code. */
   #joinNoticeCode { color: var(--dim); }
   /* The one-line result of a redemption; fadeIn is the "text appears in place" motion (DESIGN). */
@@ -1140,7 +1141,7 @@
 <div class="login" id="friendNotice" hidden>
   <div class="login-in">
     <h2>הוזמנת להיות חבר</h2>
-    <p class="games-invite-code" id="friendNoticeCode" dir="ltr"></p>
+    <p class="games-invite-code friend-invite-code" id="friendNoticeCode" dir="ltr"></p>
     <p class="join-notice-status" id="friendNoticeStatus" role="status" aria-live="polite" hidden></p>
     <div class="join-notice-actions">
       <button type="button" class="btn-primary" id="friendNoticeAcceptBtn">אשר בקשה</button>
@@ -3300,14 +3301,9 @@
   }
 
   // ---------- friend invite (pure) ----------
-  // "הוסף אותי כחבר": a personal, shareable link modeled on the group invite above — same token
-  // shape (generateInviteToken/INVITE_TOKEN_ALPHABET, reused as-is), same URL-with-query idea,
-  // its own distinct query param so it never shadows ?join= (tests/friend-invite.test.cjs pins
-  // this). There is no server-side redemption yet: no RPC resolves a friend token to the person
-  // who shared it, so nothing here stores a token→identity mapping. The share button (friends
-  // screen) mints one fresh each time it is tapped — enough to prove the URL/notice shape
-  // end-to-end — and the notice's accept action surfaces SERVER_NOTE instead of a fake success.
-  // See the share-links report for the RPC a follow-up needs to add.
+  // Friend tokens are server-minted opaque 256-bit values, deliberately distinct from the short
+  // group-invite code. Their mapping lives only in friend_invites and is never readable through
+  // profile policies; app_create_friend_invite/app_accept_friend_invite are the whole seam.
   function friendInviteLink(token, origin, pathname) {
     return origin + pathname + "?friend=" + token;
   }
@@ -3333,8 +3329,13 @@
     if (!match) return null;
     let raw = "";
     try { raw = decodeURIComponent(match[1]); } catch (e) { raw = match[1]; }
-    const token = normalizeInviteToken(raw);
-    return new RegExp("^[" + INVITE_TOKEN_ALPHABET + "]{8}$").test(token) ? token : null;
+    const token = String(raw).toLowerCase().replace(/[\s-]/g, "");
+    return /^[0-9a-f]{64}$/.test(token) ? token : null;
+  }
+
+  function formatFriendInviteToken(token) {
+    const t = String(token || "");
+    return t.replace(/(.{8})/g, "$1-").replace(/-$/, "");
   }
 
   // The one normalization for a token that arrives from outside (a URL, a paste, a hand-typed
@@ -7259,6 +7260,7 @@
     render();
     enterCloudMode(); // phase 2a: groups/members/invites/friendships now live on the server
     maybeRunPendingJoin(); // an invite link opened before signing in redeems itself now, once
+    maybeRunPendingFriendInvite();
   }
 
   function initAuth() {
@@ -7578,19 +7580,37 @@
     renderFriendsPage();
   }
 
-  // "הוסף אותי כחבר": the reverse of "הוסף חבר" — instead of searching for someone, share a
-  // personal link that lets them add themselves. Works with or without an account, same as the
-  // group invite's share actions, because it never calls the server: it mints a token (friend
-  // invite (pure), above), builds the WhatsApp-ready message and shares it, exactly the
-  // navigator.share-first / wa.me-fallback pattern renderGroupInvite's "וואטסאפ" action uses.
-  function shareFriendInvite() {
-    const token = generateInviteToken(randomInviteBytes());
-    const link = friendInviteLink(token, location.origin, location.pathname);
-    const message = buildFriendShareText(me, link);
-    if (typeof navigator.share === "function") {
-      navigator.share({ title: "סוגרים קופה", text: message }).catch(() => {});
-    } else {
-      window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank", "noopener");
+  let friendInviteSharing = false;
+  let friendInviteShareError = "";
+
+  // A personal token can only be useful when a signed-in server owns it. Do
+  // not manufacture a local fallback: an offline link would be dead on arrival.
+  async function shareFriendInvite() {
+    if (!supabase) return;
+    if (!cloudMode() || friendInviteSharing) return;
+    const sessionUserId = authUser && authUser.id;
+    friendInviteSharing = true;
+    friendInviteShareError = "";
+    renderFriendsPage();
+    try {
+      const { data, error } = await supabase.rpc("app_create_friend_invite");
+      if (error) throw error;
+      if (!cloudMode() || !authUser || authUser.id !== sessionUserId) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      const token = row && parseFriendToken(row.token);
+      if (!token) throw new Error("bad friend invite token");
+      const link = friendInviteLink(token, location.origin, location.pathname);
+      const message = buildFriendShareText(me, link);
+      if (typeof navigator.share === "function") {
+        navigator.share({ title: "סוגרים קופה", text: message }).catch(() => {});
+      } else {
+        window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank", "noopener");
+      }
+    } catch (e) {
+      friendInviteShareError = "לא הצלחנו ליצור קישור לחברים, נסו שוב";
+    } finally {
+      friendInviteSharing = false;
+      if (cloudMode() && authUser && authUser.id === sessionUserId) renderFriendsPage();
     }
   }
 
@@ -7737,19 +7757,20 @@
     friendsSec.appendChild(addFriendBtn);
     if (online) renderAddFriendPanel(friendsSec);
     if (!online) friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
-    // The reverse direction — "הוסף אותי כחבר" shares a personal link instead of searching for
-    // someone (Problem 2 of the share-links work). Unlike "הוסף חבר" this never calls the server,
-    // so it works with or without an account; it only needs a name to invite as (me).
+    // The reverse direction uses a stable server token, so it is disabled until a signed-in
+    // cloud session can create a redeemable link.
     if (me) {
-      const inviteMeBtn = el("button", "games-invite-action", "הוסף אותי כחבר");
+      const inviteMeBtn = el("button", "games-invite-action", friendInviteSharing ? "יוצר קישור…" : "הוסף אותי כחבר");
       inviteMeBtn.type = "button";
+      inviteMeBtn.disabled = !online || friendInviteSharing;
       inviteMeBtn.style.marginTop = "14px";
       // .games-invite-action's documented 40px (DESIGN.md) matches its three existing siblings
       // ("העתק קישור"/"שתף"/"וואטסאפ") on the group invite card; this one stands alone on the
       // friends screen, so it gets the full 44px touch target on top of that shared style.
       inviteMeBtn.style.minHeight = "44px";
-      inviteMeBtn.addEventListener("click", shareFriendInvite);
+      if (online) inviteMeBtn.addEventListener("click", shareFriendInvite);
       friendsSec.appendChild(inviteMeBtn);
+      if (friendInviteShareError) friendsSec.appendChild(el("p", "friend-error", friendInviteShareError));
     }
     box.appendChild(friendsSec);
   }
@@ -8595,12 +8616,11 @@
   // ?friend= is a distinct param from ?join= (parseFriendToken, friend invite (pure) section) so
   // the two never shadow each other; both are read independently at boot, below.
   //
-  // Unlike group joins there is no redemption RPC yet at all (see the friend invite (pure) note
-  // and the share-links report for what a follow-up needs to add), so this has exactly one shape,
-  // not three: the notice always shows the code, and "אשר בקשה" is a real, tappable action that
-  // answers honestly — SERVER_NOTE inline — instead of a fake success. "לא עכשיו" always closes it.
+  // The token stays in memory while the receiver signs in. Once authenticated,
+  // app_accept_friend_invite resolves it privately and accepts the friendship.
   let pendingFriendToken = null; // in memory only, mirrors pendingJoinToken — no new storage key
   let friendNoticeBound = false;
+  let friendNoticeRedeeming = false;
 
   function stripFriendFromUrl() {
     const params = new URLSearchParams(location.search);
@@ -8626,20 +8646,96 @@
     stripFriendFromUrl();
   }
 
+  function friendNoticeMessage(status) {
+    switch (String(status || "")) {
+      case "accepted": return "נוספתם אחד לשני כחברים";
+      case "already-friends": return "אתם כבר חברים";
+      case "self": return "אי אפשר להוסיף את עצמכם כחבר";
+      case "invalid": return "הקישור לא נמצא או שכבר לא תקין";
+      default: return "הוספת החבר נכשלה, נסו שוב";
+    }
+  }
+
+  function friendInviteSucceeded(status) {
+    return status === "accepted" || status === "already-friends";
+  }
+
+  async function acceptFriendInvite(token) {
+    if (!supabase) return;
+    if (!cloudMode() || friendNoticeRedeeming) return;
+    const sessionUserId = authUser && authUser.id;
+    const ui = friendNoticeParts();
+    friendNoticeRedeeming = true;
+    ui.acceptBtn.disabled = true;
+    ui.acceptBtn.textContent = "מאשר…";
+    ui.status.hidden = true;
+    try {
+      const { data, error } = await supabase.rpc("app_accept_friend_invite", { p_token: token });
+      if (error) throw error;
+      if (!cloudMode() || !authUser || authUser.id !== sessionUserId) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      const status = String((row && row.status) || "");
+      const ok = friendInviteSucceeded(status);
+      ui.status.textContent = friendNoticeMessage(status);
+      ui.status.classList.toggle("is-error", !ok);
+      ui.status.hidden = false;
+      if (!ok) {
+        ui.acceptBtn.hidden = true;
+        pendingFriendToken = null;
+        stripFriendFromUrl();
+        return;
+      }
+      await pullCloud();
+      if (!cloudMode() || !authUser || authUser.id !== sessionUserId) return;
+      setTimeout(() => { closeFriendNotice(); render(); }, 700);
+    } catch (e) {
+      if (cloudMode() && authUser && authUser.id === sessionUserId) {
+        ui.status.textContent = friendNoticeMessage("error");
+        ui.status.classList.add("is-error");
+        ui.status.hidden = false;
+        ui.acceptBtn.disabled = false;
+        ui.acceptBtn.textContent = "אשר בקשה";
+      }
+    } finally {
+      friendNoticeRedeeming = false;
+    }
+  }
+
   function showFriendNotice(token) {
     const ui = friendNoticeParts();
-    ui.code.textContent = formatInviteCode(token);
+    ui.code.textContent = formatFriendInviteToken(token);
     ui.status.hidden = true;
+    ui.status.classList.remove("is-error");
+    ui.acceptBtn.disabled = false;
+    ui.acceptBtn.hidden = false;
     pendingFriendToken = token;
     ui.notice.hidden = false;
     if (!friendNoticeBound) {
       friendNoticeBound = true;
       ui.acceptBtn.addEventListener("click", () => {
-        ui.status.textContent = SERVER_NOTE;
-        ui.status.hidden = false;
+        const token2 = pendingFriendToken;
+        if (!token2) return;
+        if (cloudMode()) { acceptFriendInvite(token2); return; }
+        if (supabase) { friendNoticeParts().notice.hidden = true; showLogin(); }
       });
       ui.laterBtn.addEventListener("click", closeFriendNotice);
     }
+    if (!supabase) {
+      ui.status.textContent = "קישור חברים דורש חיבור לחשבון";
+      ui.status.classList.add("is-error");
+      ui.status.hidden = false;
+      ui.acceptBtn.hidden = true;
+    } else if (!cloudMode()) {
+      ui.acceptBtn.textContent = "התחבר כדי לאשר";
+    } else {
+      ui.acceptBtn.textContent = "אשר בקשה";
+    }
+  }
+
+  function maybeRunPendingFriendInvite() {
+    const token = pendingFriendToken || parseFriendToken(location.search);
+    if (!token || friendNoticeRedeeming || !cloudMode()) return;
+    showFriendNotice(token);
   }
 
   // ---------- iOS Safari install hint ----------
