@@ -576,6 +576,11 @@
   .btn-close-table.hold-state:active { transform: scale(.98); }
   .btn-close-table.force-state { background: var(--accent); border-color: var(--accent); color: var(--bg); }
   .btn-close-table.force-state::before { transform: scaleX(0); transition: none; }
+  /* A destructive hold (account deletion) stays --bad throughout the fill instead of turning
+     accent-colored like the force-close "unlock" flow above — there is no second, safer step
+     after this one to signal. */
+  .btn-close-table.warn-state.hold-state { border-color: var(--bad); color: var(--bad); }
+  #deleteAccountHoldBtn { width: 100%; max-width: 300px; margin: 0; }
   .finish-game-hint { color: var(--dim); font-size: 12px; font-weight: 300; text-align: center; margin: 8px 0 0; }
   .return-edit-btn { display: block; margin: 18px auto 0; color: var(--dim); font-size: 13px; font-weight: 500; padding: 6px 2px; }
   .return-edit-btn:hover { color: var(--text); }
@@ -805,6 +810,7 @@
   .set-flat:hover { color: var(--accent); }
   .set-flat.danger { color: var(--bad); }
   .set-flat.danger:hover, .set-flat.danger.armed { color: var(--bad); }
+  .settings-danger-title { font-size: 13px; letter-spacing: .04em; font-weight: 500; color: var(--bad); margin: 22px 0 0; }
 
   /* group page: invite (code / link / QR) */
   .games-invite-create {
@@ -862,6 +868,7 @@
     .btn-close-table.blocked-state:hover { background: none; color: var(--dim); }
     .btn-close-table.force-state:hover { background: var(--accent-press); color: var(--bg); }
     .btn-close-table.hold-state:hover { background: none; border-color: var(--accent); color: var(--accent); }
+    .btn-close-table.warn-state.hold-state:hover { background: none; border-color: var(--bad); color: var(--bad); }
     .btn-primary:hover { background: var(--accent); color: var(--bg); }
     .btn-primary:disabled:hover { background: none; color: var(--faint); }
     .games-invite-create:hover { background: var(--accent); color: var(--bg); }
@@ -961,6 +968,20 @@
     <button type="button" class="set-flat" id="setSignInBtn" hidden>התחבר עם חשבון</button>
     <button type="button" class="set-flat" id="setSwapBtn">התנתקות</button>
     <button type="button" class="set-flat danger" id="setClearBtn">איפוס רקורד</button>
+    <p class="settings-danger-title" id="setDangerTitle" hidden>אזור מסוכן</p>
+    <button type="button" class="set-flat danger" id="setDeleteAccountToggle" hidden aria-expanded="false" aria-controls="setDeleteAccountPanel">מחיקת חשבון</button>
+    <div class="games-create-panel" id="setDeleteAccountPanel">
+      <div class="games-create-panel-in">
+        <div class="games-create-panel-content">
+          <p class="games-primary-reason">החשבון, השם, האימייל והפרופיל שלך יימחקו לצמיתות — לא תוכל להתחבר שוב.</p>
+          <p class="games-primary-reason">היסטוריית המשחקים של החברים שלך נשמרת, השם שלך יופיע בה כמשתמש שנמחק.</p>
+          <button type="button" class="btn-close-table warn-state" id="deleteAccountHoldBtn"><span>מחיקה לצמיתות</span></button>
+          <p class="finish-game-hint" id="deleteAccountHint" hidden>המשך להחזיק כדי למחוק</p>
+          <button type="button" class="games-create-cancel" id="setDeleteAccountCancel">ביטול</button>
+          <p class="friend-error" id="deleteAccountError" hidden></p>
+        </div>
+      </div>
+    </div>
     <p class="empty-note" style="margin-top:6px">גרסה 60</p>
     <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
@@ -992,6 +1013,7 @@
   <div class="login" id="login" hidden>
   <div class="login-in">
     <h2>מי אתה?</h2>
+    <p class="join-notice-status" id="loginNote" hidden></p>
     <div class="auth-block" id="authBlock" hidden>
       <button type="button" class="btn-google" id="authGoogleBtn">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1228,6 +1250,10 @@
   let profileTab = "balance";
   let debtTab = "owed";
   let setNameEditing = false;
+  let deleteAccountBusy = false;         // an app_delete_my_account() RPC call is in flight
+  let deleteAccountHoldTimer = null;
+  let deleteAccountCompletionTimer = null;
+  let loginNote = "";                    // shown once on the next showLogin() (e.g. after deletion), then cleared
 
   // ---------- theme (default: dark), floating sun/moon toggle ----------
   const SUN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19"></path></svg>';
@@ -2865,6 +2891,52 @@
     const member = list.find(m => m && m.id === memberId);
     if (!member || member.status !== "active" || member.role !== "admin") return false;
     return !list.some(m => m && m.id !== memberId && m.groupId === member.groupId && m.status === "active" && m.role === "admin");
+  }
+  // ----- account deletion helpers — mirror app_delete_my_account() in
+  // docs/backend/delete-account.sql; keep both in sync if this logic ever changes. -----
+  // Missing/invalid joinedAt sorts last (Infinity): an unknown join time never outranks a member
+  // whose join time is actually on record.
+  function joinedAtMs(member) {
+    const t = member && member.joinedAt ? new Date(member.joinedAt).getTime() : NaN;
+    return Number.isFinite(t) ? t : Infinity;
+  }
+  // When the leaving membership (memberId) is a group's LAST active admin: names the longest-
+  // standing OTHER active member (earliest joinedAt) to promote, or "archive" when none remain.
+  // A multi-admin group, a non-admin membership, or an already-inactive one is a no-op ("none") —
+  // isLastActiveAdmin (above) is the single source of truth for "would this leave nobody in
+  // charge". Pure: returns a decision, mutates nothing; the caller applies it.
+  function pickAccountDeletionSuccessor(members, memberId) {
+    const list = Array.isArray(members) ? members : [];
+    const member = list.find(m => m && m.id === memberId);
+    if (!member || member.status !== "active" || member.role !== "admin" || !isLastActiveAdmin(list, memberId)) {
+      return { action: "none", memberId: null };
+    }
+    const others = list.filter(m => m && m.id !== memberId && m.groupId === member.groupId && m.status === "active");
+    if (!others.length) return { action: "archive", memberId: null };
+    const successor = others.slice().sort((a, b) => joinedAtMs(a) - joinedAtMs(b))[0];
+    return { action: "promote", memberId: successor.id };
+  }
+  // Client-side mirror of the identity scrub in app_delete_my_account(): drops identity.userId
+  // from group membership, the open table and its leader ref, replacing it with a guestId —
+  // exactly like the server drops profile_id in favour of a fresh guests row — so this device
+  // stops claiming to be an account that can never sign in again. Every displayName is left
+  // untouched, and no money field is ever touched (buyins/cashout/entryLog live on `players`
+  // entries this function only patches the identity of; debts/history carry no userId to begin
+  // with), so every balance total is identical before and after. Pure: returns a new state, no I/O.
+  function scrubLocalIdentity(state, identity) {
+    const s = state || {};
+    const uid = identity && identity.userId;
+    if (!uid) return s;
+    const fallbackGuestId = (identity && identity.guestId) || newId();
+    const scrubRef = (ref) => (ref && ref.userId === uid)
+      ? { ...ref, userId: null, guestId: ref.guestId || fallbackGuestId }
+      : ref;
+    return {
+      ...s,
+      groupMembers: (Array.isArray(s.groupMembers) ? s.groupMembers : []).map(scrubRef),
+      players: (Array.isArray(s.players) ? s.players : []).map(scrubRef),
+      leaderRef: s.leaderRef ? scrubRef(s.leaderRef) : s.leaderRef,
+    };
   }
   // Builds a Player record for the current game. guestId/memberId stay null for an ungrouped
   // game; addPlayer and startGroupGame resolve them for a group game (Task 8).
@@ -6866,6 +6938,10 @@
     authRedirectError = ""; // shown once — a later visit to this screen starts clean
     setAuthError("authEmailError", "");
     setAuthError("authCodeError", "");
+    const note = document.getElementById("loginNote");
+    note.textContent = loginNote;
+    note.hidden = !loginNote;
+    loginNote = ""; // shown once, same rule as authRedirectError above
     const chips = document.getElementById("loginChips");
     chips.innerHTML = "";
     knownNames().forEach(n => {
@@ -7575,6 +7651,9 @@
     document.getElementById("setSignInBtn").hidden = !canSignIn;
     document.getElementById("setSwapBtn").hidden = !authUser;
     document.getElementById("setSwapBtn").textContent = "התנתקות";
+    // Danger zone: account deletion only makes sense for a signed-in account.
+    document.getElementById("setDangerTitle").hidden = !authUser;
+    document.getElementById("setDeleteAccountToggle").hidden = !authUser;
     document.getElementById("setNameEdit").hidden = false;
     document.getElementById("setNameEditor").hidden = !setNameEditing;
     document.getElementById("setNameInput").value = me || "";
@@ -7668,6 +7747,113 @@
     document.getElementById("settings").hidden = true;
     render();
   });
+
+  // ---------- account deletion (danger zone) ----------
+  // Tapping "מחיקת חשבון" expands an inline panel (same grid-collapse pattern as
+  // .games-create-panel elsewhere); the destructive action itself is confirmed with the same
+  // cancellable one-second pointer hold as "סיים משחק" / the forced "סגור שולחן", never a second
+  // click-to-arm step. No alert/confirm/form-submit anywhere in this flow.
+  const DELETE_ACCOUNT_HOLD_MS = 1000;
+
+  function closeDeleteAccountPanel() {
+    document.getElementById("setDeleteAccountPanel").classList.remove("open");
+    document.getElementById("setDeleteAccountToggle").setAttribute("aria-expanded", "false");
+    clearDeleteAccountHold();
+    setDeleteAccountError("");
+  }
+  document.getElementById("setDeleteAccountToggle").addEventListener("click", (e) => {
+    const panel = document.getElementById("setDeleteAccountPanel");
+    const opening = !panel.classList.contains("open");
+    if (!opening) { closeDeleteAccountPanel(); return; }
+    panel.classList.add("open");
+    e.currentTarget.setAttribute("aria-expanded", "true");
+  });
+  document.getElementById("setDeleteAccountCancel").addEventListener("click", closeDeleteAccountPanel);
+
+  function clearDeleteAccountHold() {
+    if (deleteAccountHoldTimer) clearTimeout(deleteAccountHoldTimer);
+    if (deleteAccountCompletionTimer) clearTimeout(deleteAccountCompletionTimer);
+    deleteAccountHoldTimer = null;
+    deleteAccountCompletionTimer = null;
+    const btn = document.getElementById("deleteAccountHoldBtn");
+    const hint = document.getElementById("deleteAccountHint");
+    if (btn) btn.classList.remove("hold-state");
+    if (hint) hint.hidden = true;
+  }
+  function beginDeleteAccountHold(e) {
+    if (!authUser || deleteAccountBusy) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    clearDeleteAccountHold();
+    const btn = e.currentTarget;
+    const hint = document.getElementById("deleteAccountHint");
+    btn.classList.add("hold-state");
+    if (hint) hint.hidden = false;
+    if (btn.setPointerCapture && e.pointerId !== undefined) btn.setPointerCapture(e.pointerId);
+    deleteAccountHoldTimer = setTimeout(() => {
+      deleteAccountHoldTimer = null;
+      deleteAccountCompletionTimer = setTimeout(() => {
+        deleteAccountCompletionTimer = null;
+        btn.classList.remove("hold-state");
+        if (hint) hint.hidden = true;
+        runDeleteAccount();
+      }, 60);
+    }, DELETE_ACCOUNT_HOLD_MS);
+  }
+  function endDeleteAccountHold(e) {
+    if (deleteAccountHoldTimer) clearDeleteAccountHold();
+    const btn = e.currentTarget;
+    if (btn.releasePointerCapture && e.pointerId !== undefined && btn.hasPointerCapture && btn.hasPointerCapture(e.pointerId)) {
+      btn.releasePointerCapture(e.pointerId);
+    }
+  }
+  const deleteAccountHoldBtn = document.getElementById("deleteAccountHoldBtn");
+  deleteAccountHoldBtn.addEventListener("pointerdown", beginDeleteAccountHold);
+  deleteAccountHoldBtn.addEventListener("pointerup", endDeleteAccountHold);
+  deleteAccountHoldBtn.addEventListener("pointercancel", endDeleteAccountHold);
+  deleteAccountHoldBtn.addEventListener("lostpointercapture", endDeleteAccountHold);
+
+  function setDeleteAccountError(message) {
+    const line = document.getElementById("deleteAccountError");
+    if (!line) return;
+    line.textContent = message || "";
+    line.hidden = !message;
+  }
+  // Failure leaves everything exactly as it was — inline error only, nothing local is touched
+  // until app_delete_my_account() actually confirms.
+  async function runDeleteAccount() {
+    if (!supabase || !authUser || deleteAccountBusy) return;
+    setDeleteAccountError("");
+    deleteAccountBusy = true;
+    try {
+      const { error } = await supabase.rpc("app_delete_my_account");
+      if (error) throw error;
+      finishAccountDeletion();
+    } catch (e) {
+      deleteAccountBusy = false;
+      setDeleteAccountError("לא הצלחנו למחוק את החשבון, נסו שוב");
+    }
+  }
+  // The RPC already erased the account server-side; this is local cleanup only. Mirrors
+  // scrubLocalIdentity's server counterpart first (so this device stops claiming to be an
+  // account that can never sign in again), then signs out and returns to login — same as the
+  // existing setSwapBtn flow, plus the scrub and a short confirmation line.
+  function finishAccountDeletion() {
+    // Not a new ref being minted (that rule is about never fabricating a userId locally) — this
+    // reads the one already-confirmed id of the session that is about to end, purely to find and
+    // strip every local trace of it.
+    const deletedUserId = authUser ? authUser.id : null;
+    const identity = { userId: deletedUserId, guestId: resolveGuestId(collectionsOf(state), me) };
+    state = scrubLocalIdentity(state, identity);
+    signOutAccount();
+    save();
+    me = null; saveMe();
+    deleteAccountBusy = false;
+    document.getElementById("settings").hidden = true;
+    closeDeleteAccountPanel();
+    render();
+    loginNote = "החשבון נמחק בהצלחה";
+    showLogin();
+  }
 
   // Hide the tab bar while the on-screen keyboard is open — iOS moves
   // fixed-bottom elements around with the keyboard, so we duck out instead.
