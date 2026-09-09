@@ -96,6 +96,12 @@
 -- function below calls it, never auth.uid() directly.
 -- =====================================================================
 
+-- Everything below runs as ONE transaction. This file REPLACES app_redeem_invite,
+-- which is already live and is the only way anyone joins a group -- a half-applied
+-- run could leave that path broken with no obvious symptom. Postgres DDL is
+-- transactional, so a failure anywhere rolls the whole file back untouched.
+BEGIN;
+
 -- ---------------------------------------------------------------------
 -- 0. Remove what this file replaces (the old, never-executed consent flow)
 -- ---------------------------------------------------------------------
@@ -509,6 +515,8 @@ COMMENT ON FUNCTION app_self_claim_guest(uuid) IS
 REVOKE ALL ON FUNCTION app_self_claim_guest(uuid) FROM public;
 REVOKE ALL ON FUNCTION app_self_claim_guest(uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION app_self_claim_guest(uuid) TO authenticated;
+
+COMMIT;
 
 -- ---------------------------------------------------------------------
 -- HOW TO VERIFY (SQL editor, two accounts + a helper — mirrors the report's manual test plan)
