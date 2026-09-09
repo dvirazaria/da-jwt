@@ -63,12 +63,14 @@
     width: 100%; height: 40px; margin: 0 auto 8px;
     pointer-events: none;
   }
-  /* Optical centring. The image box is already centred to the pixel, and the artwork's outer
-     edges are symmetric on its 408px canvas — but the four glyphs grow left→right (67/70/75/79px
-     wide), so the mean of their centres lands 4.99 canvas px = 1.8 css px left of the middle at
-     this width. The eye reads a row of discrete symbols by their centres, which is why the group
-     looks pulled to the start edge. Nudge it back. Re-measure if `width` here ever changes. */
-  .suits-mark img { display: block; width: 150px; height: auto; transform: translateX(1.8px); }
+  /* Optical centring, settled by eye rather than by formula. Two measurements of "centre"
+     disagree on this artwork: the bounding box is already symmetric (8px of empty canvas each
+     side), the mean of the four glyphs' box centres sits 1.79px toward the start edge, and the
+     alpha-weighted ink centroid sits 1.30px toward the end edge. Neither matched what the row
+     actually looks like — it still read start-heavy at both. 4.8px toward the end edge is the
+     value that looks centred. Re-tune by eye if the artwork or `width` here ever changes; do not
+     "correct" it back to either computed number. */
+  .suits-mark img { display: block; width: 150px; height: auto; transform: translateX(4.8px); }
   .suits-mark .suits-mark-light { display: none; }
   :root[data-theme="light"] .suits-mark-dark { display: none; }
   :root[data-theme="light"] .suits-mark-light { display: block; }
@@ -405,6 +407,18 @@
     font-size: 13px; font-weight: 600; transition: color .2s, opacity .2s;
   }
   .games-create-group-inline:hover { color: var(--accent-press); }
+  /* Group page: "חברים" section heading gets the same trailing action-row treatment as
+     "הקבוצות שלי" above — the direct, always-reachable invite entry point (vs. the full invite
+     management surface, still in the group settings overlay only). Same values as
+     .games-groups-heading/.games-create-group-inline on purpose, just honestly named for their
+     own section, so the two header rows read as one consistent pattern. */
+  .games-members-heading { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+  .games-members-heading .games-section-title { margin: 0; }
+  .games-member-invite-btn {
+    min-height: 44px; padding: 8px 4px; color: var(--accent);
+    font-size: 13px; font-weight: 600; transition: color .2s, opacity .2s;
+  }
+  .games-member-invite-btn:hover { color: var(--accent-press); }
   .games-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .games-quick-actions.single { grid-template-columns: 1fr; }
   .games-quick-action {
@@ -859,6 +873,17 @@
     font-weight: 700; font-size: 15px; padding: 10px 24px; min-height: 44px;
     transition: background-color .2s, color .2s, border-color .2s;
   }
+  /* invite-creation "bind to a guest" picker — same chip idiom as .games-invite-action below */
+  .games-invite-bind { display: flex; flex-direction: column; align-items: center; gap: 8px; animation: rise .3s ease both; }
+  .games-invite-bind-label { margin: 0; color: var(--dim); font-size: 12px; font-weight: 400; }
+  .games-invite-bind-chips { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .games-invite-bind-chip {
+    border: 1px solid var(--line); border-radius: 999px; color: var(--dim);
+    font-size: 13px; font-weight: 600; padding: 8px 16px; min-height: 40px;
+    transition: background-color .2s, color .2s, border-color .2s;
+  }
+  .games-invite-bind-chip.active { border-color: var(--accent); color: var(--accent); }
+  .games-invite-bind-chip:hover { border-color: var(--accent); color: var(--accent); }
   .games-invite-card { display: flex; flex-direction: column; align-items: center; gap: 12px; animation: rise .3s ease both; }
   .games-invite-code {
     margin: 0; text-align: center; color: var(--text);
@@ -1045,7 +1070,7 @@
         </div>
       </div>
     </div>
-    <p class="empty-note" style="margin-top:6px">גרסה 61</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 62</p>
     <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
 </div>
@@ -1125,6 +1150,18 @@
       <button type="button" class="btn-primary" id="joinNoticeJoinBtn" hidden>הצטרף לקבוצה</button>
       <button type="button" class="btn-primary" id="joinNoticeContinueBtn">המשך</button>
       <button type="button" class="btn-skip" id="joinNoticeLaterBtn">לא עכשיו</button>
+    </div>
+  </div>
+</div>
+
+<div class="login" id="friendNotice" hidden>
+  <div class="login-in">
+    <h2>הוזמנת להיות חבר</h2>
+    <p class="games-invite-code" id="friendNoticeCode" dir="ltr"></p>
+    <p class="join-notice-status" id="friendNoticeStatus" role="status" aria-live="polite" hidden></p>
+    <div class="join-notice-actions">
+      <button type="button" class="btn-primary" id="friendNoticeAcceptBtn">אשר בקשה</button>
+      <button type="button" class="btn-skip" id="friendNoticeLaterBtn">לא עכשיו</button>
     </div>
   </div>
 </div>
@@ -1288,6 +1325,8 @@
   let dismissedGuestClaimIds = new Set(); // guestIds whose "שיחקת כאן בעבר?" got a "לא" this session —
                                            // in-memory only, never save()d; a future pull may offer it again
   let guestClaimBusyIds = new Set();      // guestId/claimId currently mid-RPC — disables just that row
+  let inviteBindGuestId = "";             // draft pick for "צור הזמנה" — "" = general, else a guestId
+                                           // of this group's roster; UI-only, reset once the invite exists
   let hideGroupArmed = false;          // "מחק קבוצה" (remove a left group from this device) armed
   let hideGroupArmedTimeout = null;    // auto-disarm timer for the above
   let formerMembersOpen = false;       // whether the "חברים לשעבר" collapsed list is expanded
@@ -1684,6 +1723,11 @@
     ["gamesClosed", "games"],
     ["debts", "debts"],
   ];
+  // groups / groupMembers / invites / games / gameParticipants must NOT move into this map: their
+  // UPDATE policies (docs/backend/security-fixes.sql §F6) no longer carry a standing creator
+  // fallback, so a row that lands here would skip splitCloudWrites and go up as a plain merge
+  // upsert -- reopening the exact 42501-on-first-write bug commit 9eafade fixed. See the
+  // splitCloudWrites doc comment below and security-review-2026-09-09.md's F6 addendum.
   const CLOUD_INSERT_ONLY = { entries: true, transfers: true, debts: true };
   const EMPTY_CLOUD_ROWS = {
     guests: [], groups: [], groupMembers: [], invites: [], friendships: [],
@@ -1712,11 +1756,10 @@
   let cloudGameChannelId = "";   // which game it is for ("" = none)
   let cloudGameEventTimer = null;
   let pendingCloudGame = null;   // a realtime update parked until the active input loses focus
-  // Raw guests/guest_claims rows this pull could read (RLS already narrowed them — see
+  // Raw guests rows this pull could read (RLS already narrowed them — see
   // docs/backend/link-guest.sql). In-memory session cache only, same pattern as cloudProfileIds/
   // cloudGameCreators: never a new localStorage key, never part of `state`, rebuilt every pull.
   let cloudGuestRows = [];
-  let cloudGuestClaims = [];
 
   // `authUser` is declared further down, in the auth section; every caller here runs after boot.
   function cloudMode() { return !!(supabase && authUser); }
@@ -2049,13 +2092,10 @@
       const gameIds = openGames.concat(closedGames).map(row => row.id).filter(Boolean);
       const children = await fetchCloudGameChildren(gameIds);
       const debtsResult = await supabase.from("debts").select("*");
-      // guests/guest_claims feed the "זה אני" prompt (docs/backend/link-guest.sql) only — RLS
-      // already narrows both to what this device may see, so nothing here needs its own filter.
-      // Best-effort: a missing guest_claims table (link-guest.sql not applied yet) must not break
-      // the rest of the pull, so a query error degrades to "no candidates offered" instead of
-      // failing the whole sync.
+      // guests feeds the "זה אני" self-claim row (docs/backend/link-guest.sql) only — RLS already
+      // narrows it to what this device may see, so nothing here needs its own filter. Best-effort:
+      // a query error degrades to "no candidates offered" instead of failing the whole pull.
       const guestsResult = await supabase.from("guests").select("*");
-      const guestClaimsResult = await supabase.from("guest_claims").select("*");
       applyCloudPull({
         groups: groupRows,
         members: memberRows,
@@ -2068,7 +2108,6 @@
         transfers: children.transfers,
         debts: debtsResult.error ? [] : (debtsResult.data || []),
         guests: guestsResult.error ? [] : (guestsResult.data || []),
-        guestClaims: guestClaimsResult.error ? [] : (guestClaimsResult.data || []),
       }, pullSeq);
     } catch (e) {
       setSync(false, "שגיאת סנכרון — נשמר מקומית");
@@ -2109,11 +2148,10 @@
     // The payload was read before a local write happened, so it cannot know about that write.
     // Drop it and read again rather than merging a snapshot that is older than this device.
     if (pullSeq !== undefined && pullSeq !== cloudWriteSeq) { scheduleCloudPull(800); return; }
-    // Read-only cache for the "זה אני" prompt (renderGroupGuestClaims) — updated even when the
-    // merge below defers for a focused input, since nothing here can clobber what someone is
+    // Read-only cache for the "זה אני" self-claim row (renderGroupGuestClaims) — updated even when
+    // the merge below defers for a focused input, since nothing here can clobber what someone is
     // typing.
     cloudGuestRows = payload.guests || [];
-    cloudGuestClaims = payload.guestClaims || [];
     const groupRows = payload.groups || [];
     const memberRows = payload.members || [];
     const inviteRows = payload.invites || [];
@@ -2298,9 +2336,8 @@
     cloudPushAttempt = 0;
     cloudSurfaceError = false;
     cloudGuestRows = [];
-    cloudGuestClaims = [];
     // Push before pull: anything still unconfirmed locally must reach the server before the
-    // server's view can overwrite it. The guest-claim caches are rebuilt by that first pull.
+    // server's view can overwrite it. The guest cache is rebuilt by that first pull.
     pushCloud().then(() => { if (cloudMode()) return pullCloud(); }).catch(() => {});
   }
   // Signed out: keep every local record exactly as it is and simply stop talking to the server.
@@ -2319,7 +2356,6 @@
     cloudProfileIds = [];
     cloudGameCreators = {};
     cloudGuestRows = [];
-    cloudGuestClaims = [];
     pendingCloudGame = null;
     leaveCloudGameChannel();
     setSync(false, "שמירה מקומית");
@@ -2594,7 +2630,13 @@
   //                     status: "active"|"left"|"removed", joinedAt, leftAt: ISO|null,
   //                     hiddenAt: ISO|null } -- hiddenAt: a group I left and removed from THIS
   //                     device only (D8); it never affects anybody else's data.
-  // Invite          = { id, groupId, token, createdBy: ParticipantRef, createdAt, revokedAt: ISO|null }
+  // Invite          = { id, groupId, token, createdBy: ParticipantRef, createdAt, revokedAt: ISO|null,
+  //                     boundGuestId: string|null } -- boundGuestId: set only when a member picked a
+  //                     specific unlinked guest of this group while creating the invite ("הזמן את
+  //                     דוד"); redemption links that guest to whoever signs in through this exact
+  //                     token, server-side and silently (docs/backend/link-guest.sql). Never derived
+  //                     from the token itself and never put in the shared URL/QR/code -- see
+  //                     inviteLink() in the invites (pure) section below, which never takes one.
   // Friendship      = { id, requester: ParticipantRef, addressee: ParticipantRef,
   //                     status: "pending"|"accepted"|"rejected", createdAt, respondedAt: ISO|null }
   // GroupSummary     = { groupId, name, avatarDataUrl, memberCount, members: [displayName], hasActiveGame,
@@ -2656,6 +2698,7 @@
       createdBy: normalizeParticipantRef(i.createdBy),
       createdAt: typeof i.createdAt === "string" ? i.createdAt : "",
       revokedAt: typeof i.revokedAt === "string" ? i.revokedAt : null,
+      boundGuestId: typeof i.boundGuestId === "string" && i.boundGuestId ? i.boundGuestId : null,
     };
   }
   function normalizeFriendship(f) {
@@ -3143,18 +3186,18 @@
     });
   }
 
-  // Local mirror of the SQL safety rule in docs/backend/link-guest.sql (app_approve_guest_claim):
-  // a claim must never seat the same person twice in one game. `players` is one game's roster —
-  // the current table's `state.players`, or a history entry's snapshot. Used to grey out "זה אני"
-  // for the table you are both sitting at right now; the RPC remains the authoritative check
-  // across every game, including closed ones this device may not fully know.
+  // Local mirror of the SQL safety rule in docs/backend/link-guest.sql (app_link_guest_to_profile,
+  // shared by every linking path): a link must never seat the same person twice in one game.
+  // `players` is one game's roster — the current table's `state.players`, or a history entry's
+  // snapshot. The RPC remains the authoritative check across every game, including closed ones
+  // this device may not fully know.
   function seatsGuestAndUser(players, guestId, userId) {
     const list = Array.isArray(players) ? players : [];
     if (!guestId || !userId) return false;
     return list.some(p => p && p.guestId === guestId) && list.some(p => p && p.userId === userId);
   }
-  // Applied to the local collections right after this device's own app_approve_guest_claim call
-  // succeeds, so the approver's screen stops showing the old guest name immediately instead of
+  // Applied to the local collections right after this device's own app_self_claim_guest call
+  // succeeds, so the claimant's own screen stops showing the old guest name immediately instead of
   // waiting for the next pull (which would show the same result anyway, since the server rows are
   // already re-pointed by then — this is an optimistic-UI mirror, not the source of truth). Only
   // identity fields move; every buyin/cashout/entryLog/net stays exactly as it was. Idempotent: a
@@ -3181,6 +3224,33 @@
     return c;
   }
 
+  // Local mirror of app_guest_has_zero_exposure in docs/backend/link-guest.sql: a guest may be
+  // self-claimed only when doing so moves no money -- no open debt on either side, and no
+  // game_participants row in a game that is still open/in settlement or closed unbalanced. Raw
+  // pulled-row shapes throughout (debtor_guest_id/creditor_guest_id/status on a debt row,
+  // guest_id/game_id on a participant row, phase/is_balanced on a game row) -- the same shapes a
+  // pull already hands the cloud mapping section -- kept as plain arguments so this stays
+  // pure/testable, exactly like seatsGuestAndUser above. The RPC is the actual authority (Task
+  // instruction: enforce server-side, not just in the UI); this exists so the two can never quietly
+  // drift apart, and so the rule is pinned by a test independent of any live network call.
+  function guestHasZeroExposure(guestId, debtRows, participantRows, gameRows) {
+    if (!guestId) return false;
+    const debts = Array.isArray(debtRows) ? debtRows : [];
+    const hasOpenDebt = debts.some(d => d && d.status === "open"
+      && (d.debtor_guest_id === guestId || d.creditor_guest_id === guestId));
+    if (hasOpenDebt) return false;
+    const games = Array.isArray(gameRows) ? gameRows : [];
+    const gameById = new Map(games.filter(g => g && g.id != null).map(g => [g.id, g]));
+    const participants = Array.isArray(participantRows) ? participantRows : [];
+    const sitsExposed = participants.some(p => {
+      if (!p || p.guest_id !== guestId) return false;
+      const game = gameById.get(p.game_id);
+      if (!game) return true; // this device doesn't know the game -- fail closed, never assume safe
+      return game.phase !== "closed" || game.is_balanced !== true;
+    });
+    return !sitsExposed;
+  }
+
   // ---------- invites (pure) ----------
   // One invite token model, three presentations (large code / link / QR). These functions stay
   // pure: they mint, format and read tokens, and never touch state. Redeeming one is the join-by-
@@ -3196,8 +3266,16 @@
     }
     return token;
   }
-  function createInvite(invites, groupId, byRef, token, at) {
-    const invite = normalizeInvite({ id: newId(), groupId, token, createdBy: byRef, createdAt: at, revokedAt: null });
+  // boundGuestId (optional) is the local mirror of invites.bound_guest_id (docs/backend/
+  // link-guest.sql) -- a member picking a specific unlinked guest of this group while creating the
+  // invite. Never part of the token/link/QR (see inviteLink below); it only ever travels as this
+  // row's own column, server-validated on push (invites_insert_admin's WITH CHECK) and resolved
+  // server-side, silently, on redemption -- nothing here reads it back out again.
+  function createInvite(invites, groupId, byRef, token, at, boundGuestId) {
+    const invite = normalizeInvite({
+      id: newId(), groupId, token, createdBy: byRef, createdAt: at, revokedAt: null,
+      boundGuestId: boundGuestId || null,
+    });
     invites.push(invite);
     return invite;
   }
@@ -3237,6 +3315,45 @@
     if (code) lines.push("קוד: " + code);
     return lines.join("\n");
   }
+
+  // ---------- friend invite (pure) ----------
+  // "הוסף אותי כחבר": a personal, shareable link modeled on the group invite above — same token
+  // shape (generateInviteToken/INVITE_TOKEN_ALPHABET, reused as-is), same URL-with-query idea,
+  // its own distinct query param so it never shadows ?join= (tests/friend-invite.test.cjs pins
+  // this). There is no server-side redemption yet: no RPC resolves a friend token to the person
+  // who shared it, so nothing here stores a token→identity mapping. The share button (friends
+  // screen) mints one fresh each time it is tapped — enough to prove the URL/notice shape
+  // end-to-end — and the notice's accept action surfaces SERVER_NOTE instead of a fake success.
+  // See the share-links report for the RPC a follow-up needs to add.
+  function friendInviteLink(token, origin, pathname) {
+    return origin + pathname + "?friend=" + token;
+  }
+  // The WhatsApp-ready "add me as a friend" message: the same app-name line buildInviteShareText
+  // opens with (one recognizable message family), then who is inviting — falling back to a
+  // nameless line when this device has no name yet, never the literal "undefined" — and the
+  // personal link on its own line. Short on purpose: a handful of lines, chat-preview sized.
+  function buildFriendShareText(myName, url) {
+    const name = String(myName == null ? "" : myName).trim();
+    const link = String(url == null ? "" : url).trim();
+    const lines = [
+      "סוגרים קופה — אפליקציה לניהול קופת פוקר",
+      name ? name + " מזמין/ה אותך להצטרף כחבר/ה" : "מישהו מזמין אותך להצטרף כחבר/ה",
+    ];
+    if (link) lines.push(link);
+    return lines.join("\n");
+  }
+  // Reads a ?friend= token out of a location.search string — same normalization and alphabet
+  // check as parseJoinToken below, on the distinct "friend" param, so a URL carrying both never
+  // confuses one for the other.
+  function parseFriendToken(search) {
+    const match = String(search || "").match(/[?&]friend=([^&]*)/);
+    if (!match) return null;
+    let raw = "";
+    try { raw = decodeURIComponent(match[1]); } catch (e) { raw = match[1]; }
+    const token = normalizeInviteToken(raw);
+    return new RegExp("^[" + INVITE_TOKEN_ALPHABET + "]{8}$").test(token) ? token : null;
+  }
+
   // The one normalization for a token that arrives from outside (a URL, a paste, a hand-typed
   // code): uppercase, dashes and whitespace removed. app_redeem_invite() in
   // docs/backend/join-invite.sql normalizes with upper(regexp_replace(..., '[[:space:]-]', ''))
@@ -4087,7 +4204,9 @@
     const i = invite || {};
     const creator = refToIdentityRow(i.createdBy, ctx);
     // expires_at is deliberately not written: the local Invite has no expiry field, and sending
-    // the column would wipe an expiry set anywhere else.
+    // the column would wipe an expiry set anywhere else. bound_guest_id always re-sends whatever
+    // this device has (null included) -- same "every payload column is writable" upsert shape as
+    // guestToRow's created_by -- so an admin clearing the binding locally clears it on the server too.
     return {
       id: String(i.id || ""),
       group_id: String(i.groupId || ""),
@@ -4095,6 +4214,7 @@
       created_by_profile_id: creator.profile_id || (ctx || {}).profileId || null,
       created_at: cloudIsoOr(i.createdAt),
       revoked_at: cloudIso(i.revokedAt),
+      bound_guest_id: isCloudId(i.boundGuestId) ? i.boundGuestId : null,
     };
   }
   function rowToInvite(row, ctx) {
@@ -4107,6 +4227,7 @@
         cloudProfileName(r.created_by_profile_id, ctx)),
       createdAt: String(r.created_at || ""),
       revokedAt: cloudIso(r.revoked_at),
+      boundGuestId: isCloudId(r.bound_guest_id) ? String(r.bound_guest_id) : null,
     };
   }
 
@@ -4159,15 +4280,17 @@
     return { id: String(guestId || ""), display_name: name || "אורח", created_by: String(createdBy || "") };
   }
 
-  // ----- guest claim candidates (raw guests/guest_claims rows, docs/backend/link-guest.sql) -----
-  // A guest is a claim candidate for me, in one group, when: I am signed in (meUserId is a real
-  // profile id — local/offline mode never has one, so this is naturally []), the guest is a
+  // ----- self-claim candidates (raw guests rows, docs/backend/link-guest.sql) -----
+  // A guest is a self-claim candidate for me, in one group, when: I am signed in (meUserId is a
+  // real profile id — local/offline mode never has one, so this is naturally []), the guest is a
   // member of that group, the guest's display_name matches mine, the guest is not already linked
-  // to anyone, the guest is not somehow me, and no claim on it is already in flight (from me or
-  // anyone else — once requested it moves to "the request" instead of being offered again).
-  // guestRows only ever contains what guests_select already let this device read, so no separate
-  // visibility check is needed here beyond "is this guest actually seated in the group I'm looking at".
-  function guestClaimCandidatesInGroup(guestRows, groupMembers, claims, groupId, meUserId, meName) {
+  // to anyone, and the guest is not somehow me. This is a client-side SUGGESTION filter only —
+  // whether the tap actually succeeds is decided authoritatively by app_self_claim_guest, which
+  // re-checks name and zero financial exposure server-side (Task instruction: enforce server-side,
+  // not just in the UI). guestRows only ever contains what guests_select already let this device
+  // read, so no separate visibility check is needed here beyond "is this guest actually seated in
+  // the group I'm looking at".
+  function guestClaimCandidatesInGroup(guestRows, groupMembers, groupId, meUserId, meName) {
     if (!meUserId || !groupId) return [];
     const name = String(meName || "").trim();
     if (!name) return [];
@@ -4175,27 +4298,9 @@
     const members = Array.isArray(groupMembers) ? groupMembers : [];
     const memberGuestIds = new Set(
       members.filter(m => m && m.groupId === groupId && m.guestId).map(m => m.guestId));
-    const pendingGuestIds = new Set(
-      (Array.isArray(claims) ? claims : []).filter(c => c && c.status === "pending").map(c => c.guest_id));
     return guests.filter(g => g && !g.linked_profile_id && g.id !== meUserId
-      && !pendingGuestIds.has(g.id)
       && memberGuestIds.has(g.id)
       && String(g.display_name || "").trim() === name);
-  }
-  // Pending guest_claims rows on guests seated in one group, split into mine (I am the claimant —
-  // render "ממתין לאישור") and toApprove (visible to me only because guest_claims_select granted
-  // it — I am the guest's creator or an active admin of this group, exactly app_can_approve_
-  // guest_claim's own rule — so anything here is already safe to render as an approval entry).
-  function guestClaimsForGroup(claims, groupMembers, groupId, meUserId) {
-    const list = Array.isArray(claims) ? claims : [];
-    const members = Array.isArray(groupMembers) ? groupMembers : [];
-    const guestIdsInGroup = new Set(
-      members.filter(m => m && m.groupId === groupId && m.guestId).map(m => m.guestId));
-    const pending = list.filter(c => c && c.status === "pending" && guestIdsInGroup.has(c.guest_id));
-    return {
-      mine: pending.filter(c => c.claimant_profile_id === meUserId),
-      toApprove: pending.filter(c => c.claimant_profile_id !== meUserId),
-    };
   }
 
   // What each table will accept. A row that fails here is dropped before the request rather than
@@ -4357,6 +4462,14 @@
   //
   // So: new rows go up as INSERT ... ON CONFLICT DO NOTHING (insert policy only, and a re-send
   // after a failed push is a harmless no-op), known rows keep the merge upsert.
+  //
+  // This is also why docs/backend/security-fixes.sql's §F6 can safely drop the "OR I am the
+  // creator" fallback those same UPDATE policies picked up as a workaround: as long as every
+  // caller reaches this function instead of upserting a whole diff directly (CLOUD_INSERT_ONLY
+  // above must stay limited to append-only tables with no UPDATE policy of their own), the UPDATE
+  // arm only ever runs against a row `known` already proves is server-side, so the STABLE
+  // SECURITY DEFINER helpers are reading something committed by an earlier, already-finished
+  // request -- never the row this same call is still writing.
   function splitCloudWrites(upserts, knownIds, key) {
     const k = key || "id";
     const known = new Set((Array.isArray(knownIds) ? knownIds : []).map(String));
@@ -4852,10 +4965,11 @@
     return bytes;
   }
 
-  function createGroupInvite(groupId) {
+  function createGroupInvite(groupId, boundGuestId) {
     const at = new Date().toISOString();
     const byRef = { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me };
-    createInvite(state.invites, groupId, byRef, generateInviteToken(randomInviteBytes()), at);
+    createInvite(state.invites, groupId, byRef, generateInviteToken(randomInviteBytes()), at, boundGuestId || null);
+    inviteBindGuestId = ""; // the picker only shows before an invite exists — nothing left to reset it from
     save();
     renderGroupSurface();
     refreshGroupSettings(); // the invite block lives in the settings overlay now (D1)
@@ -4865,6 +4979,7 @@
     const invite = activeInvite(state.invites, groupId);
     if (!invite) return;
     revokeInvite(state.invites, invite.id, new Date().toISOString());
+    inviteBindGuestId = ""; // the create picker reappears — start it fresh, not on a stale pick
     save();
     renderGroupSurface();
     refreshGroupSettings(); // the invite block lives in the settings overlay now (D1)
@@ -5407,7 +5522,7 @@
     const previewClaimsSection = renderGroupGuestClaims(currentGroupId);
     if (previewClaimsSection) inner.appendChild(previewClaimsSection);
     const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
-    inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
+    inner.appendChild(renderGroupMembers(summary, activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
     box.appendChild(inner);
   }
@@ -5762,14 +5877,50 @@
   // Flat member rows, name + a quiet "מנהל" tag for admins. For an admin each row is tappable
   // and opens an inline action strip (D3); "+ הוסף חבר" moved to the settings overlay (D1).
   // Former members appear collapsed under a toggle, shown only when there are any.
-  function renderGroupMembers(members, former, isAdmin) {
+  //
+  // The "חברים" title row also carries the group page's direct invite entry point (any active
+  // member, not just admins — same reach as renderGroupInvite in the settings overlay) — see
+  // renderGroupInviteButton just below. That overlay stays the full invite management surface
+  // (create, revoke, code, QR); this is the one-tap "invite someone" path so getting there no
+  // longer requires opening it at all.
+  function renderGroupMembers(summary, members, former, isAdmin) {
     const section = el("section", "games-section");
-    section.appendChild(el("h3", "games-section-title", "חברים"));
+    const heading = el("div", "games-members-heading");
+    heading.appendChild(el("h3", "games-section-title", "חברים"));
+    if (summary && summary.isMember) heading.appendChild(renderGroupInviteButton(summary));
+    section.appendChild(heading);
     const list = Array.isArray(members) ? members : [];
     list.forEach(member => section.appendChild(renderMemberRow(member, list, isAdmin)));
     const formerList = Array.isArray(former) ? former : [];
     if (formerList.length) section.appendChild(renderFormerMembers(formerList));
     return section;
+  }
+
+  // The group page's prominent, always-reachable invite entry point (Problem 1 of the share-links
+  // work): one tap reuses the group's active invite if there is one, otherwise creates it on
+  // demand (createGroupInvite already saves + re-renders both this page and the settings overlay
+  // — Lane: creation behaviour stays theirs, this only calls it), then shares immediately with the
+  // exact navigator.share-first / wa.me-fallback pattern the "וואטסאפ" action in renderGroupInvite
+  // already uses, so the two entry points read identically once a chat opens.
+  function renderGroupInviteButton(summary) {
+    const btn = el("button", "games-member-invite-btn", "+ הזמן לקבוצה");
+    btn.type = "button";
+    btn.addEventListener("click", () => {
+      let invite = activeInvite(state.invites, summary.groupId);
+      if (!invite) {
+        createGroupInvite(summary.groupId);
+        invite = activeInvite(state.invites, summary.groupId);
+      }
+      if (!invite) return; // defensive: creation refused for a reason renderGroupInvite would also hit
+      const link = inviteLink(invite.token, location.origin, location.pathname);
+      const message = buildInviteShareText(summary.name, formatInviteCode(invite.token), link);
+      if (typeof navigator.share === "function") {
+        navigator.share({ title: summary.name, text: message }).catch(() => {});
+      } else {
+        window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank", "noopener");
+      }
+    });
+    return btn;
   }
 
   // D3: a member row shows name + role tag only. For an admin the row itself is the control
@@ -6114,18 +6265,50 @@
     return svg;
   }
 
+  // The invite-creation "bind to an existing guest" picker (docs/backend/link-guest.sql: the
+  // authorization for path 1's silent link is this exact choice — a member picking a specific
+  // person before the link ever leaves the app). Shown only when the group actually has an
+  // unlinked guest member, so the common case (none) renders the plain "צור הזמנה" button exactly
+  // as before — nothing new to look at. Chips, not a <select>, matching the pill-choice idiom
+  // .games-invite-action already uses one section down for copy/share/whatsapp. The chosen id
+  // lives only in the UI-only inviteBindGuestId until createGroupInvite() consumes and resets it;
+  // the guest id itself never touches the link/token/QR (inviteLink() below takes no such param).
+  function renderInviteGuestBindPicker(groupId) {
+    const candidates = activeMembers(state.groupMembers, groupId).filter(m => m && m.guestId && !m.userId);
+    if (!candidates.length) return null;
+    if (inviteBindGuestId && !candidates.some(m => m.guestId === inviteBindGuestId)) inviteBindGuestId = "";
+    const wrap = el("div", "games-invite-bind");
+    wrap.appendChild(el("p", "games-invite-bind-label", "אפשר לקשר את ההזמנה לאורח קיים בקבוצה:"));
+    const chips = el("div", "games-invite-bind-chips");
+    const pick = (guestId) => { inviteBindGuestId = guestId; refreshGroupSettings(); };
+    const general = el("button", "games-invite-bind-chip" + (inviteBindGuestId ? "" : " active"), "כללי");
+    general.type = "button";
+    general.addEventListener("click", () => pick(""));
+    chips.appendChild(general);
+    candidates.forEach(m => {
+      const chip = el("button", "games-invite-bind-chip" + (inviteBindGuestId === m.guestId ? " active" : ""), m.displayName);
+      chip.type = "button";
+      chip.addEventListener("click", () => pick(m.guestId));
+      chips.appendChild(chip);
+    });
+    wrap.appendChild(chips);
+    return wrap;
+  }
+
   // The group's invite, rendered inside the group settings overlay (D1): any active member sees
-  // it (returns null otherwise). No invite yet → "צור הזמנה". With one → the code, copy/share,
-  // the shared server note, and, for admins only, a text action to revoke it (which brings back
-  // "צור הזמנה").
+  // it (returns null otherwise). No invite yet → "צור הזמנה" (plus renderInviteGuestBindPicker's
+  // chip row, when applicable). With one → the code, copy/share, the shared server note, and, for
+  // admins only, a text action to revoke it (which brings back "צור הזמנה").
   function renderGroupInvite(summary, invite, isAdmin) {
     if (!summary || !summary.isMember) return null;
     const section = el("section", "games-section games-invite-section");
     section.appendChild(el("h3", "games-section-title", "הזמנה לקבוצה"));
     if (!invite) {
+      const bindPicker = renderInviteGuestBindPicker(summary.groupId);
+      if (bindPicker) section.appendChild(bindPicker);
       const createBtn = el("button", "games-invite-create", "צור הזמנה");
       createBtn.type = "button";
-      createBtn.addEventListener("click", () => createGroupInvite(summary.groupId));
+      createBtn.addEventListener("click", () => createGroupInvite(summary.groupId, inviteBindGuestId));
       section.appendChild(createBtn);
       return section;
     }
@@ -6247,7 +6430,7 @@
     const guestClaimsSection = renderGroupGuestClaims(currentGroupId);
     if (guestClaimsSection) inner.appendChild(guestClaimsSection);
     const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
-    inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
+    inner.appendChild(renderGroupMembers(summary, activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
     // D1: the invite block and "+ הוסף חבר" live in the group settings overlay now — this page
     // stays short (header, primary action, דירוג, חברים, היסטוריה).
@@ -7412,6 +7595,22 @@
     renderFriendsPage();
   }
 
+  // "הוסף אותי כחבר": the reverse of "הוסף חבר" — instead of searching for someone, share a
+  // personal link that lets them add themselves. Works with or without an account, same as the
+  // group invite's share actions, because it never calls the server: it mints a token (friend
+  // invite (pure), above), builds the WhatsApp-ready message and shares it, exactly the
+  // navigator.share-first / wa.me-fallback pattern renderGroupInvite's "וואטסאפ" action uses.
+  function shareFriendInvite() {
+    const token = generateInviteToken(randomInviteBytes());
+    const link = friendInviteLink(token, location.origin, location.pathname);
+    const message = buildFriendShareText(me, link);
+    if (typeof navigator.share === "function") {
+      navigator.share({ title: "סוגרים קופה", text: message }).catch(() => {});
+    } else {
+      window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank", "noopener");
+    }
+  }
+
   function resetAddFriendPanel() {
     addFriendOpen = false;
     addFriendJustOpened = false;
@@ -7555,6 +7754,20 @@
     friendsSec.appendChild(addFriendBtn);
     if (online) renderAddFriendPanel(friendsSec);
     if (!online) friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
+    // The reverse direction — "הוסף אותי כחבר" shares a personal link instead of searching for
+    // someone (Problem 2 of the share-links work). Unlike "הוסף חבר" this never calls the server,
+    // so it works with or without an account; it only needs a name to invite as (me).
+    if (me) {
+      const inviteMeBtn = el("button", "games-invite-action", "הוסף אותי כחבר");
+      inviteMeBtn.type = "button";
+      inviteMeBtn.style.marginTop = "14px";
+      // .games-invite-action's documented 40px (DESIGN.md) matches its three existing siblings
+      // ("העתק קישור"/"שתף"/"וואטסאפ") on the group invite card; this one stands alone on the
+      // friends screen, so it gets the full 44px touch target on top of that shared style.
+      inviteMeBtn.style.minHeight = "44px";
+      inviteMeBtn.addEventListener("click", shareFriendInvite);
+      friendsSec.appendChild(inviteMeBtn);
+    }
     box.appendChild(friendsSec);
   }
 
@@ -8394,6 +8607,58 @@
     showJoinNotice(token, true);
   }
 
+  // ---------- friend invite ----------
+  // Opening ?friend=TOKEN shows #friendNotice — the personal counterpart of #joinNotice above.
+  // ?friend= is a distinct param from ?join= (parseFriendToken, friend invite (pure) section) so
+  // the two never shadow each other; both are read independently at boot, below.
+  //
+  // Unlike group joins there is no redemption RPC yet at all (see the friend invite (pure) note
+  // and the share-links report for what a follow-up needs to add), so this has exactly one shape,
+  // not three: the notice always shows the code, and "אשר בקשה" is a real, tappable action that
+  // answers honestly — SERVER_NOTE inline — instead of a fake success. "לא עכשיו" always closes it.
+  let pendingFriendToken = null; // in memory only, mirrors pendingJoinToken — no new storage key
+  let friendNoticeBound = false;
+
+  function stripFriendFromUrl() {
+    const params = new URLSearchParams(location.search);
+    if (!params.has("friend")) return;
+    params.delete("friend");
+    const qs = params.toString();
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
+  }
+
+  function friendNoticeParts() {
+    return {
+      notice: document.getElementById("friendNotice"),
+      code: document.getElementById("friendNoticeCode"),
+      status: document.getElementById("friendNoticeStatus"),
+      acceptBtn: document.getElementById("friendNoticeAcceptBtn"),
+      laterBtn: document.getElementById("friendNoticeLaterBtn"),
+    };
+  }
+
+  function closeFriendNotice() {
+    pendingFriendToken = null;
+    friendNoticeParts().notice.hidden = true;
+    stripFriendFromUrl();
+  }
+
+  function showFriendNotice(token) {
+    const ui = friendNoticeParts();
+    ui.code.textContent = formatInviteCode(token);
+    ui.status.hidden = true;
+    pendingFriendToken = token;
+    ui.notice.hidden = false;
+    if (!friendNoticeBound) {
+      friendNoticeBound = true;
+      ui.acceptBtn.addEventListener("click", () => {
+        ui.status.textContent = SERVER_NOTE;
+        ui.status.hidden = false;
+      });
+      ui.laterBtn.addEventListener("click", closeFriendNotice);
+    }
+  }
+
   // ---------- iOS Safari install hint ----------
   // Quiet, dismissible "Add to Home Screen" tip for iOS Safari users who have not installed the
   // app yet — iOS never offers a native install prompt, so without this an iPhone/iPad user simply
@@ -8426,45 +8691,57 @@
     closeBtn.addEventListener("click", dismissIosInstallHint);
   }
 
-  // ---------- guest claim: link a guest to an account ("זה אני") ----------
-  // Explicit, consent-based. Never auto-merged by name: guestClaimCandidatesInGroup (cloud
-  // mapping (pure), above) only ever produces a SUGGESTION — tapping "זה אני" sends a request,
-  // nothing merges until a second, independent person (the guest's creator, or an active admin of
-  // one of its groups — never the claimant) approves it. The real authorization rule and the
-  // actual re-pointing both live server-side in docs/backend/link-guest.sql
-  // (app_request_guest_claim / app_approve_guest_claim / app_decline_guest_claim); everything here
-  // is UI plumbing around those three RPCs. Every entry point below early-returns when
-  // !cloudMode(), so this whole feature is a no-op in local/offline mode.
-  let guestClaimError = ""; // last inline error, shown once above the group's guest-claim rows
+  // ---------- guest linking: self-claim ("זה אני") ----------
+  // No approval step in the happy path. The two authoritative paths link silently, with no UI at
+  // all: a bound invite links as part of redemption (app_redeem_invite, docs/backend/
+  // link-guest.sql — the bind picker lives in the invite-creation UI below), and a verified
+  // contact match would link on first pull (not shipped this pass — guests carries no contact
+  // column yet and nothing in this app captures one; see the report for why that layer was
+  // skipped rather than built half-way). What remains here is the FALLBACK: someone who joined
+  // without a bound link may claim a matching guest themselves, INSTANTLY — no approval, no
+  // waiting on a second person — but only when doing so moves no money
+  // (app_self_claim_guest, which re-checks name match and zero financial exposure server-side;
+  // this device's candidate list is only ever a suggestion). Every entry point below
+  // early-returns when !cloudMode(), so this whole feature is a no-op in local/offline mode.
+  let guestClaimError = ""; // last inline error, shown once above the group's self-claim rows
 
-  function guestDisplayName(guestId) {
-    const row = cloudGuestRows.find(g => g && g.id === guestId);
-    return row ? row.display_name : "אורח";
-  }
-
-  // The RPCs raise a distinct GUEST_CLAIM_* message for every refusal they make on purpose
+  // The RPC raises a distinct GUEST_LINK_* message for every refusal it makes on purpose
   // (docs/backend/link-guest.sql); this turns each into the same short, direct Hebrew the rest of
-  // the app uses. Anything unrecognized (a network error, a status this device predates) falls
-  // back to the same neutral retry line join-invite's joinNoticeMessage uses for 'error'.
+  // the app uses. GUEST_LINK_HAS_EXPOSURE doubles as the product's own "do not offer a self-claim
+  // here — ask for a personal invite link instead" guidance. Anything unrecognized (a network
+  // error, a status this device predates) falls back to the same neutral retry line
+  // join-invite's joinNoticeMessage uses for 'error'.
   function guestClaimErrorMessage(error) {
     const text = String((error && error.message) || error || "");
-    if (text.includes("GUEST_CLAIM_DOUBLE_SEAT")) return "אי אפשר לקשר — שניכם כבר יושבים באותו משחק";
-    if (text.includes("GUEST_CLAIM_NOT_AUTHORIZED")) return "רק מי שהוסיף את האורח או מנהל הקבוצה יכולים לאשר";
-    if (text.includes("GUEST_CLAIM_ALREADY_LINKED")) return "האורח הזה כבר מקושר לחשבון אחר";
+    if (text.includes("GUEST_LINK_HAS_EXPOSURE")) return "יש היסטוריה כספית פתוחה על השם הזה — בקשו מחבר בקבוצה קישור הזמנה אישי";
+    if (text.includes("GUEST_LINK_DOUBLE_SEAT")) return "אי אפשר לקשר — אתם כבר יושבים באותו משחק";
+    if (text.includes("GUEST_LINK_ALREADY_LINKED")) return "האורח הזה כבר מקושר לחשבון אחר";
     return "הפעולה נכשלה, נסו שוב";
   }
 
-  async function requestGuestClaim(guestId) {
+  // "זה אני" — tap once, linked instantly when it is safe. A refusal (most often
+  // GUEST_LINK_HAS_EXPOSURE) is a real, expected outcome, not a bug — the candidate list is a
+  // suggestion, the RPC is the actual gate.
+  async function selfClaimGuest(guestId) {
     if (!supabase) return;
     if (!cloudMode() || guestClaimBusyIds.has(guestId)) return;
     guestClaimBusyIds.add(guestId);
     guestClaimError = "";
     renderGroupSurface();
     try {
-      const { data, error } = await supabase.rpc("app_request_guest_claim", { p_guest_id: guestId });
+      const { data, error } = await supabase.rpc("app_self_claim_guest", { p_guest_id: guestId });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
-      if (row && row.status !== "pending" && row.status !== "already-you") {
+      if (row && (row.status === "linked" || row.status === "already-you")) {
+        // Optimistic local mirror (applyGuestClaimLocally, groups domain (pure)) so this device's
+        // own screen stops showing the old guest name right away — the pull below would settle on
+        // the same result regardless, this just saves the claimant a wait.
+        applyGuestClaimLocally(
+          { groups: state.groups, groupMembers: state.groupMembers, invites: state.invites,
+            friendships: state.friendships, players: state.players },
+          String(guestId), String(authUser.id));
+        save();
+      } else if (row && row.status) {
         guestClaimError = guestClaimErrorMessage({ message: row.status });
       }
       await pullCloud();
@@ -8475,102 +8752,30 @@
     renderGroupSurface();
   }
 
-  // "לא" — purely local and reversible only by a fresh pull: no request, no server write, so
-  // there is nothing to undo server-side. Matches D8's hiddenAt precedent for "quiet, local,
-  // never save()d" rather than inventing a new persisted dismissal.
+  // "לא" — purely local and reversible only by a fresh pull: no server write, so there is
+  // nothing to undo server-side. Matches D8's hiddenAt precedent for "quiet, local, never
+  // save()d" rather than inventing a new persisted dismissal.
   function dismissGuestClaimCandidate(guestId) {
     dismissedGuestClaimIds.add(guestId);
     renderGroupSurface();
   }
 
-  // Shared by "ביטול" (the claimant withdrawing their own request) and "דחה" (the approver
-  // declining someone else's) — both are exactly app_decline_guest_claim, which itself checks
-  // which of the two the caller is.
-  async function resolveGuestClaim(claimId, decide) {
-    if (!supabase) return;
-    if (!cloudMode() || guestClaimBusyIds.has(claimId)) return;
-    guestClaimBusyIds.add(claimId);
-    guestClaimError = "";
-    renderGroupSurface();
-    try {
-      const { error } = await supabase.rpc(decide, { p_claim_id: claimId });
-      if (error) throw error;
-      await pullCloud();
-    } catch (e) {
-      guestClaimError = guestClaimErrorMessage(e);
-    }
-    guestClaimBusyIds.delete(claimId);
-    renderGroupSurface();
-  }
-  function cancelGuestClaim(claimId) { return resolveGuestClaim(claimId, "app_decline_guest_claim"); }
-  function declineGuestClaim(claimId) { return resolveGuestClaim(claimId, "app_decline_guest_claim"); }
-
-  async function approveGuestClaim(claimId) {
-    if (!supabase) return;
-    if (!cloudMode() || guestClaimBusyIds.has(claimId)) return;
-    guestClaimBusyIds.add(claimId);
-    guestClaimError = "";
-    renderGroupSurface();
-    try {
-      const { data, error } = await supabase.rpc("app_approve_guest_claim", { p_claim_id: claimId });
-      if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
-      if (row && row.status === "approved" && row.guest_id && row.claimant_profile_id) {
-        // Optimistic local mirror (applyGuestClaimLocally, groups domain (pure)) so this device's
-        // own screen stops showing the old guest name right away — the pull below would settle on
-        // the same result regardless, this just saves the approver a wait.
-        applyGuestClaimLocally(
-          { groups: state.groups, groupMembers: state.groupMembers, invites: state.invites,
-            friendships: state.friendships, players: state.players },
-          String(row.guest_id), String(row.claimant_profile_id));
-        save();
-      } else if (row && row.status && row.status !== "approved") {
-        guestClaimError = guestClaimErrorMessage({ message: row.status });
-      }
-      await pullCloud();
-    } catch (e) {
-      guestClaimError = guestClaimErrorMessage(e);
-    }
-    guestClaimBusyIds.delete(claimId);
-    renderGroupSurface();
-  }
-
-  // The group-page section: a calm "שיחקת כאן בעבר?" row per candidate, my own outgoing
-  // request's honest pending state, and — only for whoever guest_claims_select already decided
-  // has standing (never re-derived here) — the requests waiting on my approval. Returns null when
-  // there is nothing to show, so renderGroupPage() only appends and stagger-animates it when it
-  // is not empty. Reuses renderFriendGroup (the friend-request rows) rather than a new component.
+  // The group-page section: a calm "שיחקת כאן בעבר?" row per same-name unlinked guest in this
+  // group. Returns null when there is nothing to show, so renderGroupPage() only appends and
+  // stagger-animates it when it is not empty. Reuses renderFriendGroup (the friend-request rows)
+  // rather than a new component.
   function renderGroupGuestClaims(groupId) {
     if (!cloudMode() || !authUser) return null;
-    const candidates = guestClaimCandidatesInGroup(cloudGuestRows, state.groupMembers, cloudGuestClaims, groupId, authUser.id, me)
+    const candidates = guestClaimCandidatesInGroup(cloudGuestRows, state.groupMembers, groupId, authUser.id, me)
       .filter(g => !dismissedGuestClaimIds.has(g.id));
-    const claims = guestClaimsForGroup(cloudGuestClaims, state.groupMembers, groupId, authUser.id);
-    if (!candidates.length && !claims.mine.length && !claims.toApprove.length) return null;
+    if (!candidates.length) return null;
     const section = el("section", "games-section");
     if (guestClaimError) section.appendChild(el("p", "friend-error", guestClaimError));
-    if (candidates.length) {
-      const refs = candidates.map(g => ({ displayName: "שיחקת כאן בעבר בשם " + g.display_name + "?" }));
-      renderFriendGroup(section, "זה אני?", refs, "", i => [
-        { label: "זה אני", primary: true, onClick: () => requestGuestClaim(candidates[i].id) },
-        { label: "לא", onClick: () => dismissGuestClaimCandidate(candidates[i].id) },
-      ]);
-    }
-    if (claims.mine.length) {
-      const refs = claims.mine.map(c => ({ displayName: guestDisplayName(c.guest_id) }));
-      renderFriendGroup(section, "הבקשה שלך", refs, "ממתין לאישור", i => [
-        { label: "ביטול", onClick: () => cancelGuestClaim(claims.mine[i].id) },
-      ]);
-    }
-    if (claims.toApprove.length) {
-      // The guest name is baked into each row's own text (not a shared metaLabel) because a group
-      // can have more than one pending claim in flight for different guests at once.
-      const refs = claims.toApprove.map(c =>
-        ({ displayName: c.claimant_display_name_snapshot + " מבקש/ת להיות " + guestDisplayName(c.guest_id) }));
-      renderFriendGroup(section, "בקשות קישור", refs, "", i => [
-        { label: "אשר", primary: true, onClick: () => approveGuestClaim(claims.toApprove[i].id) },
-        { label: "דחה", onClick: () => declineGuestClaim(claims.toApprove[i].id) },
-      ]);
-    }
+    const refs = candidates.map(g => ({ displayName: "שיחקת כאן בעבר בשם " + g.display_name + "?" }));
+    renderFriendGroup(section, "זה אני?", refs, "", i => [
+      { label: "זה אני", primary: true, onClick: () => selfClaimGuest(candidates[i].id) },
+      { label: "לא", onClick: () => dismissGuestClaimCandidate(candidates[i].id) },
+    ]);
     return section;
   }
 
@@ -8595,8 +8800,15 @@
   // After the auth section, so initSync() can ask cloudMode() whether a session already owns the
   // data. A restored session arrives asynchronously and tears this down again (enterCloudMode).
   initSync();
+  // ?friend= and ?join= are distinct params (friend invite (pure) / join-by-invite sections) and
+  // are read independently here, so a URL can never confuse one for the other. A friend token
+  // takes the boot-time slot first — it is the simpler, always-resolvable notice (one shape, no
+  // server round trip) — before falling back to the group join flow, then the login screen.
+  const friendToken = parseFriendToken(location.search);
   const joinToken = parseJoinToken(location.search);
-  if (joinToken) {
+  if (friendToken) {
+    showFriendNotice(friendToken);
+  } else if (joinToken) {
     // The notice decides for itself what it can offer (join / sign in / nothing yet) and keeps
     // ?join= in the address bar until the flow resolves — see the join-by-invite section.
     showJoinNotice(joinToken, false);
