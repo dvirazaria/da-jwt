@@ -568,3 +568,28 @@ COMMIT;
 -- RLS is untouched throughout: as a fresh account with no relation to the group,
 --   SELECT * FROM invites WHERE token = 'ZZZZTEST';                          -- 0 rows
 --   SELECT * FROM guests WHERE id = '<GUEST>';                               -- 0 rows
+
+-- =====================================================================
+-- Follow-up, applied 2026-09-10 after verifying the run against the live
+-- project: app_guest_bindable_to_invite and app_guest_has_zero_exposure
+-- answered an ANONYMOUS caller with HTTP 200. Both are SECURITY DEFINER,
+-- so they read past RLS, and Postgres grants EXECUTE to PUBLIC by default
+-- on a new function -- the file above revoked the other three and missed
+-- these two. They are internal helpers: only the SECURITY DEFINER
+-- functions above ever call them, so nothing needs EXECUTE on them.
+--
+-- What was leaking: a caller holding a guest uuid could ask whether that
+-- person carries open debts, and whether they belong to a given group.
+-- Same class as finding F4 in security-review-2026-09-09.md.
+-- =====================================================================
+BEGIN;
+
+REVOKE ALL ON FUNCTION app_guest_bindable_to_invite(uuid, uuid) FROM public;
+REVOKE ALL ON FUNCTION app_guest_bindable_to_invite(uuid, uuid) FROM anon;
+REVOKE ALL ON FUNCTION app_guest_bindable_to_invite(uuid, uuid) FROM authenticated;
+
+REVOKE ALL ON FUNCTION app_guest_has_zero_exposure(uuid) FROM public;
+REVOKE ALL ON FUNCTION app_guest_has_zero_exposure(uuid) FROM anon;
+REVOKE ALL ON FUNCTION app_guest_has_zero_exposure(uuid) FROM authenticated;
+
+COMMIT;
