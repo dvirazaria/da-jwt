@@ -1,3 +1,28 @@
+-- #####################################################################
+-- ##  DO NOT RUN THIS YET.  ###########################################
+-- #####################################################################
+--
+-- Verified by the controller on 2026-09-10. This file is correct, but it
+-- must NOT be applied on its own: it narrows entries_select and
+-- game_participants_select to "participant of this game", while the client
+-- still builds the group leaderboard and the group history from those raw
+-- rows for EVERY game in the group. Applying it alone makes a member who
+-- missed a night stop seeing that night in the group's history, and
+-- computes their leaderboard over only the games they played.
+--
+-- That trades an obscure leak (a group member opening devtools) for a
+-- visible, everyday regression. Wrong way round.
+--
+-- The prerequisite already exists in schema.sql and the client simply
+-- never uses it: group_leaderboard_public_v, plus a per-game summary of
+-- the same shape as GroupGameSummary (date / player count / winner names /
+-- pot / balance flag, no per-player money). Wire the client onto those
+-- FIRST; then this file closes F3 with nothing lost.
+--
+-- Apply order once that lands: this SQL and the client change ship in the
+-- SAME release. Either one alone is broken.
+-- #####################################################################
+
 -- =====================================================================
 -- "סוגרים קופה" — player-boundary.sql
 -- Closes F3 (docs/backend/security-review-2026-09-09.md §F3): RLS enforced
