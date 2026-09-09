@@ -348,6 +348,26 @@ yet, so no SELECT policy can see the invite), friend requests have no UI, guest�
 bulk-uploading a device's pre-existing local history (a closed game can only reach the server by
 being opened there first).
 
+## Account deletion
+
+A signed-in account can delete itself from Settings → "אזור מסוכן" → "מחיקת חשבון" (an inline
+grid-collapse confirm panel, then the same cancellable one-second pointer hold as `סגור שולחן`/
+`סיים משחק` — never `alert`/`confirm`). The client calls the `SECURITY DEFINER` RPC
+`app_delete_my_account()` (`docs/backend/delete-account.sql`, paste-ready, never executed by this
+repo or its tests). It scrubs `profiles` to a neutral "משתמש שנמחק" instead of deleting the row
+(`groups.created_by_profile_id`/`games.created_by` are `NOT NULL` + `ON DELETE RESTRICT`, and
+`guests.created_by` is `ON DELETE CASCADE` into a further `RESTRICT` — a hard delete would abort or
+cascade-destroy other people's history), repoints every identity-bearing row it is allowed to touch
+(`group_members`, an open game's `game_participants`/`entries`, `debts`) to one fresh `guests` row
+while leaving a closed game's rows untouched (the schema's own immutability triggers block them —
+schema.sql section 7 — so a closed game's balances cannot move by construction), hands a sole-admin
+group to its longest-standing active member or archives it, revokes the caller's outstanding
+invites, and finally deletes `auth.users`. `pickAccountDeletionSuccessor` and `scrubLocalIdentity`
+in `kupa-sgura.html`'s groups-domain (pure) section mirror the succession and identity-scrub logic
+respectively and must stay in sync with the SQL if either ever changes. On success the client
+applies `scrubLocalIdentity` to the local document, signs out, and returns to the login screen with
+a short confirmation line; on failure nothing local is touched and the panel shows an inline error.
+
 ## Next milestone (the reason for this handoff): real users
 
 Goal: each player signs in, joins a shared table/group from their own phone, adds their own
