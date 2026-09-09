@@ -1,4 +1,4 @@
-const CACHE = "kupa-v60";
+const CACHE = "kupa-v61";
 
 // The full app shell: everything needed for a cold install / offline first load. Every entry here
 // must exist on disk and actually ship in the Vercel deploy (see .vercelignore) — this file is not
@@ -10,13 +10,14 @@ const PRECACHE_URLS = [
   "icon-180.png",
   "icon-192.png",
   "icon-512.png",
+  "icon-maskable-512.png",
   "privacy.html",
   "terms.html",
 ];
 
 // Manifest + icons are immutable per version (a version bump gets a brand-new CACHE name below), so
 // they're safe to serve cache-first; everything else in PRECACHE_URLS is a page and stays network-first.
-const STATIC_ASSETS = new Set(["manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"]);
+const STATIC_ASSETS = new Set(["manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png", "icon-maskable-512.png"]);
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
