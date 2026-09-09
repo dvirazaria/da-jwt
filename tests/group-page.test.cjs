@@ -112,7 +112,11 @@ test('renderGroupPage calls each of the five sub-renderers', () => {
   const source = sourceBetween('  function renderGroupPage() {', '  function render() {');
   assert.match(source, /renderGroupHeader\(summary\)/);
   assert.match(source, /renderGroupPrimaryAction\(summary, canStartGroupGame\(/);
-  assert.match(source, /renderGroupLeaders\(buildLeaderboard\(/);
+  // Group leaderboard/history now read the safe server aggregate (group_leaderboard_public_v /
+  // group_game_summaries_v) when this pull fetched one, falling back to buildLeaderboard /
+  // groupClosedGames+toGroupGameSummary exactly as before when it did not (offline, or the
+  // aggregate SQL not yet applied) — see resolveGroupLeaderboard/resolveGroupGameSummaries.
+  assert.match(source, /renderGroupLeaders\(resolveGroupLeaderboard\(/);
   assert.match(source, /renderGroupMembers\(summary, activeMembers\(/);
   assert.match(source, /renderGroupHistory\(gameSummaries\)/);
   assert.doesNotMatch(source, /renderGroupLastGame/);
@@ -120,9 +124,9 @@ test('renderGroupPage calls each of the five sub-renderers', () => {
   assert.match(source, /if \(!summary\) \{ setAppView\("games"\); return; \}/);
 });
 
-test('renderGroupPage builds game summaries from groupClosedGames mapped through toGroupGameSummary', () => {
+test('renderGroupPage builds game summaries through resolveGroupGameSummaries (aggregate-or-local)', () => {
   const source = sourceBetween('  function renderGroupPage() {', '  function render() {');
-  assert.match(source, /groupClosedGames\(collections\.history, currentGroupId\)\.map\(toGroupGameSummary\)/);
+  assert.match(source, /resolveGroupGameSummaries\(collections, currentGroupId, cloudGroupAggregates\)/);
 });
 
 // ---------- wiring: renderGroupPrimaryAction ----------

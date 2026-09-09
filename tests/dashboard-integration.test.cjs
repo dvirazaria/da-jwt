@@ -99,7 +99,7 @@ test('dashboard cards stagger in only right after a navigation, not on every in-
   assert.match(dashboardSource, /const enterStagger = gamesPageEnterNext;/);
   assert.match(dashboardSource, /gamesPageEnterNext = false;/);
   assert.match(dashboardSource, /renderActiveGamesSection\(inner, getActiveGameSummaries\(state, state\.groups\), enterStagger\)/);
-  assert.match(dashboardSource, /renderGroupsSection\(inner, getGroupSummaries\(collectionsOf\(state\), me\), enterStagger\)/);
+  assert.match(dashboardSource, /renderGroupsSection\(inner, getGroupSummaries\(collectionsOf\(state\), me, cloudGroupAggregates\), enterStagger\)/);
 });
 
 test('active-game and group cards accept an anim/animDelay pair to drive the entrance stagger', () => {

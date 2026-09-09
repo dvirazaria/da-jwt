@@ -120,7 +120,10 @@ test('Games dashboard is composed from three modular sections', () => {
   // Task 9: getActiveGameSummaries gains an optional `groups` argument for title resolution;
   // the dashboard call site passes state.groups.
   assert.match(html, /renderActiveGamesSection\(inner, getActiveGameSummaries\(state, state\.groups\), enterStagger\)/);
-  assert.match(html, /renderGroupsSection\(inner, getGroupSummaries\(collectionsOf\(state\), me\), enterStagger\)/);
+  // getGroupSummaries now also takes the safe group aggregates cache as a 3rd arg (see
+  // resolveGroupLeaderboard/resolveGroupGameSummaries) so the dashboard's group cards read
+  // safe server-side rollups when available, falling back to local computation otherwise.
+  assert.match(html, /renderGroupsSection\(inner, getGroupSummaries\(collectionsOf\(state\), me, cloudGroupAggregates\), enterStagger\)/);
   assert.match(html, /אין משחקים פעילים כרגע/);
   assert.match(html, /אין לך קבוצות עדיין/);
   // Task 3 enables the create-group quick action; it's no longer a "coming soon" placeholder.

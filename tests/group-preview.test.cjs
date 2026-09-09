@@ -25,7 +25,9 @@ test('opening a preview reuses the existing group adapters and renderers', () =>
   assert.match(source, /repairMyGroupMembership\(currentGroupId\)/);
   assert.match(source, /renderGroupPreview\(\)/);
   const renderer = sourceBetween('  function renderGroupPreview() {', '  // Back arrow, 64px avatar');
-  assert.match(renderer, /getGroupSummary\(collections, currentGroupId, me\)/);
+  // getGroupSummary now also takes the safe group aggregates (group leaderboard/history read
+  // from group_leaderboard_public_v / group_game_summaries_v when available) as a 4th arg.
+  assert.match(renderer, /getGroupSummary\(collections, currentGroupId, me, cloudGroupAggregates\)/);
   assert.match(renderer, /renderGroupHeader\(summary, closeGroupPreview, openGroupSettings\)/);
   assert.match(renderer, /renderGroupPrimaryAction\(summary, canStartGroupGame\(collections, currentGroupId\)\)/);
   assert.match(renderer, /renderGroupMembers\(summary, activeMembers\(/);
