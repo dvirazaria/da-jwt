@@ -1484,29 +1484,14 @@
     const gameId = s.gameId || "legacy-" + encodeURIComponent(JSON.stringify([
       s.updatedAt || "", s.players.map(p => p.name),
     ]));
-    return {
+    const normalized = {
       example: !!s.example,
       // UI-only dismissal flag for the iOS install hint (see boot section). Carried inside this
       // document instead of a new localStorage key, per the "one state store" rule.
       iosInstallHintDismissed: !!s.iosInstallHintDismissed,
       gameId,
       phase: normalizePhase(s.phase, s),
-      players: s.players.map((p, index) => {
-        const id = p.id || gameId + "-player-" + index;
-        const buyins = Array.isArray(p.buyins) ? [...p.buyins] : [];
-        return { ...p, id, buyins,
-          status: p.status === "exited" ? "exited" : "active",
-          exitedAt: typeof p.exitedAt === "string" ? p.exitedAt : null,
-          userId: keptUserId(p.userId), // never minted locally; kept when the server sent one
-          guestId: typeof p.guestId === "string" ? p.guestId : null,
-          memberId: typeof p.memberId === "string" ? p.memberId : null,
-          entryLog: buyins.map((amount, i) => {
-          const saved = p.entryLog && p.entryLog[i];
-          return saved && saved.amount === amount && saved.playerId === id && saved.gameId === gameId
-            ? { ...saved }
-            : { id: id + "-entry-" + i, timestamp: null, amount, playerId: id, gameId };
-        }) };
-      }),
+      players: normalizeGamePlayers(s.players, gameId),
       history: Array.isArray(s.history) ? s.history : [],
       debts: Array.isArray(s.debts) ? s.debts.map(normalizeDebt).filter(Boolean) : [],
       settlementStatuses: s.settlementStatuses && typeof s.settlementStatuses === "object"
@@ -1528,6 +1513,18 @@
         ? s.cloudPendingIds.filter(v => v !== null && v !== undefined && v !== "").map(String) : [],
       updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
     };
+    // Multi-game round 1 (docs/superpowers/plans/2026-09-10-multi-game.md): state.games is the
+    // durable store for open-game slots (see the OpenGameSlot typedef by hasOpenPhase/newCurrentGame
+    // below -- a forward reference on purpose, same pattern as keptUserId above: this file is one
+    // script, so function declarations are hoisted and normalize() can call them at load time).
+    // migrateGamesArray folds in a pre-round-1 document's implicit single slot (no `games` field at
+    // all yet) by simply starting from an empty array; syncCurrentGameMirror immediately below then
+    // reconciles the CURRENT slot (add/replace/remove, keyed by gameId) against the singular fields
+    // just built above -- the exact same reconciliation every mutator's save() repeats afterwards.
+    // That single shared code path is what makes this non-destructive AND idempotent: there is no
+    // separate one-time "migrate" branch to get subtly out of sync with the steady-state sync.
+    normalized.games = migrateGamesArray(s.games);
+    return syncCurrentGameMirror(normalized);
   }
   function newId() {
     return typeof crypto.randomUUID === "function" ? crypto.randomUUID()
@@ -1551,6 +1548,12 @@
   }
   function save() {
     pendingRemote = null; // a local edit supersedes any remote state parked for later
+    // Multi-game round 1: every mutator that hand-edits state.players/phase/groupId/startedAt/
+    // leaderRef/settlementStatuses ends here (that is the whole guard -- see
+    // tests/multi-game-migration.test.cjs's staleness-guard test), so reconciling state.games in
+    // this one place, before every persist, is exactly as good as reconciling it inside each of
+    // them by hand -- without the risk of a future mutator forgetting to.
+    syncCurrentGameMirror(state);
     state.updatedAt = new Date().toISOString();
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     // With a session Supabase owns the cloud-backed collections; without one the app keeps using
@@ -3155,6 +3158,89 @@
     const g = currentGame || {};
     return hasOpenPhase(g) && (!Array.isArray(g.players) || g.players.length === 0);
   }
+  // ---------- multi-game round 1 (docs/superpowers/plans/2026-09-10-multi-game.md) ----------
+  // OpenGameSlot = { gameId, phase: "active"|"settlement", players: Player[], groupId: string|null,
+  //                  startedAt: ISO|null, leaderRef: ParticipantRef|null, settlementStatuses: Object }
+  // state.games: OpenGameSlot[] is the durable store -- closed games never live here, they move to
+  // history (finishCloseTable). Round 1 keeps every mutator/renderer reading and writing the
+  // singular state.gameId/phase/players/groupId/startedAt/leaderRef/settlementStatuses fields
+  // exactly as before (Round 2 removes them); syncCurrentGameMirror is what keeps state.games
+  // matching those fields, called from save() (after every mutation) and from normalize() (on
+  // load/migration) -- one direction, singular fields to games, not the other way around, because
+  // those are the fields every existing mutator/test already writes and expects to keep working.
+  function currentGameSlot(state) {
+    return (Array.isArray(state.games) ? state.games : []).find(g => g.gameId === state.gameId) || null;
+  }
+  // Replaces the current gameId's entry in games (add/replace when isGameOpen(state) is now true,
+  // drop otherwise) with a fresh slot built from state's own singular fields. Any OTHER slot
+  // already in games (a different open game -- not reachable in Round 1's UI, but harmless and
+  // forward-compatible with a synced multi-game document) is left untouched.
+  function syncCurrentGameMirror(state) {
+    const games = (Array.isArray(state.games) ? state.games : []).filter(g => g.gameId !== state.gameId);
+    if (isGameOpen(state)) {
+      games.push({
+        gameId: state.gameId,
+        phase: state.phase,
+        players: state.players || [],
+        groupId: state.groupId || null,
+        startedAt: state.startedAt || null,
+        leaderRef: state.leaderRef || null,
+        settlementStatuses: state.settlementStatuses || {},
+      });
+    }
+    state.games = games;
+    return state;
+  }
+  // The per-player normalization normalize() has always done for the current game's players,
+  // pulled out so a slot already sitting in a persisted/synced games array (normalizeGameSlot,
+  // below) gets the exact same treatment -- same id/entryLog reconciliation, keyed by whichever
+  // gameId the slot actually belongs to (never the top-level state.gameId for a slot that isn't
+  // the current one).
+  function normalizeGamePlayers(players, gameId) {
+    return (Array.isArray(players) ? players : []).map((p, index) => {
+      const id = p.id || gameId + "-player-" + index;
+      const buyins = Array.isArray(p.buyins) ? [...p.buyins] : [];
+      return { ...p, id, buyins,
+        status: p.status === "exited" ? "exited" : "active",
+        exitedAt: typeof p.exitedAt === "string" ? p.exitedAt : null,
+        userId: keptUserId(p.userId), // never minted locally; kept when the server sent one
+        guestId: typeof p.guestId === "string" ? p.guestId : null,
+        memberId: typeof p.memberId === "string" ? p.memberId : null,
+        entryLog: buyins.map((amount, i) => {
+          const saved = p.entryLog && p.entryLog[i];
+          return saved && saved.amount === amount && saved.playerId === id && saved.gameId === gameId
+            ? { ...saved }
+            : { id: id + "-entry-" + i, timestamp: null, amount, playerId: id, gameId };
+        }),
+      };
+    });
+  }
+  // Defensive re-validation for an entry already sitting in a persisted/synced games array: drops
+  // anything that is not a real open game by the same isGameOpen rule the rest of this file trusts
+  // (a corrupt or foreign row must never silently resurrect a phantom table).
+  function normalizeGameSlot(g) {
+    if (!g || typeof g !== "object") return null;
+    const gameId = typeof g.gameId === "string" && g.gameId ? g.gameId : null;
+    if (!gameId) return null;
+    const phase = g.phase === "active" || g.phase === "settlement" ? g.phase : null;
+    if (!phase) return null;
+    const players = normalizeGamePlayers(g.players, gameId);
+    if (!players.length) return null; // games holds only real (isGameOpen) slots
+    return {
+      gameId, phase, players,
+      groupId: g.groupId || null,
+      startedAt: typeof g.startedAt === "string" ? g.startedAt : null,
+      leaderRef: g.leaderRef ? normalizeParticipantRef(g.leaderRef) : null,
+      settlementStatuses: g.settlementStatuses && typeof g.settlementStatuses === "object" ? { ...g.settlementStatuses } : {},
+    };
+  }
+  // Non-destructive migration seam for normalize(): a pre-round-1 document has no `games` field at
+  // all -- its one implicit slot (if it has one) is folded in by syncCurrentGameMirror right after
+  // this runs, off the fully normalized singular fields, not here. A document that already carries
+  // `games` (a later build, or a synced multi-game future) keeps every entry it can still validate.
+  function migrateGamesArray(rawGames) {
+    return Array.isArray(rawGames) ? rawGames.map(normalizeGameSlot).filter(Boolean) : [];
+  }
   // The engine has one current-game slot: a group can have at most one open game, and the
   // whole device can have only one open game at a time (documented limitation, see plan).
   // An empty open slot (isEmptyOpenGame) does not block — starting a group game simply replaces it.
@@ -3172,6 +3258,10 @@
   // Rebuilds the current-game slot for a new/reset game while preserving every other
   // collection on state (fixes a latent data-loss bug in the old hand-built object literals).
   function newCurrentGame(base, patch) {
+    // The slot being replaced (if any) is dropped from games -- the reset button (and markReal)
+    // can run while the current game is a real, isGameOpen slot; save()'s syncCurrentGameMirror
+    // adds the *new* slot back once it actually qualifies, this function only ever removes.
+    const games = (Array.isArray(base.games) ? base.games : []).filter(g => g.gameId !== base.gameId);
     return {
       ...base,
       example: false,
@@ -3182,6 +3272,7 @@
       groupId: null,
       startedAt: null,
       leaderRef: null,
+      games,
       ...patch,
     };
   }
@@ -7397,6 +7488,11 @@
     state.debts = [...newDebts, ...state.debts];
     state.history.unshift(entry);
     if (state.history.length > HISTORY_MAX) state.history.length = HISTORY_MAX;
+    // The closing game's own slot (keyed by the OLD gameId, still in effect here) must be dropped
+    // before gameId changes below -- syncCurrentGameMirror inside save() only ever reconciles
+    // whichever gameId state has *at that point*, so this is the one spot that would otherwise
+    // leak an orphaned games entry no gameId points to any more.
+    state.games = (Array.isArray(state.games) ? state.games : []).filter(g => g.gameId !== state.gameId);
     state.players = [];
     state.gameId = newId();
     state.phase = "closed";

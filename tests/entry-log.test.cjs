@@ -31,8 +31,11 @@ test('saved timestamps and entry identities survive loading', () => {
 test('each added amount has a distinct identity, timestamp, player and game; save and remote body retain them', () => {
   const saveSource=html.slice(html.indexOf('  function save()'),html.indexOf('  // --- server sync'));
   const remoteSource=html.slice(html.indexOf('  function remoteBody()'),html.indexOf('  function scheduleRemoteSave()'));
-  const context=vm.createContext({crypto:require('node:crypto').webcrypto});
-  vm.runInContext(normalizeSource + saveSource + remoteSource + `
+  // Multi-game round 1: save() now also reconciles state.games (syncCurrentGameMirror, in the
+  // groups-domain pure section), so this slice needs that section too -- same reason the
+  // normalize() tests above load groupsPureSource.
+  const context=vm.createContext({crypto:require('node:crypto').webcrypto, newId: () => 'stub-new-id'});
+  vm.runInContext(normalizeSource + groupsPureSource + saveSource + remoteSource + `
     let state = {gameId:'game-one', phase:'active', players:[], history:[], debts:[{id:'d1',status:'open'}], settlementStatuses:{payment:true}, groupId:'group-one', example:false};
     let pendingRemote = null;
     const CLIENT_ID='test', KEY='game';
