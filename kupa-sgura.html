@@ -9,6 +9,8 @@
     --line: rgba(234,244,244,.09);
     --accent: #35E0DC;
     --accent-press: #8FF0EC;
+    --accent-fill: #35E0DC;        /* filled-button surface, text is --bg: 12.3:1 */
+    --accent-fill-press: #8FF0EC;  /* 15.2:1 */
     --bad: #FF6D6D;
     --bad-press: #FF8A8A;
     --close-hold-fill: #EAF4F4;
@@ -22,6 +24,8 @@
     --line: rgba(12,21,25,.12);
     --accent: #089E98;
     --accent-press: #0CC2BB;
+    --accent-fill: #067D78;        /* darker than --accent on purpose: --bg text on #089E98 is only 3.1:1 */
+    --accent-fill-press: #056E6A;  /* 5.7:1 -- a fill darkens on hover; --accent-press would lighten it to 2.1:1 */
     --bad: #D4403E;
     --bad-press: #B92F2C;
     --close-hold-fill: #05070A;
@@ -774,7 +778,7 @@
      rules, so leaving the email action as an outline made Google read as the primary route --
      the opposite of the decision that email-code leads. Scoped to a modifier rather than
      changing .btn-primary, which eight other places share. */
-  .btn-fill { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .btn-fill { background: var(--accent-fill); color: var(--bg); border-color: var(--accent-fill); }
   .btn-fill:disabled { background: none; color: var(--faint); border-color: var(--line); }
   .btn-skip { color: var(--dim); font-size: 13px; align-self: flex-start; }
   /* quiet-but-real: "המשך בלי חשבון" is a supported mode, not a dismiss link — bordered, 44px target */
@@ -951,7 +955,7 @@
     .btn-close-table.warn-state.hold-state:hover { background: none; border-color: var(--bad); color: var(--bad); }
     .btn-primary:hover { background: var(--accent); color: var(--bg); }
     .btn-primary:disabled:hover { background: none; color: var(--faint); }
-    .btn-fill:hover { background: var(--accent-press); border-color: var(--accent-press); color: var(--bg); }
+    .btn-fill:hover { background: var(--accent-fill-press); border-color: var(--accent-fill-press); color: var(--bg); }
     .btn-fill:disabled:hover { background: none; color: var(--faint); border-color: var(--line); }
     .games-invite-create:hover { background: var(--accent); color: var(--bg); }
   }

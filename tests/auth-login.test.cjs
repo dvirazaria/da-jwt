@@ -113,14 +113,26 @@ test('the email route is the only filled button, so Google does not out-rank the
   // Google reads as the primary route -- the opposite of the decision that email-code leads.
   assert.match(login, /class="btn-primary btn-fill" id="authEmailBtn"/);
   assert.match(login, /class="btn-primary btn-fill" id="authCodeBtn"/);
-  assert.match(html, /\.btn-fill \{[^}]*background: var\(--accent\)[^}]*color: var\(--bg\)/);
+  assert.match(html, /\.btn-fill \{[^}]*background: var\(--accent-fill\)[^}]*color: var\(--bg\)/);
+  // The fill gets its own token pair: --accent-press is LIGHTER in the light theme, so reusing it
+  // as a hover fill under --bg text falls to ~2:1. Both themes must clear AA for the button text.
+  const lum = h => { const [r,g,b] = [1,3,5].map(i => parseInt(h.slice(i,i+2),16)/255).map(c => c <= .03928 ? c/12.92 : ((c+.055)/1.055)**2.4); return .2126*r + .7152*g + .0722*b; };
+  const ratio = (a,b) => (Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05);
+  const light = html.slice(html.indexOf(':root[data-theme="light"]'));
+  const tok = (src, name) => src.match(new RegExp(name + ':\\s*(#[0-9A-Fa-f]{6})'))[1];
+  for (const [src, label] of [[html, 'dark'], [light, 'light']]) {
+    const bg = tok(src, '--bg');
+    for (const t of ['--accent-fill', '--accent-fill-press']) {
+      assert.ok(ratio(tok(src, t), bg) >= 4.5, `${label} ${t} vs --bg must clear AA 4.5:1`);
+    }
+  }
   // The local-mode escape must stay quiet: never filled, never the accent colour.
   const skip = login.match(/id="loginSkip"[^>]*>/)[0];
   assert.doesNotMatch(skip, /btn-fill/);
   assert.doesNotMatch(skip, /btn-primary/);
   // A filled button darkens on hover instead of filling, and it lives in the consolidated block.
   const hoverBlock = html.slice(html.indexOf('@media (hover: hover)'));
-  assert.match(hoverBlock.slice(0, hoverBlock.indexOf('\n  }')), /\.btn-fill:hover \{[^}]*--accent-press/);
+  assert.match(hoverBlock.slice(0, hoverBlock.indexOf('\n  }')), /\.btn-fill:hover \{[^}]*--accent-fill-press/);
 });
 
 // ---------- Google branding: exact colours per theme, no turquoise border ----------
