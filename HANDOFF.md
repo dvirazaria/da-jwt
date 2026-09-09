@@ -86,8 +86,9 @@ project's "keep one source of truth" rule; nothing here is a second store.
   `// ---------- groups domain (pure) ----------` section. Pre-backend identity:
   `ParticipantRef = { userId: null, guestId, displayName }` — `userId` is always `null` until real
   accounts exist; `guestId` is the stable local identity (`resolveGuestId` reuses one guestId per
-  displayName across groups/history on this device). "Who am I" inside a group is the member whose
-  `displayName === me` (`findMyMembership`) — replaced by `userId === session.userId` post-backend.
+  displayName across groups/history on this device). "Who am I" inside a group is resolved by
+  `userId === authUser.id` when both sides carry a profile id, with `displayName === me` retained as
+  the offline/legacy fallback (`membershipMatchesUser` / `findMyMembership`).
   Nothing is ever computed and stored: `GroupSummary`, `LeaderboardEntry`, `GroupGameSummary`,
   `gameWinners` are all adapters over `groups`/`groupMembers`/`history`, never persisted fields.
   `getGroupSummaries(collections, meName)` is the real adapter the dashboard calls today (no longer
@@ -174,17 +175,12 @@ project's "keep one source of truth" rule; nothing here is a second store.
   limitation: `schema.sql`'s `games_one_open_per_group_uk` is a per-group unique index, not per-device.
   In cloud mode this shows up as `pickCloudOpenGame()`: a second open game on the server is kept
   waiting (and logged) rather than replacing the table somebody is standing at.
-- **Name-based identity** — inside the app "who am I" is still a name (`me`). Supabase phase 1 fills
-  that name from a real session (`profiles.display_name`), and since phase 2b a `ParticipantRef` keeps
-  a `userId` when the *server* supplied one — local code still never mints one, so on a device that
-  has never signed in `userId` is always `null`. `resolveGuestId()` gives the same name the same `guestId`
-  across groups/history on one device, but two different people can collide if they type the same
-  name. This is a pre-backend simplification the group model was built around, not an oversight.
-  Corollary: when `me` matches no membership row of a group (e.g. sign-in set a display name that
-  differs from the name on the rows), the group page shows "אתה לא חבר בקבוצה הזו — מחובר בשם X"
-  and offers no hide/delete action — `findMyFormerMembership` gates `.games-hide-group-btn`, and
-  `hideGroupForMember` is refused for exactly the same cases. The real fix is `userId`-based
-  membership resolution on the backend.
+- **Hybrid identity** — Supabase phase 1 fills `me` from `profiles.display_name`, and since phase 2b
+  a `ParticipantRef` keeps a `userId` when the server supplied one. Group membership and admin
+  checks prefer that stable profile id, so a later display-name edit does not hide group settings.
+  Local/legacy rows without a profile id still fall back to `displayName === me`;
+  `resolveGuestId()` gives the same name the same `guestId` across groups/history on one device,
+  so two different local-only people can still collide if they type the same name.
 - **Leaderboard eligibility rule** — since nobody is a linked account yet, "eligible for the
   leaderboard" is defined as "matches a `GroupMember` record of this group, in any status" rather
   than the spec's `userId != null`. Ad-hoc game guests who never joined the group are excluded. This

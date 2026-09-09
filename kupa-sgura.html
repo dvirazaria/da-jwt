@@ -2338,12 +2338,20 @@
     }
     return newId();
   }
-  function findMyMembership(members, groupId, meName) {
-    return (Array.isArray(members) ? members : [])
-      .find(m => m && m.groupId === groupId && m.status === "active" && m.displayName === meName) || null;
+  // A signed-in profile id is the stable identity. The display name remains the offline fallback
+  // for local/legacy members that do not carry a profile id yet.
+  function membershipMatchesUser(member, meName, meUserId) {
+    if (!member) return false;
+    const profileId = meUserId || (typeof authUser !== "undefined" && authUser ? authUser.id : null);
+    if (profileId && member.userId) return member.userId === profileId;
+    return member.displayName === meName;
   }
-  function isGroupAdmin(members, groupId, meName) {
-    const membership = findMyMembership(members, groupId, meName);
+  function findMyMembership(members, groupId, meName, meUserId) {
+    return (Array.isArray(members) ? members : [])
+      .find(m => m && m.groupId === groupId && m.status === "active" && membershipMatchesUser(m, meName, meUserId)) || null;
+  }
+  function isGroupAdmin(members, groupId, meName, meUserId) {
+    const membership = findMyMembership(members, groupId, meName, meUserId);
     return !!membership && membership.role === "admin";
   }
   function activeMembers(members, groupId) {
@@ -2636,13 +2644,13 @@
   // succeed; hideGroupForMember is refused in exactly the cases this returns null.
   function findMyFormerMembership(members, groupId, meName) {
     return (Array.isArray(members) ? members : [])
-      .find(m => m && m.groupId === groupId && m.displayName === meName && (m.status === "left" || m.status === "removed")) || null;
+      .find(m => m && m.groupId === groupId && membershipMatchesUser(m, meName) && (m.status === "left" || m.status === "removed")) || null;
   }
   // The dashboard-side reader for the flag above: true only for a group I am no longer a member
   // of AND have hidden. Opening such a group directly still works (getGroupSummary is unfiltered).
   function isGroupHiddenForMember(members, groupId, meName) {
     const list = Array.isArray(members) ? members : [];
-    const membership = list.find(m => m && m.groupId === groupId && m.displayName === meName);
+    const membership = list.find(m => m && m.groupId === groupId && membershipMatchesUser(m, meName));
     return !!membership && membership.status !== "active" && !!membership.hiddenAt;
   }
   // Promotes/demotes a member. Refused (false, no mutation) when not found, or when demoting
@@ -4797,7 +4805,7 @@
   function toggleStartGamePanel() {
     if (startGameOpen) { closeStartGamePanel(); return; }
     const members = activeMembers(state.groupMembers, currentGroupId);
-    const mine = members.find(m => m && m.displayName === me);
+    const mine = findMyMembership(members, currentGroupId, me);
     startGameOpen = true;
     startGameJustOpened = true;
     startGameSelection = new Set(mine ? [mine.id] : []);
@@ -4912,7 +4920,7 @@
     const isLastAdmin = isLastActiveAdmin(activeList, member.id);
     if (member.role !== "admin") content.appendChild(renderMakeAdminButton(member));
     else if (!isLastAdmin) content.appendChild(renderRemoveAdminButton(member));
-    if (member.displayName !== me && !isLastAdmin) content.appendChild(renderRemoveMemberButton(member));
+    if (!membershipMatchesUser(member, me) && !isLastAdmin) content.appendChild(renderRemoveMemberButton(member));
     if (isLastAdmin) content.appendChild(el("p", "games-member-note", "העבר ניהול לחבר אחר קודם"));
     detailsIn.appendChild(content);
     details.appendChild(detailsIn);

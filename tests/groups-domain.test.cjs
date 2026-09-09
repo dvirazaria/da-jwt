@@ -122,6 +122,30 @@ test('findMyMembership and isGroupAdmin match the active member with the given d
   assert.equal(vm.runInContext(`!!findMyMembership(${JSON.stringify(members)}, 'g1', 'עבר')`, context), false);
 });
 
+test('membership resolution keeps a signed-in admin after their profile display name changes', () => {
+  const context = load();
+  context.authUser = { id: 'profile-1' };
+  const members = [
+    { groupId: 'g1', userId: 'profile-1', displayName: 'דביר עזריה', role: 'admin', status: 'active' },
+    { groupId: 'g1', userId: 'profile-2', displayName: 'דביר', role: 'member', status: 'active' },
+  ];
+  assert.equal(vm.runInContext(
+    `findMyMembership(${JSON.stringify(members)}, 'g1', 'דביר', 'profile-1').userId`, context
+  ), 'profile-1');
+  assert.equal(vm.runInContext(
+    `isGroupAdmin(${JSON.stringify(members)}, 'g1', 'דביר', 'profile-1')`, context
+  ), true);
+  const collections = {
+    groups: [{ id: 'g1', name: 'בדיקת ענן' }],
+    groupMembers: members,
+    history: [],
+    currentGame: { example: false, phase: 'closed', players: [] },
+  };
+  const summary = runJSON(`getGroupSummary(${JSON.stringify(collections)}, 'g1', 'דביר')`, context);
+  assert.equal(summary.isMember, true);
+  assert.equal(summary.isAdmin, true);
+});
+
 test('activeMembers/formerMembers partition by group and status', () => {
   const context = load();
   const members = [
