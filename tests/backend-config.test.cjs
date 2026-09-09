@@ -92,7 +92,11 @@ test('nothing calls supabase directly at the top level of the IIFE', () => {
 
 test('the login screen offers Google, a divider, and an email code, plus the local fallback', () => {
   const login = html.slice(html.indexOf('<div class="login" id="login"'), html.indexOf('<div class="login" id="joinNotice"'));
-  assert.ok(login.includes('מי אתה?'), 'the title stays');
+  // "כניסה" replaced "מי אתה?" — see docs/superpowers/plans/2026-09-08-design-round-2-handoff.md
+  // משימה 5 (gender-neutral heading, decided by the owner) — assert the new title exactly, and
+  // that the old gendered phrasing is gone rather than merely absent from this one string.
+  assert.ok(login.includes('<h2>כניסה</h2>'), 'the new gender-neutral title is used');
+  assert.doesNotMatch(login, /מי אתה\?/, 'the old gendered title must not remain');
   assert.ok(login.includes('המשך עם Google'), 'Google sign-in button');
   assert.ok(login.includes('שלחו לי קוד'), 'email OTP button');
   assert.ok(login.includes('אישור'), 'code verification button');
@@ -106,9 +110,11 @@ test('the login screen offers Google, a divider, and an email code, plus the loc
   assert.match(login, /id="authCode"[^>]*dir="ltr"/);
 });
 
-test('the Google button asks for a redirect back to this exact page', () => {
+test('the Google button asks for a redirect back to this exact page, search included', () => {
   assert.match(appScript, /provider: "google"/);
-  assert.match(appScript, /redirectTo: location\.origin \+ location\.pathname/);
+  // location.search must ride along so a `?join=`/`?friend=` invite token opened before sign-in
+  // survives the OAuth round trip (see tests/auth-login.test.cjs for the behavioural check).
+  assert.match(appScript, /redirectTo: location\.origin \+ location\.pathname \+ location\.search/);
 });
 
 test('the email path is send-code then verify-code, with inline Hebrew errors', () => {

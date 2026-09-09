@@ -771,6 +771,17 @@
     padding: 12px 26px; min-height: 48px; align-self: flex-start;
   }
   .btn-skip { color: var(--dim); font-size: 13px; align-self: flex-start; }
+  /* quiet-but-real: "המשך בלי חשבון" is a supported mode, not a dismiss link — bordered, 44px target */
+  .btn-quiet {
+    border: 1px solid var(--line); border-radius: 999px; background: transparent;
+    color: var(--dim); font-weight: 600; font-size: 14px;
+    padding: 10px 22px; min-height: 44px; align-self: flex-start;
+  }
+  .btn-quiet:hover { border-color: var(--dim); color: var(--text); }
+  .btn-quiet:active { transform: scale(.97); }
+  .login-benefit { margin-top: -10px !important; }
+  .login-legal { color: var(--faint); font-size: 11px; line-height: 1.5; margin: -2px 0 0; }
+  .login-legal:empty { display: none; }
 
   /* sign-in: the account block sits above, the existing local name flow stays below it, quieter */
   .auth-block, .auth-step, .auth-local { display: flex; flex-direction: column; gap: 14px; }
@@ -779,16 +790,21 @@
   .auth-local.auth-local-only { border-top: none; padding-top: 0; }
   .auth-local.auth-local-only .auth-local-title { display: none; }
   .login .auth-local-title { color: var(--faint); font-size: 12px; font-weight: 700; letter-spacing: .04em; margin: 6px 0 -4px; }
+  .login .auth-local-hint { color: var(--faint); font-size: 12px; margin: -6px 0 0; }
+  .auth-code-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  /* Google's own branding rules, not our accent: fixed colours per theme, never a turquoise border. */
   .btn-google {
     display: flex; align-items: center; justify-content: center; gap: 10px;
-    border: 1px solid var(--line); border-radius: 999px;
-    color: var(--text); font-weight: 700; font-size: 15px;
+    border: 1px solid #8E918F; border-radius: 999px;
+    background: #131314; color: #E3E3E3; font-weight: 500; font-size: 15px;
     padding: 12px 22px; min-height: 48px; width: 100%;
   }
-  .btn-google:hover { border-color: var(--accent); }
+  :root[data-theme="light"] .btn-google { background: #FFFFFF; border-color: #747775; color: #1F1F1F; }
+  .btn-google:hover { opacity: .92; }
   .btn-google:active { transform: scale(.97); }
   .btn-google:disabled { opacity: .45; cursor: default; }
-  .btn-google svg { width: 20px; height: 20px; flex: 0 0 20px; }
+  .btn-google-mark { width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; }
+  .btn-google svg { width: 18px; height: 18px; flex: 0 0 18px; }
   .auth-divider { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: 12px; }
   .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
   /* the email → code swap reuses the standard panel entrance instead of a hard cut */
@@ -1084,16 +1100,19 @@
 
   <div class="login" id="login" hidden>
   <div class="login-in">
-    <h2>מי אתה?</h2>
+    <h2>כניסה</h2>
+    <p class="login-benefit">חשבון שומר את החובות והקבוצות שלך בין ערבים ובין מכשירים. בלי סיסמה.</p>
     <p class="join-notice-status" id="loginNote" hidden></p>
     <div class="auth-block" id="authBlock" hidden>
       <button type="button" class="btn-google" id="authGoogleBtn">
+        <span class="btn-google-mark">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.99-4.3 2.99-7.35Z"></path>
           <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.42l-3.23-2.5c-.9.6-2.05.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H3.07v2.58A10 10 0 0 0 12 22Z"></path>
           <path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.83V7.5H3.07a10 10 0 0 0 0 9l3.34-2.58Z"></path>
           <path fill="#EA4335" d="M12 5.98c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.95 2.99 14.7 2 12 2a10 10 0 0 0-8.93 5.5l3.34 2.59C7.2 7.73 9.4 5.98 12 5.98Z"></path>
         </svg>
+        </span>
         <span id="authGoogleLabel">המשך עם Google</span>
       </button>
       <p class="auth-error" id="authGoogleError" hidden></p>
@@ -1108,18 +1127,27 @@
         <input type="text" id="authCode" dir="ltr" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" aria-label="קוד מהמייל">
         <button type="button" class="btn-primary" id="authCodeBtn">אישור</button>
         <p class="auth-error" id="authCodeError" hidden></p>
-        <button type="button" class="btn-skip" id="authCodeBackBtn">מייל אחר</button>
+        <div class="auth-code-actions">
+          <button type="button" class="btn-skip" id="authResendBtn" disabled>שליחה חוזרה</button>
+          <button type="button" class="btn-skip" id="authCodeBackBtn">שינוי כתובת</button>
+        </div>
       </div>
     </div>
     <p class="auth-note" id="authOffline" hidden>כניסה עם חשבון לא זמינה כרגע</p>
     <div class="auth-local" id="authLocal">
       <p class="auth-local-title">בלי חשבון</p>
-      <p>בחר את השם שלך או הקלד אחד חדש — ככה הרקורד שלך יישמר בין ערבים.</p>
+      <p>איך קוראים לך? השם נשאר על המכשיר הזה, בלי סנכרון בין מכשירים.</p>
+      <p class="auth-local-hint" id="loginChipsHint" hidden>שמות מהמכשיר הזה</p>
       <div class="who-row" id="loginChips"></div>
       <input type="text" id="loginName" placeholder="השם שלך" autocomplete="off" aria-label="השם שלך">
       <button type="button" class="btn-primary" id="loginGo">המשך</button>
-      <button type="button" class="btn-skip" id="loginSkip">דלג בינתיים</button>
+      <button type="button" class="btn-quiet" id="loginSkip">המשך בלי חשבון</button>
     </div>
+    <!-- LOGIN_LEGAL_NOTE / LOGIN_AGE_NOTE: placeholder copy, filled in by JS at showLogin() time.
+         Final text is being drafted separately in docs/legal-copy.md — swapping the two JS string
+         constants is a text-only change, no markup edit needed; both tolerate a two-line string. -->
+    <p class="login-legal" id="authLegalNote"></p>
+    <p class="login-legal" id="authAgeNote"></p>
   </div>
 </div>
 
@@ -7292,6 +7320,30 @@
     finishCloseTable();
   });
 
+  // ---------- auth errors (pure) ----------
+  // Supabase auth failures -> short Hebrew sentences. DOM-free and state-free on purpose (only
+  // reads `error`, never touches the DOM) so tests/auth-login.test.cjs can run it from a vm slice.
+  // `step` is "email" | "code" | "google" — which action the error came from.
+  function mapAuthError(error, step) {
+    const message = String((error && (error.message || error.error_description || error.msg)) || "").toLowerCase();
+    const status = error && (error.status !== undefined ? error.status : error.code);
+    if (status === 0 || /network|fetch|failed to fetch|offline/.test(message)) {
+      return "אין חיבור לאינטרנט. נסו שוב.";
+    }
+    if (status === 429 || /rate limit|too many|429/.test(message)) {
+      return "יותר מדי ניסיונות. נסו שוב בעוד כמה דקות.";
+    }
+    if (step === "code") {
+      if (/expired/.test(message)) return "הקוד פג תוקף. אפשר לשלוח קוד חדש.";
+      if (/invalid|otp|token/.test(message) || !message) return "הקוד לא נכון";
+      return "הקוד לא נכון";
+    }
+    if (step === "google") return "לא הצלחנו להתחבר עם Google";
+    // step === "email"
+    if (/invalid email|unable to validate|not a valid/.test(message)) return "כתובת מייל לא תקינה";
+    return "לא הצלחנו לשלוח מייל";
+  }
+
   // ---------- auth (Supabase session) ----------
   // Phase 1 wires identity only: a real session, a `profiles` row, and `me` fed from it. No game
   // data moves to the server yet — save()/initSync()/remoteBody() are untouched, and nothing here
@@ -7300,6 +7352,9 @@
   let authAppliedUserId = null; // last session already turned into a profile — avoids double upserts
   let authEmailPending = "";    // address a code was sent to; "" while the email step is showing
   let authRedirectError = "";   // an error the OAuth redirect came back with, shown on the login screen
+  let authAutoVerifyTimer = null; // ~250ms after the 6th digit, verifies without waiting for "אישור"
+  let authResendTimer = null;     // ticks the 60s resend countdown (Supabase's own rate window)
+  let authResendUntil = 0;
 
   function emailLocalPart(email) {
     const at = typeof email === "string" ? email.indexOf("@") : -1;
@@ -7433,7 +7488,31 @@
     shown.classList.remove("auth-step-in");
     void shown.offsetWidth; // restart the panel entrance
     shown.classList.add("auth-step-in");
-    if (step !== "email") document.getElementById("authCodeSent").textContent = "שלחנו קוד ל־" + authEmailPending;
+    if (step !== "email") document.getElementById("authCodeSent").textContent = "הקוד נשלח ל־" + authEmailPending;
+    if (step === "email") { clearResendCountdown(); clearTimeout(authAutoVerifyTimer); }
+  }
+  function clearResendCountdown() {
+    if (authResendTimer) { clearInterval(authResendTimer); authResendTimer = null; }
+    authResendUntil = 0;
+  }
+  function tickResendButton() {
+    const btn = document.getElementById("authResendBtn");
+    if (!btn) return;
+    const remaining = Math.max(0, Math.ceil((authResendUntil - Date.now()) / 1000));
+    if (remaining <= 0) {
+      clearResendCountdown();
+      btn.disabled = false;
+      btn.textContent = "שליחה חוזרה";
+    } else {
+      btn.disabled = true;
+      btn.textContent = "שליחה חוזרה (" + remaining + ")";
+    }
+  }
+  function startResendCountdown() {
+    clearResendCountdown();
+    authResendUntil = Date.now() + 60000; // Supabase's own OTP rate window
+    tickResendButton();
+    authResendTimer = setInterval(tickResendButton, 1000);
   }
   // The CDN script is deferred, so the account block may only become available after first paint.
   function refreshAuthBlock() {
@@ -7447,14 +7526,17 @@
     setAuthError("authGoogleError", "");
     setGoogleBusy(true);
     try {
+      // location.search is included so a `?join=` / `?friend=` invite token opened before sign-in
+      // survives the OAuth redirect round trip (Google returns to this same URL, then supabase-js
+      // strips its own ?code=/&state= — see stripAuthParamsFromUrl — leaving join/friend intact).
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: location.origin + location.pathname },
+        options: { redirectTo: location.origin + location.pathname + location.search },
       });
       if (error) throw error;
     } catch (e) {
       setGoogleBusy(false);
-      setAuthError("authGoogleError", "לא הצלחנו להתחבר עם Google");
+      setAuthError("authGoogleError", mapAuthError(e, "google"));
     }
   }
 
@@ -7475,11 +7557,24 @@
       authEmailPending = email;
       document.getElementById("authCode").value = "";
       setAuthStep("code");
+      startResendCountdown();
       document.getElementById("authCode").focus();
     } catch (e) {
-      setAuthError("authEmailError", "לא הצלחנו לשלוח מייל");
+      setAuthError("authEmailError", mapAuthError(e, "email"));
     }
     setAuthBusy("authEmailBtn", false, "שולח…", "שלחו לי קוד");
+  }
+
+  async function resendEmailCode() {
+    if (!supabase || !authEmailPending) return;
+    setAuthError("authCodeError", "");
+    try {
+      const { error } = await supabase.auth.signInWithOtp({ email: authEmailPending, options: { shouldCreateUser: true } });
+      if (error) throw error;
+      startResendCountdown();
+    } catch (e) {
+      setAuthError("authCodeError", mapAuthError(e, "email"));
+    }
   }
 
   async function verifyEmailCode() {
@@ -7491,14 +7586,16 @@
       shakeEl(input);
       return;
     }
+    clearTimeout(authAutoVerifyTimer);
     setAuthError("authCodeError", "");
     setAuthBusy("authCodeBtn", true, "בודק…", "אישור");
     try {
       const { error } = await supabase.auth.verifyOtp({ email: authEmailPending, token, type: "email" });
       if (error) throw error;
       authEmailPending = "";
+      clearResendCountdown();
     } catch (e) {
-      setAuthError("authCodeError", "הקוד לא נכון");
+      setAuthError("authCodeError", mapAuthError(e, "code"));
     }
     setAuthBusy("authCodeBtn", false, "בודק…", "אישור");
   }
@@ -7512,13 +7609,29 @@
   document.getElementById("authCode").addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); verifyEmailCode(); }
   });
+  // Single field, not six boxes: auto-verify ~250ms after the 6th digit; "אישור" stays as a
+  // manual fallback for anyone whose 6th keystroke doesn't land cleanly (autofill races, IME, ...).
+  document.getElementById("authCode").addEventListener("input", (e) => {
+    clearTimeout(authAutoVerifyTimer);
+    const digits = e.target.value.replace(/\D/g, "");
+    if (digits.length === 6) authAutoVerifyTimer = setTimeout(verifyEmailCode, 250);
+  });
+  document.getElementById("authResendBtn").addEventListener("click", resendEmailCode);
   document.getElementById("authCodeBackBtn").addEventListener("click", () => {
     authEmailPending = "";
+    clearResendCountdown();
+    clearTimeout(authAutoVerifyTimer);
     setAuthError("authCodeError", "");
     setAuthStep("email");
   });
 
   // ---------- login (who are you — asked once per device, on first open) ----------
+  // LOGIN_LEGAL_NOTE / LOGIN_AGE_NOTE are placeholders. Final copy is being drafted separately in
+  // docs/legal-copy.md (a parallel review, not this task) — swap these two strings when it lands;
+  // showLogin() below renders them as plain textContent, so that swap is text-only, no markup or
+  // layout change, and both #authLegalNote/#authAgeNote tolerate a two-line string (see CSS).
+  const LOGIN_LEGAL_NOTE = "בהמשך אתם מאשרים את תנאי השימוש ומדיניות הפרטיות."; // placeholder — docs/legal-copy.md
+  const LOGIN_AGE_NOTE = "השירות מיועד לבני 18 ומעלה."; // placeholder — docs/legal-copy.md
   function showLogin() {
     const box = document.getElementById("login");
     box.hidden = false;
@@ -7534,7 +7647,9 @@
     loginNote = ""; // shown once, same rule as authRedirectError above
     const chips = document.getElementById("loginChips");
     chips.innerHTML = "";
-    knownNames().forEach(n => {
+    const names = knownNames();
+    document.getElementById("loginChipsHint").hidden = names.length === 0;
+    names.forEach(n => {
       const chip = el("button", "chip", n);
       chip.type = "button";
       chip.addEventListener("click", () => {
@@ -7544,6 +7659,8 @@
       });
       chips.appendChild(chip);
     });
+    document.getElementById("authLegalNote").textContent = LOGIN_LEGAL_NOTE;
+    document.getElementById("authAgeNote").textContent = LOGIN_AGE_NOTE;
   }
   function confirmLogin() {
     const inp = document.getElementById("loginName");
