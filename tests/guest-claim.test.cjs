@@ -1,16 +1,23 @@
-// Guest -> account linking ("זה אני"), consent-based (docs/backend/link-guest.sql).
+// Guest -> account linking, v2 (docs/backend/link-guest.sql) — no approval step in the happy path.
 //
-// The server half is docs/backend/link-guest.sql: a SECURITY DEFINER app_request_guest_claim /
-// app_approve_guest_claim / app_decline_guest_claim trio, because a guest can never be
-// auto-merged by name and RLS deliberately refuses the direct writes a merge needs. These tests
-// pin the pure client half, vm-sliced exactly like tests/groups-domain.test.cjs:
-//   * guestClaimCandidatesInGroup — who this device offers "שיחקת כאן בעבר?" to, and who it does
-//     not (already linked, a different group, a claim already in flight, local/offline mode);
-//   * seatsGuestAndUser — the local mirror of the SQL's double-seat guard;
+// Replaces the earlier consent-based "זה אני" design (request + a second person's approval) with
+// three paths, tried in order: (1) invite-bound linking — a member binds an invite to a specific
+// unlinked guest when creating it (app_redeem_invite links atomically on redemption, silently);
+// (2) verified contact match — not shipped this pass, see the report; (3) zero-exposure
+// self-claim — a signed-in user may claim a matching guest THEMSELVES, instantly, but only when
+// doing so moves no money (app_self_claim_guest, enforced server-side). Every path shares the
+// same re-pointing engine and double-seat guard (app_link_guest_to_profile).
+//
+// These tests pin the pure client half, vm-sliced exactly like tests/groups-domain.test.cjs:
+//   * guestHasZeroExposure — the local mirror of app_guest_has_zero_exposure: an open debt, or a
+//     seat in an open/unbalanced game, makes a guest unclaimable; a clean guest is claimable;
+//   * seatsGuestAndUser — the local mirror of the SQL's double-seat guard, unchanged and shared by
+//     every linking path;
 //   * applyGuestClaimLocally — the optimistic local re-point, and that it is pure identity, never
-//     money, and idempotent;
-//   * a structural regex check that link-guest.sql actually enforces auth.uid()-derived identity,
-//     is SECURITY DEFINER, revokes the public default, and never mentions service_role.
+//     money, and idempotent (also unchanged — every path re-points identity the same way);
+//   * a structural regex check that link-guest.sql is SECURITY DEFINER, keyed off auth.uid() via
+//     the vendor seam, revokes the public default, enforces zero exposure server-side (inside
+//     app_self_claim_guest itself, not just suggested by the UI), and never mentions service_role.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -26,8 +33,9 @@ function sourceBetween(startMarker, endMarker) {
   return html.slice(start, end);
 }
 
-// Both new helpers live between "groups domain (pure)" and "cloud mapping (pure)" ends, i.e. the
-// same wide slice tests/groups-domain.test.cjs already loads (it runs up to the DOM boundary
+// guestHasZeroExposure and seatsGuestAndUser/applyGuestClaimLocally live in "groups domain
+// (pure)"; guestClaimCandidatesInGroup lives a bit further in "cloud mapping (pure)" — the same
+// wide slice tests/groups-domain.test.cjs already loads (it runs up to the DOM boundary
 // `function el(`, which happens to include every pure section in between).
 const pureSource = sourceBetween('  // ---------- groups domain (pure) ----------', '  function el(');
 
@@ -42,45 +50,52 @@ function runJSON(code, context) {
   return JSON.parse(vm.runInContext(`JSON.stringify(${code})`, context));
 }
 
-// ---------- guestClaimCandidatesInGroup ----------
+// ---------- guestHasZeroExposure ----------
 
-test('guestClaimCandidatesInGroup offers an unlinked same-name guest seated in my group', () => {
+test('guestHasZeroExposure: an open debt on either side makes a guest unclaimable, a paid one does not', () => {
   const context = load();
-  const guestRows = [{ id: 'guest-1', display_name: 'דביר', created_by: 'admin-1', linked_profile_id: null }];
-  const groupMembers = [
-    { groupId: 'group-1', guestId: 'guest-1', userId: null, displayName: 'דביר', status: 'active' },
-    { groupId: 'group-1', guestId: null, userId: 'user-dvir', displayName: 'דביר', status: 'active' },
-  ];
-  const result = runJSON(
-    `guestClaimCandidatesInGroup(${JSON.stringify(guestRows)}, ${JSON.stringify(groupMembers)}, [], 'group-1', 'user-dvir', 'דביר')`,
+  const asDebtor = runJSON(
+    `guestHasZeroExposure('guest-1', [{status:'open', debtor_guest_id:'guest-1', creditor_guest_id:null}], [], [])`,
     context);
-  assert.deepEqual(result.map(g => g.id), ['guest-1']);
+  const asCreditor = runJSON(
+    `guestHasZeroExposure('guest-1', [{status:'open', debtor_guest_id:null, creditor_guest_id:'guest-1'}], [], [])`,
+    context);
+  const paidDoesNotCount = runJSON(
+    `guestHasZeroExposure('guest-1', [{status:'paid', debtor_guest_id:'guest-1', creditor_guest_id:null}], [], [])`,
+    context);
+  const someoneElsesDebt = runJSON(
+    `guestHasZeroExposure('guest-1', [{status:'open', debtor_guest_id:'guest-2', creditor_guest_id:null}], [], [])`,
+    context);
+  assert.equal(asDebtor, false, 'an open debt as debtor blocks the claim');
+  assert.equal(asCreditor, false, 'an open debt as creditor blocks the claim');
+  assert.equal(paidDoesNotCount, true, 'a paid debt is not exposure');
+  assert.equal(someoneElsesDebt, true, 'a different guest\'s open debt is irrelevant');
 });
 
-test('guestClaimCandidatesInGroup excludes a linked guest, another group, a name mismatch, an in-flight claim, and local mode', () => {
+test('guestHasZeroExposure: an open or unbalanced-closed game blocks the claim, a closed balanced one does not', () => {
   const context = load();
-  const guestRows = [
-    { id: 'guest-linked', display_name: 'דביר', created_by: 'admin-1', linked_profile_id: 'someone-else' },
-    { id: 'guest-other-group', display_name: 'דביר', created_by: 'admin-1', linked_profile_id: null },
-    { id: 'guest-wrong-name', display_name: 'יוסי', created_by: 'admin-1', linked_profile_id: null },
-    { id: 'guest-in-flight', display_name: 'דביר', created_by: 'admin-1', linked_profile_id: null },
-  ];
-  const groupMembers = [
-    { groupId: 'group-1', guestId: 'guest-linked', displayName: 'דביר', status: 'active' },
-    { groupId: 'group-2', guestId: 'guest-other-group', displayName: 'דביר', status: 'active' },
-    { groupId: 'group-1', guestId: 'guest-wrong-name', displayName: 'יוסי', status: 'active' },
-    { groupId: 'group-1', guestId: 'guest-in-flight', displayName: 'דביר', status: 'active' },
-  ];
-  const claims = [{ guest_id: 'guest-in-flight', claimant_profile_id: 'user-dvir', status: 'pending' }];
-  const run = (meUserId, meName) => runJSON(
-    `guestClaimCandidatesInGroup(${JSON.stringify(guestRows)}, ${JSON.stringify(groupMembers)}, ${JSON.stringify(claims)}, 'group-1', ${JSON.stringify(meUserId)}, ${JSON.stringify(meName)})`,
+  const seated = (guestId, gameId) => JSON.stringify([{ guest_id: guestId, game_id: gameId }]);
+  const openGame = runJSON(
+    `guestHasZeroExposure('guest-1', [], ${seated('guest-1', 'g1')}, [{id:'g1', phase:'active', is_balanced:null}])`,
     context);
-  assert.deepEqual(run('user-dvir', 'דביר'), [], 'linked/other-group/wrong-name/in-flight guests are never offered');
-  // Local/offline mode: ParticipantRef.userId is always null pre-account, so this must be [] too.
-  assert.deepEqual(run(null, 'דביר'), []);
+  const settlementGame = runJSON(
+    `guestHasZeroExposure('guest-1', [], ${seated('guest-1', 'g1')}, [{id:'g1', phase:'settlement', is_balanced:null}])`,
+    context);
+  const unbalancedClosed = runJSON(
+    `guestHasZeroExposure('guest-1', [], ${seated('guest-1', 'g1')}, [{id:'g1', phase:'closed', is_balanced:false}])`,
+    context);
+  const cleanGuest = runJSON(
+    `guestHasZeroExposure('guest-1', [], ${seated('guest-1', 'g1')}, [{id:'g1', phase:'closed', is_balanced:true}])`,
+    context);
+  const noGuestId = runJSON(`guestHasZeroExposure('', [], [], [])`, context);
+  assert.equal(openGame, false, 'a still-open game blocks the claim');
+  assert.equal(settlementGame, false, 'a game in settlement blocks the claim');
+  assert.equal(unbalancedClosed, false, 'a closed but unbalanced game blocks the claim');
+  assert.equal(cleanGuest, true, 'closed + balanced, no open debts -> claimable');
+  assert.equal(noGuestId, false, 'no guestId is never claimable');
 });
 
-// ---------- seatsGuestAndUser ----------
+// ---------- seatsGuestAndUser (double-seat guard, shared by every linking path) ----------
 
 test('seatsGuestAndUser mirrors the SQL double-seat guard', () => {
   const context = load();
@@ -94,7 +109,7 @@ test('seatsGuestAndUser mirrors the SQL double-seat guard', () => {
   assert.equal(seats(both, 'guest-1', ''), false, 'no userId, no guard');
 });
 
-// ---------- applyGuestClaimLocally ----------
+// ---------- applyGuestClaimLocally (the local re-point, shared by every linking path) ----------
 
 function claimFixture() {
   return {
@@ -161,9 +176,9 @@ test('applyGuestClaimLocally is idempotent — a second call changes nothing fur
   assert.equal(once, twice);
 });
 
-// ---------- SQL: authorization is auth.uid()-derived, definer-rights, hardened ----------
+// ---------- SQL: definer-rights, auth.uid()-derived, hardened, exposure enforced server-side ----------
 
-test('link-guest.sql is SECURITY DEFINER, keyed off auth.uid() via the vendor seam, revokes the public default, and never mentions service_role', () => {
+test('link-guest.sql is SECURITY DEFINER, keyed off auth.uid() via the vendor seam, revokes the public default, enforces zero exposure server-side, and never mentions service_role', () => {
   const sql = fs.readFileSync('docs/backend/link-guest.sql', 'utf8');
   assert.match(sql, /security definer/i);
   // The seam is app_current_profile_id() (auth.uid() lives only in rls-policies.sql), documented
@@ -172,6 +187,15 @@ test('link-guest.sql is SECURITY DEFINER, keyed off auth.uid() via the vendor se
   assert.match(sql, /app_current_profile_id\(\)/);
   assert.match(sql, /revoke/i);
   assert.doesNotMatch(sql, /service_role/i);
-  // The claimant is always the caller's own identity, never a spoofable parameter.
-  assert.doesNotMatch(sql, /app_request_guest_claim\(p_(profile|user|target)_id/i);
+  // Neither public-facing RPC takes a spoofable target identity — both always resolve their own
+  // caller via app_current_profile_id(), never a caller-supplied profile/user/target id.
+  assert.doesNotMatch(sql, /app_redeem_invite\(p_(profile|user|target)_id/i);
+  assert.doesNotMatch(sql, /app_self_claim_guest\(p_(profile|user|target)_id/i);
+  // The zero-exposure gate is enforced INSIDE app_self_claim_guest itself — not left to the UI.
+  const start = sql.indexOf('CREATE OR REPLACE FUNCTION app_self_claim_guest');
+  assert.ok(start >= 0, 'missing app_self_claim_guest');
+  const end = sql.indexOf('CREATE OR REPLACE FUNCTION', start + 1);
+  const body = sql.slice(start, end >= 0 ? end : undefined);
+  assert.match(body, /app_guest_has_zero_exposure\(/);
+  assert.match(body, /GUEST_LINK_HAS_EXPOSURE/);
 });

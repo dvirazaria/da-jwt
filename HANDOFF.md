@@ -348,47 +348,74 @@ slot per device, avatar object storage, and bulk-uploading a device's pre-existi
 closed game can only reach the server by being opened there first). Guest→account linking is
 covered next.
 
-## Guest → account linking ("קישור אורח לחשבון")
+## Guest → account linking ("קישור אורח לחשבון"), v2 — no approval step
 
 Closes the identity gap phase 2b left open: a guest played real games, owes/is owed real debts and
 sits in a group's roster under `guest_id`, then signs in and gets an empty new `profiles` row with
-none of it visible. Never auto-merged by name — `docs/backend/link-guest.sql` (paste-ready, not yet
-run against the project) adds a two-party consent flow: `app_request_guest_claim(p_guest_id)` (the
-signing-in user, acting only as their own `auth.uid()` — never a spoofable target id) creates a
-`guest_claims` row; `app_approve_guest_claim(p_claim_id)` (only the guest's creator or an active
-admin of one of its groups — never the claimant) does the actual merge, re-pointing
-`game_participants`, `debts` (`debtor_*` and `creditor_*` independently) and `games.leader_*` from
-`guest_id` to `profile_id`, and skipping a `group_members` row only where the claimant already
-holds an independent active membership in that same group (the common real path: the claimant
-usually has to join a group under their own account before `guests_select` even lets them see the
-old guest there to claim it). `transfers`/`entries` need no change at all — they reference
-`game_participants.id`, not an identity column, so they follow automatically. Refuses and rolls
-back (`GUEST_CLAIM_DOUBLE_SEAT`) if the claim would seat the same person twice in one game;
-idempotent on a retried/already-resolved call. `app_decline_guest_claim` lets either the claimant
-withdraw their own request or the approver say no.
+none of it visible. An earlier design required a second, independent human (the guest's creator or
+a group admin) to approve a "זה אני" request before anything merged — safe, but it put a human
+approval in a brand-new user's first minute. That design was never run against the project and has
+been replaced outright (not layered on top of); `docs/backend/link-guest.sql` (paste-ready) now
+ships **zero approvals in the happy path**, with friction scaled to financial risk instead of
+applied uniformly, in three paths tried in this order:
 
-**Frontend, cloud mode only — everything below is a no-op when `cloudMode()` is false.** A pull now
-also reads `guests`/`guest_claims` (RLS-narrowed, same as every other table) into
-`cloudGuestRows`/`cloudGuestClaims` — in-memory only, the same pattern as `cloudProfileIds`/
-`cloudGameCreators`, no new localStorage key. `guestClaimCandidatesInGroup` / `guestClaimsForGroup`
-(cloud mapping (pure)) and `seatsGuestAndUser` / `applyGuestClaimLocally` (groups domain (pure)) are
-the new pure helpers, tested in `tests/guest-claim.test.cjs`. `renderGroupGuestClaims()` renders on
-both the group page and the group-preview overlay: a calm "שיחקת כאן בעבר בשם X?" / "זה אני" / "לא"
-row per candidate, the claimant's own honest "ממתין לאישור", and the approver's "אשר"/"דחה" entry —
-all reusing `renderFriendGroup`, the exact rows friend requests already use, rather than a new
-component. Nothing here touches `settle()`, `tableBalance()`, `buildHistoryEntry()`,
-`buildDebtRecords()` or the close-table flow: the merge is entirely server-side, and the next
-`pullCloud()` after an approval already shows it merged, because every reader (RLS policies, the
-leaderboard views, `buildHistoryEntryFromCloud`) already keys off `profile_id`/`guest_id` exactly as
-it always did.
+1. **Invite-bound linking (primary).** A member creates an invite and optionally binds it to one
+   existing, unlinked guest of that group ("הזמן את דוד") —
+   `renderInviteGuestBindPicker(groupId)`, a small chip picker shown only when the group actually
+   has an eligible guest, right above "צור הזמנה" in the group-settings invite block. The chosen
+   guest id travels only as `invites.bound_guest_id`, never in the shared link/QR/code
+   (`inviteLink()` takes no such parameter). `app_redeem_invite(p_token)` (extended, same
+   signature) links that guest to whoever redeems the token, silently, in the same transaction as
+   joining — a refusal (already linked, double-seat) is swallowed on purpose, since the redeemer
+   never asked to be linked to anyone, only to join a group.
+2. **Verified contact match (automatic fast path) — not shipped.** `guests` carries no
+   phone/email column and nothing in `kupa-sgura.html` captures one for a guest today (a guest is
+   only ever added by typed display name). Building the capture UI would widen the
+   `GroupMember`/`Player` pure data contracts and their whole cloud push/pull mapping — a
+   materially separate feature, flagged as a follow-up rather than built half-way.
+3. **Zero-exposure self-claim (fallback).** `app_self_claim_guest(p_guest_id)` — the signing-in
+   user, acting only as their own `auth.uid()` — links a same-name guest to themselves **instantly**
+   when doing so cannot move money: no open debt on either side, and no `game_participants` row in
+   a game that is still open/in settlement or closed unbalanced
+   (`app_guest_has_zero_exposure`, enforced inside the RPC, not just suggested by the UI). Any
+   exposure raises `GUEST_LINK_HAS_EXPOSURE`, which the UI turns into "ask a member for a personal
+   invite link instead" — friction scales with risk rather than gating every claim uniformly.
 
-**Known gap, documented rather than patched blind:** `guests_update_creator` in `rls-policies.sql`
-technically still lets a guest's creator `UPDATE` `linked_profile_id`/`linked_at` directly — RLS
-cannot express "every column except these two". The obvious fix
-(`GRANT UPDATE (display_name, created_by) ON guests`) needs verifying against a real
-`ON CONFLICT DO UPDATE` upsert's generated column list first (the existing guest push in
-`guestToRow` always re-sends `created_by`, even unchanged, and this repo cannot run SQL to check),
-so it was documented instead of applied unverified — see the comment in `link-guest.sql`.
+All three funnel through one internal, **ungranted** engine, `app_link_guest_to_profile(p_guest_id,
+p_claimant)`: re-points `game_participants`, `debts` (`debtor_*`/`creditor_*` independently) and
+`games.leader_*` from `guest_id` to `profile_id`, skips a `group_members` row only where the
+claimant already holds an independent active membership in that same group, and sets
+`guests.linked_profile_id`/`linked_at` as the idempotency marker (the same rule guards every path
+against re-linking an already-linked guest). `transfers`/`entries` need no change — they reference
+`game_participants.id`, not an identity column, so they follow automatically. Refuses
+(`double-seat`, surfaced as `GUEST_LINK_DOUBLE_SEAT` from the self-claim path) if the link would
+seat the same person twice in one game, in every path, with no partial effect. Being ungranted
+(`REVOKE ALL` from every role, no `GRANT`) is the actual protection — it takes a caller-supplied
+`p_claimant`, the opposite of every public RPC in this file, so it must never be directly reachable.
+
+**Frontend, cloud mode only — everything below is a no-op when `cloudMode()` is false.** A pull
+still reads `guests` (RLS-narrowed) into `cloudGuestRows` — in-memory only, same pattern as
+`cloudProfileIds`/`cloudGameCreators`, no new localStorage key (the `guest_claims` pull and its
+cache are gone with the table). `guestClaimCandidatesInGroup` (cloud mapping (pure)) and
+`seatsGuestAndUser` / `applyGuestClaimLocally` / `guestHasZeroExposure` (groups domain (pure)) are
+the pure helpers, tested in `tests/guest-claim.test.cjs`. `renderGroupGuestClaims()` still renders
+on both the group page and the group-preview overlay: a calm "שיחקת כאן בעבר בשם X?" / "זה אני" /
+"לא" row per same-name unlinked guest, reusing `renderFriendGroup` — tapping "זה אני" links
+instantly or shows a short inline reason it could not. Nothing here touches `settle()`,
+`tableBalance()`, `buildHistoryEntry()`, `buildDebtRecords()` or the close-table flow: the merge is
+entirely server-side, and the next `pullCloud()` already shows it merged, because every reader (RLS
+policies, the leaderboard views, `buildHistoryEntryFromCloud`) keys off `profile_id`/`guest_id`
+exactly as it always did.
+
+**Known gaps, documented rather than patched blind:** (1) `guests_update_creator` in
+`rls-policies.sql` technically still lets a guest's creator `UPDATE` `linked_profile_id`/`linked_at`
+directly — RLS cannot express "every column except these two"; the fix needs verifying against a
+real `ON CONFLICT DO UPDATE` upsert's generated column list first, which this repo cannot run SQL
+to check. (2) `invites_update_admin` deliberately does not re-validate `bound_guest_id` (only
+`invites_insert_admin` does) — see the comment above that policy in `link-guest.sql` for why
+re-checking "still unlinked" on every later UPDATE would start rejecting a bound invite's own
+revoke the moment its binding resolves. Both are narrow, low-blast-radius gaps, not silently
+ignored risks.
 
 ## Account deletion
 

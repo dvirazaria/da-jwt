@@ -141,13 +141,28 @@ test('an invite round-trips, and its creator is the signed-in profile', () => {
   const invite = {
     id: IV1, groupId: GR1, token: 'ABCD2345',
     createdBy: { userId: P1, guestId: G1, displayName: 'דביר' },
-    createdAt: '2026-09-03T09:00:00.000Z', revokedAt: null,
+    createdAt: '2026-09-03T09:00:00.000Z', revokedAt: null, boundGuestId: null,
   };
   const row = runJSON(`inviteToRow(${JSON.stringify(invite)}, ${ctxLiteral})`, context);
   assert.deepEqual(row, {
     id: IV1, group_id: GR1, token: 'ABCD2345', created_by_profile_id: P1,
-    created_at: '2026-09-03T09:00:00.000Z', revoked_at: null,
+    created_at: '2026-09-03T09:00:00.000Z', revoked_at: null, bound_guest_id: null,
   });
+  assert.deepEqual(runJSON(`rowToInvite(${JSON.stringify(row)}, ${ctxLiteral})`, context), invite);
+});
+
+// docs/backend/link-guest.sql path 1: an invite created bound to a specific guest carries that
+// guest's id as its own column — never inside the token/link/QR (a separate, structural test
+// pins that in tests/guest-claim.test.cjs) — and round-trips the same way every other field does.
+test('a bound invite carries bound_guest_id and round-trips it', () => {
+  const context = load();
+  const invite = {
+    id: IV1, groupId: GR1, token: 'ABCD2345',
+    createdBy: { userId: P1, guestId: G1, displayName: 'דביר' },
+    createdAt: '2026-09-03T09:00:00.000Z', revokedAt: null, boundGuestId: GU2,
+  };
+  const row = runJSON(`inviteToRow(${JSON.stringify(invite)}, ${ctxLiteral})`, context);
+  assert.equal(row.bound_guest_id, GU2);
   assert.deepEqual(runJSON(`rowToInvite(${JSON.stringify(row)}, ${ctxLiteral})`, context), invite);
 });
 
