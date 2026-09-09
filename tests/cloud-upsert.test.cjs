@@ -65,6 +65,12 @@ test('the push plan keeps FK order as data: parents before children', () => {
   assert.ok(at('groups') < at('groupMembers'));
   assert.ok(at('groups') < at('invites'));
   assert.ok(at('games') < at('gameParticipants'));
+  // game_participants_insert/_update's WITH CHECK (security-fixes.sql §F2) resolves the named
+  // profile's membership by reading group_members, a table this same push must have already
+  // written and committed as an earlier, separate request -- never the row a same-statement
+  // upsert is still inserting. That only holds if group_members always goes up first.
+  assert.ok(at('groupMembers') < at('games'));
+  assert.ok(at('groupMembers') < at('gameParticipants'));
   assert.ok(at('gameParticipants') < at('entries'));
   assert.ok(at('gameParticipants') < at('transfers'));
   assert.ok(at('transfers') < at('gamesClosed'));

@@ -384,3 +384,76 @@ Edge Function/Gateway אם ההיקף גדל — אין לזה תיקון ב-RLS
 (הם שוברים מסך קיים / test קיים בלי תיאום), ולכן הושארו כהמלצה מתועדת בלבד, בהתאם
 להנחיה "אם ממצא ניתן לתיקון טריוויאלי ב-kupa-sgura.html בלי לפגוע בהתנהגות המוצר —
 תקנו גם שם; אחרת השאירו את קובץ האפליקציה בלי נגיעה."
+
+---
+
+## נספח (2026-09-09, מאוחר יותר): ההתנגשות בין F6 ל-`fix-upsert-policies.sql` — נבדקה, לא רק נומקה
+
+**מה התגלה.** `security-fixes.sql` §F6 (לעיל) מחזיר חמש מדיניות בדיוק לניסוח שהיה
+לפני `fix-upsert-policies.sql` — כלומר מסיר מהן את ענף ה-"או שאני היוצר" ש-
+`fix-upsert-policies.sql` הוסיף. אותו ענף, לפי הכותרת של `fix-upsert-policies.sql`
+עצמו, קיים כדי לפתור תקלת ייצור אמיתית: `commit 9eafade` (שורת commit: "fix: insert
+new cloud rows instead of upserting them") תיעד ש-`upsert(rows, { onConflict: "id"
+})` — המתורגם ל-`INSERT ... ON CONFLICT (id) DO UPDATE` — גרם ל-42501 על **כל** כתיבה
+ראשונה של שורה חדשה בטבלאות `groups`/`group_members`/`invites`/`games`, לפני שתוקן.
+כלומר: לכאורה, הסרת הענף מחזירה בדיוק את התקלה שהוא בא לתקן. המשימה הזו נדרשה
+**לברר**, לא להניח, אם זה נכון עדיין מול קוד הלקוח כפי שהוא היום — ולא לסמוך על
+הנוסח הקיים של §F6 (שכבר טען את אותה מסקנה) בלי לבדוק אותו.
+
+**המנגנון (רמת ביטחון: גבוהה, מבוסס על שילוב של תיעוד PostgreSQL + שחזור אמפירי
+שכבר תועד בקוד, לא על הרצת SQL חדשה — אסור למשימה הזו להריץ SQL מול הפרויקט).**
+`INSERT ... ON CONFLICT DO UPDATE` הוא command יחיד שכפוף גם למדיניות ה-INSERT
+**וגם** למדיניות ה-UPDATE של הטבלה — לא רק כש-conflict אמיתי קורה, אלא כתכונה
+מובנית של איך Postgres אוכף RLS על הצורה הזו של statement (זה גם ההסבר העקבי
+היחיד לתצפית המתועדת ב-`fix-upsert-policies.sql`: upsert של שורה **חדשה לגמרי**
+נכשל ב-42501, לא רק upsert שבאמת התנגש בשורה קיימת). בנפרד מזה, ובנוסף לזה:
+פונקציות `STABLE SECURITY DEFINER` שקוראות שוב לאותה טבלה שה-statement כותב אליה
+(`app_is_group_admin` קוראת ל-`group_members`, `app_can_read_game`/
+`app_is_active_group_member` קוראות בעקיפין לטבלת המשחק/החברות) לא רואות את השורה
+שאותו statement עצמו עדיין באמצע כתיבתה — זו תופעת snapshot/MVCC ידועה היטב
+סביב `ON CONFLICT DO UPDATE` ולא באג ב-Postgres. שני האפקטים יחד: ענף שנקרא ישירות
+מעמודות השורה החדשה עצמה (כמו `created_by = app_current_profile_id()`) לא סובל
+מהבעיה בכלל, כי WITH CHECK תמיד רואה את ערכי השורה המוצעת ישירות, בלי שאילתה חוזרת.
+
+**מה נבדק בפועל מול `kupa-sgura.html` (לא רק נקרא, גם עוקב אחרי הזרימה).**
+`CLOUD_INSERT_ONLY` (`kupa-sgura.html`, סביב `// ---------- cloud store (Supabase)
+----------`) מכיל אך ורק `entries`/`transfers`/`debts` — **כל חמש** הטבלאות
+שהתיקון ב-§F6 נוגע בהן (`groups`, `group_members`, `invites`, `games`,
+`game_participants`) נמצאות מחוץ למפה הזו, ולכן עוברות דרך הענף השני של
+`pushCloudRun()`, שקורא ל-`splitCloudWrites(upserts, known, "id")` **לפני** כל
+כתיבה. שורה שה-`id` שלה לא ב-`known` (הבסיס המאושר — אך ורק תוצאה של push קודם
+שהצליח, או של pull שקרא אותה בפועל מהשרת; לעולם לא כתיבה מקומית אופטימית) יוצאת
+כ-`.upsert(rows, { onConflict: "id", ignoreDuplicates: true })`, ש-PostgREST
+מתרגם ל-`INSERT ... ON CONFLICT (id) DO NOTHING` — צורה שלא מפעילה מדיניות UPDATE
+בכלל (דורשת רק הרשאת INSERT). רק שורה שכבר **ב-`known`** — כלומר כבר הוכחה כקיימת
+בשרת — יוצאת כ-upsert אמיתי שנוגע במדיניות UPDATE, ובשלב הזה השורה כבר commit-
+ה בטרנזקציה קודמת ונפרדת (כל קריאת `.upsert()`/`.select()` היא בקשת HTTP/
+statement נפרד ש-`pushCloudRun()` ממתין לו (`await`) ברצף), כך שהפונקציות
+`STABLE SECURITY DEFINER` קוראות אותה כמו כל קריאה רגילה. נבדקו גם מסלולי retry
+(`classifyCloudError`/`cloudBackoffDelay`, ראו `.superpowers/network-resilience-
+report.md`) ו-first-device seeding (`enterCloudMode` מאפס את `lastPushedRows`
+ל-`null`): בשום מסלול `known` לא מתמלא משורה שלא אושרה בפועל, ולכל ארבעת קריאות
+ה-`.upsert(` הקיימות בקובץ כולו (נבדק ב-grep ממצה) יש חשבון — אין נתיב שעוקף את
+`splitCloudWrites` עבור אחת מחמש הטבלאות האלה. `game_participants_update` שונה
+מהותית מהארבע האחרות: `app_can_write_game()` (הפונקציה שהמדיניות שלו מבוססת
+עליה) קוראת לטבלת `games` — טבלה **אחרת** מזו שנכתבת — ותמיד הייתה "upsert-safe"
+מעצמה, גם לפני `fix-upsert-policies.sql`; הענף שהוא הוסיף שם היה redundant בלבד
+(כבר מתועד ב-§F2 למעלה), לא תיקון אמיתי לבעיה הזו.
+
+**מסקנה.** גוף חמש המדיניות ב-§F6 **לא שונה** בעקבות הבדיקה הזו — הניסוח שכבר היה
+שם (חזרה לגרסה שלפני `fix-upsert-policies.sql`, בלי ענף creator) נכון ובטוח
+להרצה, בתנאי שקוד הלקוח ממשיך להיראות כפי שהוא נבדק כאן. מה שכן נוסף: הערה צמודה
+לכל אחת מחמש המדיניות ב-`security-fixes.sql` שמסבירה במפורש *למה* היא upsert-safe
+בלי הענף, שתי הערות תיעוד ב-`kupa-sgura.html` (ליד `CLOUD_INSERT_ONLY` וליד
+`splitCloudWrites`) שמזהירות מפורשות נגד העברת אחת מהחמש למסלול upsert גולמי,
+וכלי `tools/rls-introspect.sql` (read-only בלבד) שמאפשר לוודא מה **בפועל** רץ
+במסד לפני הרצת `security-fixes.sql` ואחריה.
+
+**אזהרה לקורא עתידי — אל תשחזרו את ענף ה-creator.** אם `42501` יחזור על כתיבה
+ראשונה של שורה חדשה **אחרי** הרצת §F6, החשד הראשון צריך להיות **שינוי בצד
+הלקוח** — מישהו הוסיף אחת מחמש הטבלאות ל-`CLOUD_INSERT_ONLY`, או כתב upsert גולמי
+שעוקף את `splitCloudWrites` — ולא "חסר ענף creator ב-SQL". הרצת
+`tools/rls-introspect.sql` (בלוק 3) מראה מיד אם הענף אכן נעדר מהמדיניות החיות;
+אם הוא נעדר וה-42501 עדיין קורה, התקלה היא בקוד הלקוח, ותיקון הבעיה הוא לתקן
+את הלקוח כך שיחזור להשתמש ב-`splitCloudWrites` — **לא** להחזיר הרשאת יוצר קבועה
+שפותחת מחדש את F6 (יוצר שהודח נשאר בעל שליטה לצמיתות).
