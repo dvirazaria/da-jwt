@@ -472,7 +472,7 @@ BEGIN
   -- creating it) or a verified-contact match (authorized by real proof of identity), a bare
   -- self-claim has no other human in the loop — name equality is the only signal left, so it is
   -- enforced here, not just used as a client-side suggestion filter.
-  SELECT display_name INTO v_claimant_name FROM profiles p WHERE p.id = v_claimant;
+  SELECT p.display_name INTO v_claimant_name FROM profiles p WHERE p.id = v_claimant;
   IF btrim(coalesce(v_claimant_name, '')) = ''
      OR lower(btrim(v_claimant_name)) <> lower(btrim(v_guest.display_name)) THEN
     RAISE EXCEPTION 'GUEST_LINK_NAME_MISMATCH: claimant name does not match guest %', p_guest_id
