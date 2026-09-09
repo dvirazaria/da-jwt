@@ -99,8 +99,13 @@ last-writer-wins על מסמך שלם ידרסו זה את זה. buy-in של א�
 להשוות לפי כל מזהה שקיים בשני הצדדים, כדי שחברות שחזרה מהשרת עם `profile_id` ומשחק סגור שנשמר
 מקומית עם `guestId` בלבד יישארו אותו אדם.
 
-מה שעדיין מקומי בלבד אחרי 2b: מימוש `?join=`, קישור אורח לחשבון, והיסטוריה מקומית ישנה שמעולם
-לא הייתה פתוחה בשרת (אי אפשר להכניס משחק סגור ב-INSERT — `games_insert_member` דורש `phase <> 'closed'`).
+מה שעדיין מקומי בלבד אחרי 2b: מימוש `?join=`, והיסטוריה מקומית ישנה שמעולם לא הייתה פתוחה בשרת (אי
+אפשר להכניס משחק סגור ב-INSERT — `games_insert_member` דורש `phase <> 'closed'`).
+
+✅ **קישור אורח לחשבון** — `docs/backend/link-guest.sql` (מוכן להדבקה, טרם הורץ בפועל): זרימת הסכמה
+דו-צדדית, `app_request_guest_claim`/`app_approve_guest_claim`/`app_decline_guest_claim` וטבלת
+`guest_claims`. ה-UI ב-`kupa-sgura.html` (סקשן `// ---------- guest claim ... ----------`, ליד
+`// ---------- join by invite ----------`) מתועד בקצרה ב-`HANDOFF.md` תחת "קישור אורח לחשבון".
 
 ## מה משתנה ומה נשאר — הרשימה המדויקת
 
@@ -142,8 +147,8 @@ last-writer-wins על מסמך שלם ידרסו זה את זה. buy-in של א�
    `ParticipantRef.userId` כבר אמיתי — כשהשרת סיפק אותו.
 5. שלב 2c — סגירה אטומית: `close_game` RPC בטרנזקציה אחת במקום רצף ה-writes של 2b, ו-
    `entries`/`transfers` שנכתבות בתוכה. גם `hidden_at` ו-`avatar_url` (Storage) שייכים לכאן.
-6. שלב 3 — מימוש `?join=` דרך `redeem_invite`, קישור אורח לחשבון (`guests.linked_profile_id`),
-   UI לבקשות חברות, וטבלת הדירוג דרך ה-views.
+6. שלב 3 — מימוש `?join=` דרך `redeem_invite`, ✅ **קישור אורח לחשבון**
+   (`docs/backend/link-guest.sql` — ראו למעלה), UI לבקשות חברות, וטבלת הדירוג דרך ה-views.
 
 בכל שלב localStorage נשאר ה-fallback: אם השרת לא זמין, האפליקציה חוזרת בדיוק להתנהגות היום.
 
