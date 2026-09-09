@@ -2638,8 +2638,8 @@
   // THIS device. Local-only — it stamps hiddenAt on my own membership record and touches
   // nothing else, so the group, its history and every other member stay exactly as they were.
   // Refused (false, no mutation) while I am still an active member, or when I was never one.
-  function hideGroupForMember(members, groupId, meName, at) {
-    const membership = findMyFormerMembership(members, groupId, meName);
+  function hideGroupForMember(members, groupId, meName, at, meUserId) {
+    const membership = findMyFormerMembership(members, groupId, meName, meUserId);
     if (!membership) return false;
     membership.hiddenAt = at;
     return true;
@@ -2648,9 +2648,9 @@
   // member at all — e.g. this device's name matches no membership row). The group page renders
   // the hide-from-device action only when this is non-null, so its confirm tap can always
   // succeed; hideGroupForMember is refused in exactly the cases this returns null.
-  function findMyFormerMembership(members, groupId, meName) {
+  function findMyFormerMembership(members, groupId, meName, meUserId) {
     return (Array.isArray(members) ? members : [])
-      .find(m => m && m.groupId === groupId && membershipMatchesUser(m, meName) && (m.status === "left" || m.status === "removed")) || null;
+      .find(m => m && m.groupId === groupId && membershipMatchesUser(m, meName, meUserId) && (m.status === "left" || m.status === "removed")) || null;
   }
   // The dashboard-side reader for the flag above: true only for a group I am no longer a member
   // of AND have hidden. Opening such a group directly still works (getGroupSummary is unfiltered).
@@ -4926,7 +4926,8 @@
   // null (nothing destructive to offer) when I have no left/removed membership to stamp — the
   // confirm tap must never be a silent no-op.
   function renderHideGroupAction() {
-    if (!findMyFormerMembership(state.groupMembers, currentGroupId, me)) return null;
+    const profileId = authUser && authUser.id;
+    if (!findMyFormerMembership(state.groupMembers, currentGroupId, me, profileId)) return null;
     const wrap = el("div", "games-hide-group");
     const btn = el("button", "set-flat danger games-hide-group-btn" + (hideGroupArmed ? " armed" : ""),
       hideGroupArmed ? "בטוח? הקבוצה תוסר מהמכשיר" : "מחק קבוצה");
@@ -4942,7 +4943,7 @@
       hideGroupArmed = false;
       // Refused (membership changed under us): re-render to the page's honest state — the
       // armed label must not linger over a no-op.
-      if (!hideGroupForMember(state.groupMembers, currentGroupId, me, new Date().toISOString())) { renderGroupSurface(); return; }
+      if (!hideGroupForMember(state.groupMembers, currentGroupId, me, new Date().toISOString(), profileId)) { renderGroupSurface(); return; }
       save();
       setAppView("games");
     });
