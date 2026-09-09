@@ -106,6 +106,23 @@ test('the consent line links both documents, reads gender-neutrally, and is wire
   assert.match(html, /\.login-legal a \{[^}]*text-decoration: underline/);
 });
 
+// ---------- hierarchy: email code is the primary route ----------
+
+test('the email route is the only filled button, so Google does not out-rank the primary path', () => {
+  // Google's button is filled by its own brand rules. If the email action stays an outline,
+  // Google reads as the primary route -- the opposite of the decision that email-code leads.
+  assert.match(login, /class="btn-primary btn-fill" id="authEmailBtn"/);
+  assert.match(login, /class="btn-primary btn-fill" id="authCodeBtn"/);
+  assert.match(html, /\.btn-fill \{[^}]*background: var\(--accent\)[^}]*color: var\(--bg\)/);
+  // The local-mode escape must stay quiet: never filled, never the accent colour.
+  const skip = login.match(/id="loginSkip"[^>]*>/)[0];
+  assert.doesNotMatch(skip, /btn-fill/);
+  assert.doesNotMatch(skip, /btn-primary/);
+  // A filled button darkens on hover instead of filling, and it lives in the consolidated block.
+  const hoverBlock = html.slice(html.indexOf('@media (hover: hover)'));
+  assert.match(hoverBlock.slice(0, hoverBlock.indexOf('\n  }')), /\.btn-fill:hover \{[^}]*--accent-press/);
+});
+
 // ---------- Google branding: exact colours per theme, no turquoise border ----------
 
 test('the Google button uses Google\'s own brand colours in both themes, never the app accent', () => {

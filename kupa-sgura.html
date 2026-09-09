@@ -770,6 +770,12 @@
     color: var(--accent); font-weight: 700; font-size: 15px;
     padding: 12px 26px; min-height: 48px; align-self: flex-start;
   }
+  /* The one filled button on the sign-in screen. Google's button is filled by its own brand
+     rules, so leaving the email action as an outline made Google read as the primary route --
+     the opposite of the decision that email-code leads. Scoped to a modifier rather than
+     changing .btn-primary, which eight other places share. */
+  .btn-fill { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .btn-fill:disabled { background: none; color: var(--faint); border-color: var(--line); }
   .btn-skip { color: var(--dim); font-size: 13px; align-self: flex-start; }
   /* quiet-but-real: "המשך בלי חשבון" is a supported mode, not a dismiss link — bordered, 44px target */
   .btn-quiet {
@@ -945,6 +951,8 @@
     .btn-close-table.warn-state.hold-state:hover { background: none; border-color: var(--bad); color: var(--bad); }
     .btn-primary:hover { background: var(--accent); color: var(--bg); }
     .btn-primary:disabled:hover { background: none; color: var(--faint); }
+    .btn-fill:hover { background: var(--accent-press); border-color: var(--accent-press); color: var(--bg); }
+    .btn-fill:disabled:hover { background: none; color: var(--faint); border-color: var(--line); }
     .games-invite-create:hover { background: var(--accent); color: var(--bg); }
   }
 
@@ -1124,13 +1132,13 @@
       <div class="auth-divider"><span>או</span></div>
       <div class="auth-step" id="authEmailStep">
         <input type="email" id="authEmail" dir="ltr" inputmode="email" autocomplete="email" placeholder="name@mail.com" aria-label="כתובת מייל">
-        <button type="button" class="btn-primary" id="authEmailBtn">שלחו לי קוד</button>
+        <button type="button" class="btn-primary btn-fill" id="authEmailBtn">שלחו לי קוד</button>
         <p class="auth-error" id="authEmailError" hidden></p>
       </div>
       <div class="auth-step" id="authCodeStep" hidden>
         <p class="auth-note" id="authCodeSent"></p>
         <input type="text" id="authCode" dir="ltr" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" aria-label="קוד מהמייל">
-        <button type="button" class="btn-primary" id="authCodeBtn">אישור</button>
+        <button type="button" class="btn-primary btn-fill" id="authCodeBtn">אישור</button>
         <p class="auth-error" id="authCodeError" hidden></p>
         <div class="auth-code-actions">
           <button type="button" class="btn-skip" id="authResendBtn" disabled>שליחה חוזרה</button>
