@@ -883,6 +883,34 @@
     #rotateNotice { display: flex; pointer-events: auto; animation: fadeIn .3s ease both; }
   }
 
+  /* ---------- iOS Safari install hint (quiet, dismissible; see JS boot section) ---------- */
+  .ios-install-hint {
+    position: fixed; inset-inline: 17px; bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    max-width: 470px; margin-inline: auto; z-index: 21;
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bar-bg);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    border: 1px solid var(--line); border-radius: 16px;
+    padding-block: 10px; padding-inline: 14px 8px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.35);
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  :root[data-theme="light"] .ios-install-hint { box-shadow: 0 8px 24px rgba(12,21,25,.14); }
+  .ios-install-hint.closing { opacity: 0; transform: translateY(8px); }
+  .ios-install-hint-body { flex: 1 1 auto; min-width: 0; }
+  .ios-install-hint-title { font-size: 13px; font-weight: 700; color: var(--text); }
+  .ios-install-hint-steps { margin-top: 2px; font-size: 12px; font-weight: 300; color: var(--dim); }
+  .ios-install-hint-close {
+    flex: 0 0 auto; width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--dim);
+  }
+  .ios-install-hint-close svg {
+    width: 16px; height: 16px; stroke: currentColor; fill: none;
+    stroke-width: 1.8; stroke-linecap: round;
+  }
+  .ios-install-hint-close:hover { color: var(--text); }
+
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
@@ -1020,6 +1048,19 @@
   <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7.5" y="3" width="9" height="18" rx="2"></rect><path d="M4 9.5a8.5 8.5 0 0 1 14.7-4.1"></path><path d="M18.7 3.8v3.7H15"></path></svg>
   <strong>האפליקציה עובדת במצב אנכי</strong>
   <span>סובבו את הטלפון חזרה</span>
+</aside>
+
+<!-- iOS Safari install hint: quiet, dismissible, shown only outside standalone mode. Self-contained
+     block — markup, styles above (#rotateNotice section) and JS (boot section) all live near their
+     siblings so this merges as one unit. -->
+<aside id="iosInstallHint" class="ios-install-hint load-in" aria-label="הצעה להתקנת האפליקציה למסך הבית" hidden>
+  <div class="ios-install-hint-body">
+    <p class="ios-install-hint-title">אפשר להתקין את האפליקציה למסך הבית</p>
+    <p class="ios-install-hint-steps">לוחצים שיתוף, ואז הוסף למסך הבית</p>
+  </div>
+  <button type="button" class="ios-install-hint-close" id="iosInstallHintClose" aria-label="סגירת ההצעה להתקנה">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+  </button>
 </aside>
 
 <div class="wrap">
@@ -1284,6 +1325,9 @@
     ]));
     return {
       example: !!s.example,
+      // UI-only dismissal flag for the iOS install hint (see boot section). Carried inside this
+      // document instead of a new localStorage key, per the "one state store" rule.
+      iosInstallHintDismissed: !!s.iosInstallHintDismissed,
       gameId,
       phase: normalizePhase(s.phase, s),
       players: s.players.map((p, index) => {
@@ -7802,9 +7846,42 @@
     showJoinNotice(token, true);
   }
 
+  // ---------- iOS Safari install hint ----------
+  // Quiet, dismissible "Add to Home Screen" tip for iOS Safari users who have not installed the
+  // app yet — iOS never offers a native install prompt, so without this an iPhone/iPad user simply
+  // never finds out the app is installable. Dismissal persists through the same state document /
+  // save() path as everything else (iosInstallHintDismissed, see normalize()) — no new localStorage key.
+  function isIosSafari() {
+    const ua = navigator.userAgent || "";
+    const isIOSDevice = /iPad|iPhone|iPod/.test(ua)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); // iPadOS 13+ desktop UA
+    const isOtherIOSBrowser = /CriOS|FxiOS|EdgiOS|OPiOS|Mercury|GSA/.test(ua); // Chrome/Firefox/Edge/Opera/DDG/GSA on iOS
+    return isIOSDevice && !isOtherIOSBrowser;
+  }
+  function isStandaloneDisplay() {
+    return navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+  }
+  function dismissIosInstallHint() {
+    const hint = document.getElementById("iosInstallHint");
+    if (!hint) return;
+    hint.classList.add("closing");
+    state.iosInstallHintDismissed = true;
+    save();
+    setTimeout(() => { hint.hidden = true; hint.classList.remove("closing"); }, 250);
+  }
+  function initIosInstallHint() {
+    if (!isIosSafari() || isStandaloneDisplay() || state.iosInstallHintDismissed) return;
+    const hint = document.getElementById("iosInstallHint");
+    const closeBtn = document.getElementById("iosInstallHintClose");
+    if (!hint || !closeBtn) return;
+    hint.hidden = false;
+    closeBtn.addEventListener("click", dismissIosInstallHint);
+  }
+
   // ---------- boot ----------
   appView = initialAppView(state);
   render();
+  initIosInstallHint();
   if (typeof screen.orientation?.lock === "function" && matchMedia("(display-mode: standalone)").matches) {
     try { screen.orientation.lock("portrait").catch(() => {}); } catch (e) {}
   }
