@@ -62,9 +62,22 @@ test('createInvite pushes a normalized invite (createdAt = at, revokedAt = null)
   assert.deepEqual(invite, {
     id: 'invite-1', groupId: 'g1', token: 'ABCDEFGH',
     createdBy: { userId: null, guestId: 'u1', displayName: 'דביר' },
-    createdAt: '2026-09-08T10:00:00.000Z', revokedAt: null,
+    createdAt: '2026-09-08T10:00:00.000Z', revokedAt: null, boundGuestId: null,
   });
   assert.equal(vm.runInContext('invites.length', context), 1);
+});
+
+// boundGuestId (docs/backend/link-guest.sql path 1 — the invite-bound linking picker) is an
+// optional 6th argument; omitting it (the test above) and passing '' both mean "no binding".
+test('createInvite accepts an optional boundGuestId — the local mirror of invites.bound_guest_id', () => {
+  const context = load(() => 'invite-2');
+  const invites = [];
+  Object.assign(context, { invites });
+  const invite = runJSON(
+    `createInvite(invites, 'g1', {guestId:'u1', displayName:'דביר'}, 'ABCDEFGH', '2026-09-08T10:00:00.000Z', 'guest-david')`,
+    context
+  );
+  assert.equal(invite.boundGuestId, 'guest-david');
 });
 
 test('activeInvite returns the latest non-revoked invite for the group, or null', () => {
@@ -169,7 +182,7 @@ test('the join-notice flow never pushes to state.groupMembers or state.groups', 
 });
 
 test('createGroupInvite and revokeGroupInvite save() and re-render the active group surface, using no alert/confirm', () => {
-  const source = sourceBetween('  function createGroupInvite(groupId) {', '  function resetCreateGroupPanel(');
+  const source = sourceBetween('  function createGroupInvite(groupId, boundGuestId) {', '  function resetCreateGroupPanel(');
   assert.match(source, /save\(\);/);
   assert.match(source, /renderGroupSurface\(\);/);
   assert.doesNotMatch(source, /\balert\(/);
