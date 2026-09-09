@@ -138,7 +138,7 @@ test('startUngroupedGame refuses to replace an open game with players (backstop 
 test('continueCurrentGame only enters a game that is actually open (players seated)', () => {
   const source = sourceBetween('  function continueCurrentGame() {', '  function openGroup(');
   const context = vm.createContext({ newId: () => 'x', view: null, state: { example: false, phase: 'active', players: [] } });
-  vm.runInContext('function setAppView(next) { view = next; }' + pureSource + source, context);
+  vm.runInContext('function setAppView(next) { view = next; } function closeGroupPreview() {}' + pureSource + source, context);
   vm.runInContext('continueCurrentGame()', context);
   assert.equal(vm.runInContext('view', context), null);
   vm.runInContext(`state.players = ${JSON.stringify(onePlayer)}; continueCurrentGame()`, context);

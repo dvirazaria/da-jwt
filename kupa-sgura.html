@@ -366,7 +366,15 @@
   .games-home-lead { color: var(--dim); font-size: 14px; font-weight: 300; margin: 0 0 26px; }
   .games-section { margin-top: 24px; text-align: center; }
   .games-section:first-of-type { margin-top: 0; }
+  .games-groups-heading { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+  .games-groups-heading .games-section-title { margin: 0; }
+  .games-create-group-inline {
+    min-height: 44px; padding: 8px 4px; color: var(--accent);
+    font-size: 13px; font-weight: 600; transition: color .2s, opacity .2s;
+  }
+  .games-create-group-inline:hover { color: var(--accent-press); }
   .games-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .games-quick-actions.single { grid-template-columns: 1fr; }
   .games-quick-action {
     min-width: 0; min-height: 46px; padding: 9px 12px;
     border: 1px solid var(--line); border-radius: 999px;
@@ -377,6 +385,8 @@
   .games-quick-action.primary { border-color: var(--accent); color: var(--accent); }
   .games-quick-action:disabled { opacity: .45; cursor: default; color: var(--faint); }
   .games-active-card, .games-group-card { padding: 15px 0; border-bottom: 1px solid var(--line); text-align: center; }
+  .games-group-list { border-top: 1px solid var(--line); }
+  .games-group-list .games-group-card { padding: 10px 0; }
   .games-card-status { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; font-weight: 400; }
   .games-card-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .games-card-status.settlement::before { background: var(--faint); }
@@ -398,7 +408,7 @@
   .games-detail-meta { color: var(--dim); font-weight: 300; font-variant-numeric: tabular-nums; }
   .games-detail-totals { color: var(--dim); font-size: 12px; font-weight: 300; margin: 8px 0 0; }
   .games-detail-totals b { color: var(--text); font-weight: 600; }
-  .games-group-head { display: flex; align-items: center; justify-content: flex-start; gap: 10px; text-align: start; }
+  .games-group-head { display: flex; align-items: center; justify-content: flex-start; gap: 10px; min-height: 44px; text-align: start; }
   .games-group-head[role="button"] { cursor: pointer; transition: opacity .18s ease, transform .12s ease; }
   .games-group-head[role="button"]:active { transform: scale(.97); }
   .games-group-head[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
@@ -684,10 +694,20 @@
   /* D1: the group settings overlay carries the invite block and the add-member panel now, so it
      scrolls from the top instead of centring a column that can outgrow the screen. */
   #groupSettings {
+    z-index: 42;
     align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch;
     padding-block: calc(58px + env(safe-area-inset-top, 0px)) calc(28px + env(safe-area-inset-bottom, 0px));
   }
   #groupSettings .login-in { margin-inline: auto; }
+  #groupPreview {
+    z-index: 41; align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding-block: calc(58px + env(safe-area-inset-top, 0px)) calc(28px + env(safe-area-inset-bottom, 0px));
+  }
+  .group-preview-in { width: 100%; max-width: 440px; margin-inline: auto; }
+  #groupPreview .games-group-header { padding-top: 0; }
+  #groupPreview .games-section { text-align: start; }
+  #groupPreview .games-section-title, #groupPreview .games-member-add,
+  #groupPreview .games-former-members, #groupPreview .games-history-item { text-align: center; }
   .group-set-section { width: 100%; }
   .group-set-section .games-section { margin-top: 0; }
   .join-notice-actions { display: flex; align-items: center; gap: 16px; }
@@ -741,7 +761,18 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 38px; font-weight: 800;
   }
-  .set-name { font-size: 22px; font-weight: 800; margin-top: -6px; }
+  .set-name-row { display: flex; align-items: center; justify-content: center; margin-top: -6px; }
+  .set-name { font-size: 22px; font-weight: 800; }
+  .set-name-edit {
+    width: 44px; min-height: 44px; margin-inline-start: 2px; padding: 10px;
+    color: var(--dim); transition: color .2s, opacity .2s;
+  }
+  .set-name-edit:hover { color: var(--accent); }
+  .set-name-edit svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .set-name-editor { width: 100%; max-width: 260px; display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: -12px; }
+  .set-name-editor-actions { display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .set-name-editor-actions button { min-height: 44px; padding: 8px 12px; font-size: 14px; font-weight: 700; }
+  .set-name-save { color: var(--accent); }
   .set-in input { max-width: 260px; text-align: center; font-size: 16px; }
   .theme-row { display: flex; align-items: center; gap: 14px; color: var(--dim); margin-top: 4px; }
   .theme-row svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -860,7 +891,19 @@
   </button>
   <div class="login-in set-in">
     <div class="avatar" id="setAvatar">?</div>
-    <div class="set-name" id="setName"></div>
+    <div class="set-name-row">
+      <div class="set-name" id="setName"></div>
+      <button type="button" class="set-name-edit" id="setNameEdit" aria-label="עריכת השם">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10.5-10.5a2.83 2.83 0 0 0-4-4L4 16v4Z"></path><path d="m13.5 6.5 4 4"></path></svg>
+      </button>
+    </div>
+    <div class="set-name-editor" id="setNameEditor" hidden>
+      <input type="text" id="setNameInput" maxlength="40" autocomplete="name" aria-label="שם">
+      <div class="set-name-editor-actions">
+        <button type="button" class="set-name-save" id="setNameSave">שמור</button>
+        <button type="button" id="setNameCancel">ביטול</button>
+      </div>
+    </div>
     <p class="set-account" id="setAccount" dir="ltr" hidden></p>
     <input type="tel" id="setPhone" inputmode="tel" placeholder="טלפון" autocomplete="tel" aria-label="טלפון">
     <input type="email" id="setEmail" inputmode="email" placeholder="מייל" autocomplete="email" aria-label="מייל">
@@ -894,6 +937,10 @@
     <button type="button" class="set-flat" id="groupSetLeaveBtn">עזוב קבוצה</button>
     <p class="games-primary-reason" id="groupSetLeaveReason" hidden></p>
   </div>
+</div>
+
+<div class="login group-preview" id="groupPreview" hidden>
+  <div class="group-preview-in" id="groupPreviewContent"></div>
 </div>
 
   <div class="login" id="login" hidden>
@@ -1071,11 +1118,10 @@
 
   const expandedEntries = new Set();
   const expandedGameCards = new Set();
-  const expandedGroupCards = new Set();
   const expandedGroupGames = new Set();
   let state = load();
   let appView = "games";         // "friends" | "games" | "game" | "settle" | "profile" | "group"
-  let currentGroupId = null;  // UI-only: which group's page is open when appView === "group"
+  let currentGroupId = null;  // UI-only: which group's page or preview is open
   let openMenu = null;        // player name whose buy-in menu is open
   let menuJustOpened = null;  // menu that should animate open on the next render
   let exitOpen = null;        // player name whose exit (cashout) panel is open
@@ -1108,11 +1154,12 @@
   let gamesPageEnterNext = false; // dashboard cards should stagger in on the next renderGamesDashboard() —
                                    // set only by setAppView(), never by an in-place re-render (Task 15, same
                                    // pattern as groupPageEnterNext above)
-  let cardDetailsJustOpenedId = null; // gameId/groupId/historyGameId whose .games-card-details should
+  let cardDetailsJustOpenedId = null; // gameId/historyGameId whose .games-card-details should
                                        // animate its grid-collapse open on the next render (Task 18 motion)
   let me = loadMe();
   let profileTab = "balance";
   let debtTab = "owed";
+  let setNameEditing = false;
 
   // ---------- theme (default: dark), floating sun/moon toggle ----------
   const SUN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19"></path></svg>';
@@ -3830,16 +3877,19 @@
     openMenu = customOpen = pendingAmount = null;
     animNext = "all";
     save();
+    closeGroupPreview();
     setAppView("game");
     return true;
   }
 
   function continueCurrentGame() {
     if (!isGameOpen(state)) return;
+    closeGroupPreview();
     setAppView(state.phase === "settlement" ? "settle" : "game");
   }
 
   function openGroup(groupId) {
+    closeGroupPreview();
     currentGroupId = String(groupId || "");
     repairMyGroupMembership(currentGroupId);
     setAppView("group");
@@ -3900,7 +3950,7 @@
     const byRef = { userId: null, guestId: resolveGuestId(collectionsOf(state), me), displayName: me };
     createInvite(state.invites, groupId, byRef, generateInviteToken(randomInviteBytes()), at);
     save();
-    renderGroupPage();
+    renderGroupSurface();
     refreshGroupSettings(); // the invite block lives in the settings overlay now (D1)
   }
 
@@ -3909,7 +3959,7 @@
     if (!invite) return;
     revokeInvite(state.invites, invite.id, new Date().toISOString());
     save();
-    renderGroupPage();
+    renderGroupSurface();
     refreshGroupSettings(); // the invite block lives in the settings overlay now (D1)
   }
 
@@ -3951,7 +4001,7 @@
     const member = addGroupMember(state.groupMembers, group, ref, "member", at);
     if (!member) return null;
     save();
-    renderGroupPage();
+    renderGroupSurface();
     return member; // the caller (renderAddMemberPanel) refreshes the overlay as it closes
   }
 
@@ -3962,7 +4012,7 @@
     if (!member) return false;
     if (!removeGroupMember(state.groupMembers, memberId, new Date().toISOString())) return false;
     save();
-    renderGroupPage();
+    renderGroupSurface();
     return true;
   }
 
@@ -3973,7 +4023,7 @@
     if (!member) return false;
     if (!setMemberRole(state.groupMembers, memberId, "admin")) return false;
     save();
-    renderGroupPage();
+    renderGroupSurface();
     return true;
   }
 
@@ -3984,7 +4034,7 @@
     if (!member) return false;
     if (!setMemberRole(state.groupMembers, memberId, "member")) return false;
     save();
-    renderGroupPage();
+    renderGroupSurface();
     return true;
   }
 
@@ -4102,14 +4152,11 @@
   }
 
   function renderQuickActions(parent) {
-    // D7: no section title — the two capsules explain themselves and sit straight under the lead.
+    // The group creation trigger now lives beside "הקבוצות שלי"; this keeps the dashboard's
+    // quick action focused on the one standalone flow.
     const section = el("section", "games-section games-quick-section");
     const actions = el("div", "games-quick-actions");
-
-    const createGroupBtn = el("button", "games-quick-action primary", "+ צור קבוצה");
-    createGroupBtn.type = "button";
-    createGroupBtn.setAttribute("aria-expanded", String(createGroupOpen));
-    createGroupBtn.addEventListener("click", toggleCreateGroupPanel);
+    actions.classList.add("single");
 
     const start = el("button", "games-quick-action", "משחק ללא קבוצה");
     start.type = "button";
@@ -4122,10 +4169,9 @@
       start.setAttribute("aria-disabled", "true");
     } else start.addEventListener("click", startUngroupedGame);
 
-    actions.append(createGroupBtn, start);
+    actions.appendChild(start);
     section.appendChild(actions);
     if (gameOpen) section.appendChild(el("p", "games-primary-reason", "יש משחק פעיל אחר — סגור אותו קודם"));
-    renderCreateGroupPanel(section);
     parent.appendChild(section);
   }
 
@@ -4307,61 +4353,34 @@
     copy.appendChild(meta);
     head.appendChild(copy);
     card.appendChild(head);
-
-    const memberNames = Array.isArray(group.members) ? group.members : [];
-    const lastGameLabel = group.lastGameAt ? formatShortGameDate(group.lastGameAt) : "";
-    const leaderNames = Array.isArray(group.leaderNames) ? group.leaderNames : [];
-    const hasDetails = memberNames.length || lastGameLabel || Number.isFinite(group.gameCount) || leaderNames.length;
-    if (hasDetails) {
-      const toggle = el("button", "games-card-toggle");
-      toggle.type = "button";
-      toggle.setAttribute("aria-expanded", actions.expanded ? "true" : "false");
-      toggle.innerHTML = '<span>' + (actions.expanded ? "כווץ" : "הרחב") + '</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 4.5 3.5 3 3.5-3"></path></svg>';
-      toggle.addEventListener("click", actions.onToggle);
-      card.appendChild(toggle);
-      const details = el("div", "games-card-details");
-      const detailsIn = el("div", "games-card-details-in");
-      const content = el("div", "games-card-details-content");
-      if (memberNames.length) content.appendChild(el("p", "games-detail-totals", "חברים · " + formatPlayerNames(memberNames)));
-      if (Number.isFinite(group.gameCount)) content.appendChild(el("p", "games-detail-totals", "משחקים · " + group.gameCount));
-      if (lastGameLabel) content.appendChild(el("p", "games-detail-totals", "משחק אחרון · " + lastGameLabel));
-      if (leaderNames.length) content.appendChild(el("p", "games-detail-totals", "מוביל · " + leaderNames[0]));
-      detailsIn.appendChild(content);
-      details.appendChild(detailsIn);
-      // First expand of this card plays the grid-collapse open transition (see cardDetailsJustOpenedId).
-      const groupIdForAnim = String(group.groupId || "");
-      if (actions.expanded && cardDetailsJustOpenedId === groupIdForAnim) {
-        cardDetailsJustOpenedId = null;
-        requestAnimationFrame(() => requestAnimationFrame(() => details.classList.add("open")));
-      } else if (actions.expanded) {
-        details.classList.add("open");
-      }
-      card.appendChild(details);
-    }
     return card;
   }
 
   function renderGroupsSection(parent, groups, enterStagger) {
     const section = el("section", "games-section");
-    section.appendChild(el("h3", "games-section-title", "הקבוצות שלי"));
+    const heading = el("div", "games-groups-heading");
+    heading.appendChild(el("h3", "games-section-title", "הקבוצות שלי"));
+    const createGroupBtn = el("button", "games-create-group-inline", "+ צור קבוצה");
+    createGroupBtn.type = "button";
+    createGroupBtn.setAttribute("aria-expanded", String(createGroupOpen));
+    createGroupBtn.addEventListener("click", toggleCreateGroupPanel);
+    heading.appendChild(createGroupBtn);
+    section.appendChild(heading);
     if (!groups.length) {
       section.appendChild(el("p", "games-empty", "אין לך קבוצות עדיין"));
     } else {
+      const list = el("div", "games-group-list");
       groups.forEach((group, idx) => {
         const groupId = String(group.groupId || "");
-        section.appendChild(renderGroupCard(group, {
-          expanded: expandedGroupCards.has(groupId),
+        list.appendChild(renderGroupCard(group, {
           anim: enterStagger,
           animDelay: idx * 50,
-          onToggle: () => {
-            if (expandedGroupCards.has(groupId)) expandedGroupCards.delete(groupId);
-            else { expandedGroupCards.add(groupId); cardDetailsJustOpenedId = groupId; }
-            renderGamesDashboard();
-          },
-          onOpen: () => openGroup(groupId),
+          onOpen: () => openGroupPreview(groupId),
         }));
       });
+      section.appendChild(list);
     }
+    renderCreateGroupPanel(section);
     parent.appendChild(section);
   }
 
@@ -4391,14 +4410,8 @@
     list.forEach(group => {
       const groupId = String(group.groupId || "");
       content.appendChild(renderGroupCard(group, {
-        expanded: expandedGroupCards.has(groupId),
         archived: true,
-        onToggle: () => {
-          if (expandedGroupCards.has(groupId)) expandedGroupCards.delete(groupId);
-          else { expandedGroupCards.add(groupId); cardDetailsJustOpenedId = groupId; }
-          renderGamesDashboard();
-        },
-        onOpen: () => openGroup(groupId),
+        onOpen: () => openGroupPreview(groupId),
       }));
     });
     detailsIn.appendChild(content);
@@ -4448,14 +4461,63 @@
     box.appendChild(inner);
   }
 
+  // The dashboard keeps group rows compact. Tapping one opens this full in-app preview, composed
+  // from the same adapters and group renderers as the dedicated group page.
+  function openGroupPreview(groupId) {
+    currentGroupId = String(groupId || "");
+    repairMyGroupMembership(currentGroupId);
+    document.getElementById("groupPreview").hidden = false;
+    renderGroupPreview();
+  }
+
+  function closeGroupPreview() {
+    const overlay = document.getElementById("groupPreview");
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    resetStartGamePanel();
+  }
+
+  function renderGroupPreview() {
+    const overlay = document.getElementById("groupPreview");
+    if (!overlay || overlay.hidden) return;
+    const box = document.getElementById("groupPreviewContent");
+    box.innerHTML = "";
+    const collections = collectionsOf(state);
+    const rawGroup = (Array.isArray(collections.groups) ? collections.groups : []).find(g => g && g.id === currentGroupId);
+    if (!rawGroup || rawGroup.deletedAt) { closeGroupPreview(); renderGamesDashboard(); return; }
+    const summary = getGroupSummary(collections, currentGroupId, me);
+    if (!summary) { closeGroupPreview(); renderGamesDashboard(); return; }
+    const inner = el("div", "games-home-in");
+    inner.appendChild(renderGroupHeader(summary, closeGroupPreview, openGroupSettings));
+    if (rawGroup.archivedAt) {
+      const note = el("div", "games-primary-action");
+      note.appendChild(el("p", "games-primary-reason", "הקבוצה בארכיון"));
+      inner.appendChild(note);
+    } else {
+      inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
+    }
+    inner.appendChild(renderGroupLeaders(buildLeaderboard(collections.history, collections.groupMembers, currentGroupId)));
+    const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
+    inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
+    inner.appendChild(renderGroupHistory(gameSummaries));
+    box.appendChild(inner);
+  }
+
+  function renderGroupSurface() {
+    const preview = document.getElementById("groupPreview");
+    if (preview && !preview.hidden) renderGroupPreview();
+    else if (appView === "group") renderGroupPage();
+    else if (appView === "games") renderGamesDashboard();
+  }
+
   // Back arrow, 64px avatar (image or initial), name and member count — the top of the group page.
-  function renderGroupHeader(summary) {
+  function renderGroupHeader(summary, onBack, onSettings) {
     const header = el("div", "games-group-header");
     const back = el("button", "back-arrow");
     back.type = "button";
     back.setAttribute("aria-label", "חזרה");
     back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>';
-    back.addEventListener("click", () => setAppView("games"));
+    back.addEventListener("click", onBack || (() => setAppView("games")));
     header.appendChild(back);
     // Reachable by any active member — not admin-only — since "עזוב קבוצה" must stay reachable
     // for everyone; admin-only controls (rename, avatar, archive, delete) live inside the overlay.
@@ -4466,7 +4528,7 @@
       // Row 34: same gear as the profile's corner control, so "הגדרות" looks the same in both.
       settingsBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>';
       settingsBtn.appendChild(el("span", "", "הגדרות"));
-      settingsBtn.addEventListener("click", openGroupSettings);
+      settingsBtn.addEventListener("click", onSettings || openGroupSettings);
       header.appendChild(settingsBtn);
     }
     if (summary.avatarDataUrl) {
@@ -4560,15 +4622,15 @@
     btn.addEventListener("click", () => {
       if (!hideGroupArmed) {
         hideGroupArmed = true;
-        hideGroupArmedTimeout = setTimeout(() => { hideGroupArmed = false; renderGroupPage(); }, 4000);
-        renderGroupPage();
+        hideGroupArmedTimeout = setTimeout(() => { hideGroupArmed = false; renderGroupSurface(); }, 4000);
+        renderGroupSurface();
         return;
       }
       clearTimeout(hideGroupArmedTimeout);
       hideGroupArmed = false;
       // Refused (membership changed under us): re-render to the page's honest state — the
       // armed label must not linger over a no-op.
-      if (!hideGroupForMember(state.groupMembers, currentGroupId, me, new Date().toISOString())) { renderGroupPage(); return; }
+      if (!hideGroupForMember(state.groupMembers, currentGroupId, me, new Date().toISOString())) { renderGroupSurface(); return; }
       save();
       setAppView("games");
     });
@@ -4685,7 +4747,7 @@
       removeBtn.type = "button";
       removeBtn.addEventListener("click", () => {
         startGameGuests.splice(idx, 1);
-        renderGroupPage();
+        renderGroupSurface();
       });
       row.appendChild(removeBtn);
       wrap.appendChild(row);
@@ -4717,7 +4779,7 @@
       const guestNames = startGameGuests.map(g => g.name);
       if (memberNames.includes(name) || guestNames.includes(name)) { shakeEl(nameInput); return; }
       startGameGuests.push({ name, guestId: resolveGuestId(collectionsOf(state), name) });
-      renderGroupPage();
+      renderGroupSurface();
     };
     nameInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); submit(); }
@@ -4740,14 +4802,14 @@
     startGameJustOpened = true;
     startGameSelection = new Set(mine ? [mine.id] : []);
     startGameGuests = [];
-    renderGroupPage();
+    renderGroupSurface();
   }
 
   // Plays the panel's collapse transition (matching closeAddMemberPanel's approach) before
   // resetting its draft state and rebuilding the group page without it.
   function closeStartGamePanel() {
     const panel = document.querySelector(".group-start-panel .games-create-panel.open");
-    const finish = () => { resetStartGamePanel(); renderGroupPage(); };
+    const finish = () => { resetStartGamePanel(); renderGroupSurface(); };
     if (!panel) { finish(); return; }
     panel.classList.remove("open");
     setTimeout(finish, 280);
@@ -4828,7 +4890,7 @@
       disarmRemoveMember(); // an armed "הסר" belongs to the row that was open
       memberActionsOpenId = next;
       memberActionsJustOpenedId = next;
-      renderGroupPage();
+      renderGroupSurface();
     };
     row.addEventListener("click", toggle);
     row.addEventListener("keydown", (e) => {
@@ -4877,14 +4939,14 @@
 
   // Two-step armed control, same idea as resetBtn/setClearBtn: label flips to "בטוח?" for 4s,
   // a second click within the window confirms. Only one row is armed at a time (module-level
-  // id) and, unlike those static buttons, member rows are rebuilt on every renderGroupPage(),
+  // id) and, unlike those static buttons, member rows are rebuilt on every group-surface render,
   // so arming/disarming re-renders instead of toggling a persistent element's classList.
   function armRemoveMember(memberId) {
     clearTimeout(removeMemberArmedTimeout);
     removeMemberArmedId = memberId;
     removeMemberArmedTimeout = setTimeout(() => {
       removeMemberArmedId = null;
-      renderGroupPage();
+      renderGroupSurface();
     }, 4000);
   }
   function disarmRemoveMember() {
@@ -4903,7 +4965,7 @@
         return;
       }
       armRemoveMember(member.id);
-      renderGroupPage();
+      renderGroupSurface();
     });
     return btn;
   }
@@ -4973,13 +5035,12 @@
     refreshGroupSettings();
   }
   // Plays the panel's collapse transition (matching closeCreateGroupPanel's approach) before
-  // clearing the draft name and rebuilding the overlay — and the group page behind it, whose
-  // member list just changed (renderGroupPage is guarded by appView, so it is a no-op elsewhere).
+  // clearing the draft name and rebuilding the overlay and whichever group surface is underneath.
   function closeAddMemberPanel() {
     const panel = document.querySelector(".games-member-add .games-create-panel.open");
     const finish = () => {
       addMemberOpen = false; addMemberJustOpened = false; addMemberName = "";
-      renderGroupPage();
+      renderGroupSurface();
       refreshGroupSettings();
     };
     if (!panel) { finish(); return; }
@@ -5000,7 +5061,7 @@
       if (formerMembersOpen) { closeFormerMembers(); return; }
       formerMembersOpen = true;
       formerMembersJustOpened = true;
-      renderGroupPage();
+      renderGroupSurface();
     });
     wrap.appendChild(toggle);
 
@@ -5027,7 +5088,7 @@
   // before flipping the state and rebuilding the group page without it.
   function closeFormerMembers() {
     const panel = document.querySelector(".games-former-members .games-card-details.open");
-    const finish = () => { formerMembersOpen = false; formerMembersJustOpened = false; renderGroupPage(); };
+    const finish = () => { formerMembersOpen = false; formerMembersJustOpened = false; renderGroupSurface(); };
     if (!panel) { finish(); return; }
     panel.classList.remove("open");
     setTimeout(finish, 250);
@@ -5104,7 +5165,7 @@
       section.appendChild(renderGroupHistoryRow(game, expandedGroupGames.has(game.gameId), () => {
         if (expandedGroupGames.has(game.gameId)) expandedGroupGames.delete(game.gameId);
         else { expandedGroupGames.add(game.gameId); cardDetailsJustOpenedId = game.gameId; }
-        renderGroupPage();
+        renderGroupSurface();
       }));
     });
     return section;
@@ -6648,11 +6709,14 @@
     refreshGroupSettings();
     document.getElementById("groupSettings").hidden = false;
   }
-  document.getElementById("groupSetBackBtn").addEventListener("click", closeGroupSettings);
+  document.getElementById("groupSetBackBtn").addEventListener("click", () => {
+    closeGroupSettings();
+    renderGroupSurface();
+  });
   document.getElementById("groupSetName").addEventListener("change", (e) => {
     if (!renameGroup(state.groups, currentGroupId, e.target.value)) { shakeEl(e.target); refreshGroupSettings(); return; }
     save();
-    renderGroupPage();
+    renderGroupSurface();
     refreshGroupSettings();
   });
   document.getElementById("groupSetAvatarBtn").addEventListener("click", () => {
@@ -6668,7 +6732,7 @@
       const dataUrl = await resizeAvatarImage(file);
       setGroupAvatar(state.groups, currentGroupId, dataUrl);
       save();
-      renderGroupPage();
+      renderGroupSurface();
       refreshGroupSettings();
     } catch (err) {}
   });
@@ -6682,7 +6746,7 @@
     if (!ok) return;
     save();
     closeGroupSettings();
-    if (wasArchived) renderGroupPage(); else setAppView("games");
+    if (wasArchived) renderGroupSurface(); else setAppView("games");
   });
   document.getElementById("groupSetDeleteBtn").addEventListener("click", (e) => {
     const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
@@ -6698,7 +6762,7 @@
     resetGroupDeleteArm();
     // Refused only when the group is gone/already deleted: close the overlay and let the page
     // bounce to the dashboard instead of leaving the tap a silent no-op.
-    if (!deleteGroup(state.groups, currentGroupId, new Date().toISOString())) { closeGroupSettings(); renderGroupPage(); return; }
+    if (!deleteGroup(state.groups, currentGroupId, new Date().toISOString())) { closeGroupSettings(); renderGroupSurface(); return; }
     save();
     closeGroupSettings();
     setAppView("games");
@@ -6734,11 +6798,16 @@
     account.textContent = (authUser && authUser.email) || "";
     account.hidden = !account.textContent;
     // No session but a client is reachable: offer a way back in without wiping the local name/
-    // history, and relabel the button below — it now swaps the local name, not a real sign-out.
+    // history. Local names are edited beside the displayed name; this button stays sign-out only.
     const canSignIn = !authUser && !!supabase;
     document.getElementById("setSignInNote").hidden = !canSignIn;
     document.getElementById("setSignInBtn").hidden = !canSignIn;
-    document.getElementById("setSwapBtn").textContent = canSignIn ? "החלף שם" : "התנתקות";
+    document.getElementById("setSwapBtn").hidden = !authUser;
+    document.getElementById("setSwapBtn").textContent = "התנתקות";
+    const canEditName = !authUser;
+    document.getElementById("setNameEdit").hidden = !canEditName;
+    document.getElementById("setNameEditor").hidden = !canEditName || !setNameEditing;
+    document.getElementById("setNameInput").value = me || "";
     const c = loadContact();
     document.getElementById("setPhone").value = c.phone || "";
     document.getElementById("setEmail").value = c.email || "";
@@ -6767,6 +6836,31 @@
   document.getElementById("setThemeSwitch").addEventListener("click", () => {
     toggleTheme();
     refreshSettings();
+  });
+  function closeSetNameEditor() {
+    setNameEditing = false;
+    refreshSettings();
+  }
+  function saveSetName() {
+    const input = document.getElementById("setNameInput");
+    const name = input.value.trim();
+    if (!name) { shakeEl(input); return; }
+    me = name;
+    saveMe();
+    setNameEditing = false;
+    refreshSettings();
+    render();
+  }
+  document.getElementById("setNameEdit").addEventListener("click", () => {
+    setNameEditing = true;
+    refreshSettings();
+    requestAnimationFrame(() => document.getElementById("setNameInput").focus());
+  });
+  document.getElementById("setNameSave").addEventListener("click", saveSetName);
+  document.getElementById("setNameCancel").addEventListener("click", closeSetNameEditor);
+  document.getElementById("setNameInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveSetName();
+    if (e.key === "Escape") closeSetNameEditor();
   });
   document.getElementById("setSignInBtn").addEventListener("click", () => {
     // Keeps `me` and local history untouched — this is a path back into an account, not a

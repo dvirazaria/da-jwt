@@ -66,10 +66,10 @@ test('buildGroupCreation carries an avatar data URL when provided, and trims the
   assert.equal(untrimmed.group.name, 'ליל שישי');
 });
 
-// ---------- wiring: the create-group quick action is enabled ----------
+// ---------- wiring: the create-group action is enabled beside the groups title ----------
 
-test('the create-group quick action is enabled, not a coming-soon placeholder', () => {
-  const source = sourceBetween('  function renderQuickActions(parent) {', '  function renderCreateGroupPanel(');
+test('the create-group action beside the groups title is enabled, not a coming-soon placeholder', () => {
+  const source = sourceBetween('  function renderGroupsSection(', '  // Collapsed "ארכיון');
   assert.doesNotMatch(source, /coming-soon/);
   // only the ungrouped-game capsule is ever disabled (open-game guard); create-group never is
   assert.doesNotMatch(source, /createGroupBtn\.disabled/);
@@ -116,7 +116,7 @@ test('appView accepts "group" as a navigable view, opened via openGroup', () => 
   assert.match(html, /function openGroup\(groupId\) \{/);
   assert.match(html, /setAppView\("group"\)/);
   assert.match(html, /function renderGroupPage\(\)/);
-  assert.match(html, /function renderGroupHeader\(summary\)/);
+  assert.match(html, /function renderGroupHeader\(summary, onBack, onSettings\)/);
   assert.match(html, /else if \(appView === "group"\) renderGroupPage\(\);/);
 });
 
@@ -126,14 +126,15 @@ test('the group view reuses the games dashboard shell and hides the game/settle 
   assert.match(source, /document\.getElementById\("gamesHome"\)\.hidden = appView !== "games" && appView !== "group";/);
 });
 
-test('the group card head opens the group and is keyboard-accessible; the expand toggle is separate', () => {
+test('the group card row opens its preview and is keyboard-accessible, without an expand control', () => {
   const source = sourceBetween('  function renderGroupCard(group, actions) {', '  function renderGroupsSection(');
   assert.match(source, /head\.setAttribute\("role", "button"\)/);
   assert.match(source, /head\.setAttribute\("tabindex", "0"\)/);
   assert.match(source, /head\.addEventListener\("click", actions\.onOpen\)/);
-  assert.match(source, /toggle\.addEventListener\("click", actions\.onToggle\)/);
+  assert.doesNotMatch(source, /games-card-toggle/);
+  assert.doesNotMatch(source, /הרחב/);
   const sectionSource = sourceBetween('  function renderGroupsSection(', '  function enterActiveGame(');
-  assert.match(sectionSource, /onOpen: \(\) => openGroup\(groupId\)/);
+  assert.match(sectionSource, /onOpen: \(\) => openGroupPreview\(groupId\)/);
 });
 
 // ---------- normalize() hardening ----------

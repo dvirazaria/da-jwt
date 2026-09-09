@@ -18,7 +18,7 @@ function sourceBetween(startMarker, endMarker) {
 // renderGroupPage() itself (which composes them). renderAddRowChips is the next function in
 // the file and is unrelated to the group page (it renders member chips on the game screen).
 const groupRenderersSource = sourceBetween(
-  '  function renderGroupHeader(summary) {',
+  '  function renderGroupHeader(summary, onBack, onSettings) {',
   '  function renderAddRowChips() {'
 );
 

@@ -203,11 +203,11 @@ test('the group settings overlay exists, reusing the .login/.set-in layout, next
   assert.match(html, /id="groupSetLeaveBtn"/);
 });
 
-test('the group page header exposes a settings entry point wired to openGroupSettings', () => {
-  assert.match(html, /function renderGroupHeader\(summary\)/);
+test('the group page header exposes an injectable settings entry point', () => {
+  assert.match(html, /function renderGroupHeader\(summary, onBack, onSettings\)/);
   assert.match(html, /games-group-settings-btn/);
   assert.match(html, /הגדרות/);
-  assert.match(html, /addEventListener\("click", openGroupSettings\)/);
+  assert.match(html, /addEventListener\("click", onSettings \|\| openGroupSettings\)/);
 });
 
 test('delete UI is two-step armed, like resetBtn/setClearBtn, not a single click', () => {

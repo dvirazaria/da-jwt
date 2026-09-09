@@ -52,7 +52,7 @@ const classesNeedingMotion = [
 ];
 classesNeedingMotion.forEach(cls => {
   test(`${cls} declares a transition or :active rule`, () => {
-    const idx = styleBlock.indexOf(cls);
+    const idx = styleBlock.indexOf(`${cls} {`);
     assert.ok(idx >= 0, `${cls} not found in the stylesheet`);
     const nearby = styleBlock.slice(idx, idx + 400);
     assert.match(nearby, /transition|:active/, `${cls} should declare a transition or an :active press state near its rule`);

@@ -143,10 +143,10 @@ test('the bottom stat line no longer carries the group name', () => {
 
 // ---------- D7: the "פעולות מהירות" section title is gone ----------
 
-test('the quick-actions section keeps both buttons but drops its generic title', () => {
+test('the quick-actions section keeps the standalone action and drops its generic title', () => {
   const source = sourceBetween('  function renderQuickActions(parent) {', '  function renderCreateGroupPanel(');
   assert.doesNotMatch(source, /פעולות מהירות/);
-  assert.match(source, /\+ צור קבוצה/);
+  assert.doesNotMatch(source, /\+ צור קבוצה/);
   assert.match(source, /משחק ללא קבוצה/);
 });
 
@@ -337,7 +337,7 @@ test('rows 25 + 27 + 30 + 34: nested ranking, anchored card head, plus-button to
 
   assert.match(html, /\.btn-plus::before \{[^}]*inset: -3px/s);
 
-  const settingsBtn = sourceBetween('  function renderGroupHeader(summary) {', '  // The group\'s own game has an active table');
+  const settingsBtn = sourceBetween('  function renderGroupHeader(summary, onBack, onSettings) {', '  // The group\'s own game has an active table');
   assert.match(settingsBtn, /<svg viewBox="0 0 24 24"/);
 });
 
@@ -378,7 +378,7 @@ test('the settings gear shows on primary non-game views, not on the group page o
   assert.match(html, /document\.getElementById\("resetBtn"\)\.hidden = appView === "profile" \|\| appView === "friends" \|\| appView === "games" \|\| appView === "group";/);
   assert.match(html, /document\.getElementById\("settingsBtn"\)\.addEventListener\("click"/);
   // the group page keeps its own group-settings control in the page header
-  const groupHeader = sourceBetween('  function renderGroupHeader(summary) {', '  // The group\'s own game has an active table');
+  const groupHeader = sourceBetween('  function renderGroupHeader(summary, onBack, onSettings) {', '  // The group\'s own game has an active table');
   assert.match(groupHeader, /games-group-settings-btn/);
 });
 

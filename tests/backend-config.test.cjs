@@ -196,14 +196,15 @@ test('the sign-in button opens the login overlay and never clears `me`', () => {
   assert.match(handler, /document\.getElementById\("settings"\)\.hidden = true;/);
 });
 
-test('refreshSettings branches sign-in visibility and the swap-button label on authUser + supabase', () => {
+test('refreshSettings branches sign-in visibility and reserves the swap button for signed-in accounts', () => {
   const start = appScript.indexOf('function refreshSettings()');
   const close = appScript.indexOf('\n  }', start);
   const body = appScript.slice(start, close);
   assert.match(body, /!authUser && !!supabase/, 'no-session-but-available branch must check both authUser and supabase');
   assert.match(body, /setSignInNote"\)\.hidden = !canSignIn/);
   assert.match(body, /setSignInBtn"\)\.hidden = !canSignIn/);
-  assert.match(body, /setSwapBtn"\)\.textContent = canSignIn \? "החלף שם" : "התנתקות"/);
+  assert.match(body, /setSwapBtn"\)\.hidden = !authUser/);
+  assert.match(body, /setSwapBtn"\)\.textContent = "התנתקות"/);
 });
 
 test('showLogin never requires `me` to be null, and skip only hides the overlay', () => {

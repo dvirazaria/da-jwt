@@ -22,12 +22,9 @@ const groupCardSource = sourceBetween('  function renderGroupCard(group, actions
 
 // ---------- renderGroupCard reads the real GroupSummary shape ----------
 
-test('renderGroupCard reads hasActiveGame/activeGamePhase/gameCount/lastGameAt/leaderNames from GroupSummary', () => {
+test('renderGroupCard reads the compact GroupSummary status fields', () => {
   assert.match(groupCardSource, /group\.hasActiveGame/);
   assert.match(groupCardSource, /group\.activeGamePhase/);
-  assert.match(groupCardSource, /group\.gameCount/);
-  assert.match(groupCardSource, /group\.lastGameAt/);
-  assert.match(groupCardSource, /group\.leaderNames/);
 });
 
 test('renderGroupCard no longer reads the old stub fields, or a raw group.id fallback (GroupSummary has no .id)', () => {
@@ -52,49 +49,35 @@ test('the group card status text distinguishes an active game from one in settle
   assert.match(groupCardSource, /משחק פעיל/);
 });
 
-// ---------- expand snapshot: truncated members, gameCount, short date, first leader only ----------
-
-test('the expand snapshot truncates members like formatPlayerNames, shows gameCount, a short last-game date, and only the first leader name', () => {
-  assert.match(groupCardSource, /formatPlayerNames\(memberNames\)/);
-  assert.match(groupCardSource, /"משחקים · " \+ group\.gameCount/);
-  assert.match(groupCardSource, /formatShortGameDate\(group\.lastGameAt\)/);
-  assert.match(groupCardSource, /"מוביל · " \+ leaderNames\[0\]/);
-  assert.doesNotMatch(groupCardSource, /leaderNames\.join/);
-  assert.doesNotMatch(groupCardSource, /group\.members\.join/);
-});
-
-// ---------- games-card-toggle label reflects open/closed state (C4) ----------
+// ---------- group rows are a clean list; details moved to the group preview ----------
 
 test('the active-game card toggle label is "כווץ" when expanded and "הרחב" when collapsed', () => {
   const activeCardSource = sourceBetween('  function renderActiveGameCard(summary, actions) {', '  function renderActiveGamesSection(');
   assert.match(activeCardSource, /actions\.expanded \? "כווץ" : "הרחב"/);
 });
 
-test('the group card toggle label is "כווץ" when expanded and "הרחב" when collapsed', () => {
-  assert.match(groupCardSource, /actions\.expanded \? "כווץ" : "הרחב"/);
+test('the group card has no expand control or hidden details', () => {
+  assert.doesNotMatch(groupCardSource, /games-card-toggle/);
+  assert.doesNotMatch(groupCardSource, /games-card-details/);
+  assert.doesNotMatch(groupCardSource, /הרחב/);
 });
 
-// ---------- quick actions: "+ צור קבוצה" leads as the primary capsule ----------
+// ---------- quick actions: only the standalone-game action remains ----------
 
-test('quick actions lead with the create-group action as the primary capsule; the ungrouped-game action is secondary', () => {
+test('quick actions contain only the standalone-game action after create-group moved beside the groups title', () => {
   const source = sourceBetween('  function renderQuickActions(parent) {', '  function renderCreateGroupPanel(');
-  const createIdx = source.indexOf('+ צור קבוצה');
-  const startIdx = source.indexOf('משחק ללא קבוצה');
-  assert.ok(createIdx >= 0 && startIdx >= 0, 'both quick actions should be present');
-  assert.ok(createIdx < startIdx, '"+ צור קבוצה" should be built (and appended) before "משחק ללא קבוצה"');
-  assert.match(source, /"games-quick-action primary",\s*"\+ צור קבוצה"/);
-  assert.doesNotMatch(source, /"games-quick-action primary",\s*"משחק ללא קבוצה"/);
-  // both handlers stay wired regardless of order
-  assert.match(source, /toggleCreateGroupPanel/);
+  assert.doesNotMatch(source, /\+ צור קבוצה/);
+  assert.match(source, /games-quick-actions/);
+  assert.match(source, /classList\.add\("single"\)/);
   assert.match(source, /startUngroupedGame/);
 });
 
-// ---------- expandedGroupCards/expandedGameCards/archive toggle never call save() ----------
+// ---------- dashboard interaction state never calls save() ----------
 
 test('the dashboard region never calls save() from card expand/collapse or the archive toggle', () => {
   const dashboardSource = sourceBetween(
     '  function renderActiveGamesSection(parent, summaries, enterStagger) {',
-    '  function renderGroupHeader(summary) {'
+    '  function openGroupPreview(groupId) {'
   );
   assert.doesNotMatch(dashboardSource, /\bsave\(\)/);
 });
@@ -112,7 +95,7 @@ test('dashboard cards stagger in only right after a navigation, not on every in-
   assert.match(html, /let gamesPageEnterNext = false;/);
   const setAppViewSource = sourceBetween('  function setAppView(nextView) {', '  function flashViewEnter');
   assert.match(setAppViewSource, /gamesPageEnterNext\s*=\s*nextView === "games"/);
-  const dashboardSource = sourceBetween('  function renderGamesDashboard()', '  function renderGroupHeader(summary) {');
+  const dashboardSource = sourceBetween('  function renderGamesDashboard()', '  function openGroupPreview(groupId) {');
   assert.match(dashboardSource, /const enterStagger = gamesPageEnterNext;/);
   assert.match(dashboardSource, /gamesPageEnterNext = false;/);
   assert.match(dashboardSource, /renderActiveGamesSection\(inner, getActiveGameSummaries\(state, state\.groups\), enterStagger\)/);
