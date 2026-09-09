@@ -1159,6 +1159,9 @@
   let removeMemberArmedTimeout = null; // auto-disarm timer for the above
   let memberActionsOpenId = null;      // memberId whose inline action strip is open (D3, UI-only)
   let memberActionsJustOpenedId = null; // strip that should animate open on the next render
+  let dismissedGuestClaimIds = new Set(); // guestIds whose "שיחקת כאן בעבר?" got a "לא" this session —
+                                           // in-memory only, never save()d; a future pull may offer it again
+  let guestClaimBusyIds = new Set();      // guestId/claimId currently mid-RPC — disables just that row
   let hideGroupArmed = false;          // "מחק קבוצה" (remove a left group from this device) armed
   let hideGroupArmedTimeout = null;    // auto-disarm timer for the above
   let formerMembersOpen = false;       // whether the "חברים לשעבר" collapsed list is expanded
@@ -1560,6 +1563,11 @@
   let cloudGameChannelId = "";   // which game it is for ("" = none)
   let cloudGameEventTimer = null;
   let pendingCloudGame = null;   // a realtime update parked until the active input loses focus
+  // Raw guests/guest_claims rows this pull could read (RLS already narrowed them — see
+  // docs/backend/link-guest.sql). In-memory session cache only, same pattern as cloudProfileIds/
+  // cloudGameCreators: never a new localStorage key, never part of `state`, rebuilt every pull.
+  let cloudGuestRows = [];
+  let cloudGuestClaims = [];
 
   // `authUser` is declared further down, in the auth section; every caller here runs after boot.
   function cloudMode() { return !!(supabase && authUser); }
@@ -1834,6 +1842,13 @@
       const gameIds = openGames.concat(closedGames).map(row => row.id).filter(Boolean);
       const children = await fetchCloudGameChildren(gameIds);
       const debtsResult = await supabase.from("debts").select("*");
+      // guests/guest_claims feed the "זה אני" prompt (docs/backend/link-guest.sql) only — RLS
+      // already narrows both to what this device may see, so nothing here needs its own filter.
+      // Best-effort: a missing guest_claims table (link-guest.sql not applied yet) must not break
+      // the rest of the pull, so a query error degrades to "no candidates offered" instead of
+      // failing the whole sync.
+      const guestsResult = await supabase.from("guests").select("*");
+      const guestClaimsResult = await supabase.from("guest_claims").select("*");
       applyCloudPull({
         groups: groupRows,
         members: memberRows,
@@ -1845,6 +1860,8 @@
         entries: children.entries,
         transfers: children.transfers,
         debts: debtsResult.error ? [] : (debtsResult.data || []),
+        guests: guestsResult.error ? [] : (guestsResult.data || []),
+        guestClaims: guestClaimsResult.error ? [] : (guestClaimsResult.data || []),
       }, pullSeq);
     } catch (e) {
       setSync(false, "שגיאת סנכרון — נשמר מקומית");
@@ -1885,6 +1902,11 @@
     // The payload was read before a local write happened, so it cannot know about that write.
     // Drop it and read again rather than merging a snapshot that is older than this device.
     if (pullSeq !== undefined && pullSeq !== cloudWriteSeq) { scheduleCloudPull(800); return; }
+    // Read-only cache for the "זה אני" prompt (renderGroupGuestClaims) — updated even when the
+    // merge below defers for a focused input, since nothing here can clobber what someone is
+    // typing.
+    cloudGuestRows = payload.guests || [];
+    cloudGuestClaims = payload.guestClaims || [];
     const groupRows = payload.groups || [];
     const memberRows = payload.members || [];
     const inviteRows = payload.invites || [];
@@ -2054,6 +2076,8 @@
     pendingRemote = null;
     lastPushedRows = null;
     cloudGameCreators = {};
+    cloudGuestRows = [];
+    cloudGuestClaims = [];
     pullCloud().then(() => { if (cloudMode()) return pushCloud(); }).catch(() => {});
   }
   // Signed out: keep every local record exactly as it is and simply stop talking to the server.
@@ -2069,6 +2093,8 @@
     lastPushedRows = null;
     cloudProfileIds = [];
     cloudGameCreators = {};
+    cloudGuestRows = [];
+    cloudGuestClaims = [];
     pendingCloudGame = null;
     leaveCloudGameChannel();
     setSync(false, "שמירה מקומית");
@@ -2844,6 +2870,44 @@
       seen.add(name);
       return true;
     });
+  }
+
+  // Local mirror of the SQL safety rule in docs/backend/link-guest.sql (app_approve_guest_claim):
+  // a claim must never seat the same person twice in one game. `players` is one game's roster —
+  // the current table's `state.players`, or a history entry's snapshot. Used to grey out "זה אני"
+  // for the table you are both sitting at right now; the RPC remains the authoritative check
+  // across every game, including closed ones this device may not fully know.
+  function seatsGuestAndUser(players, guestId, userId) {
+    const list = Array.isArray(players) ? players : [];
+    if (!guestId || !userId) return false;
+    return list.some(p => p && p.guestId === guestId) && list.some(p => p && p.userId === userId);
+  }
+  // Applied to the local collections right after this device's own app_approve_guest_claim call
+  // succeeds, so the approver's screen stops showing the old guest name immediately instead of
+  // waiting for the next pull (which would show the same result anyway, since the server rows are
+  // already re-pointed by then — this is an optimistic-UI mirror, not the source of truth). Only
+  // identity fields move; every buyin/cashout/entryLog/net stays exactly as it was. Idempotent: a
+  // ref already carrying `userId` (guestId cleared) has nothing left to match on a second call.
+  function applyGuestClaimLocally(collections, guestId, userId) {
+    const c = collections || {};
+    if (!guestId || !userId) return c;
+    const retarget = (ref) => {
+      if (ref && ref.guestId === guestId) { ref.userId = userId; ref.guestId = null; }
+    };
+    (Array.isArray(c.groups) ? c.groups : []).forEach(g => g && retarget(g.createdBy));
+    (Array.isArray(c.invites) ? c.invites : []).forEach(i => i && retarget(i.createdBy));
+    (Array.isArray(c.friendships) ? c.friendships : []).forEach(f => {
+      if (!f) return;
+      retarget(f.requester);
+      retarget(f.addressee);
+    });
+    (Array.isArray(c.groupMembers) ? c.groupMembers : []).forEach(m => {
+      if (m && m.guestId === guestId) { m.userId = userId; m.guestId = null; }
+    });
+    (Array.isArray(c.players) ? c.players : []).forEach(p => {
+      if (p && p.guestId === guestId) { p.userId = userId; p.guestId = null; }
+    });
+    return c;
   }
 
   // ---------- invites (pure) ----------
@@ -3805,6 +3869,45 @@
   function guestToRow(guestId, displayName, createdBy) {
     const name = String(displayName || "").trim().slice(0, 40);
     return { id: String(guestId || ""), display_name: name || "אורח", created_by: String(createdBy || "") };
+  }
+
+  // ----- guest claim candidates (raw guests/guest_claims rows, docs/backend/link-guest.sql) -----
+  // A guest is a claim candidate for me, in one group, when: I am signed in (meUserId is a real
+  // profile id — local/offline mode never has one, so this is naturally []), the guest is a
+  // member of that group, the guest's display_name matches mine, the guest is not already linked
+  // to anyone, the guest is not somehow me, and no claim on it is already in flight (from me or
+  // anyone else — once requested it moves to "the request" instead of being offered again).
+  // guestRows only ever contains what guests_select already let this device read, so no separate
+  // visibility check is needed here beyond "is this guest actually seated in the group I'm looking at".
+  function guestClaimCandidatesInGroup(guestRows, groupMembers, claims, groupId, meUserId, meName) {
+    if (!meUserId || !groupId) return [];
+    const name = String(meName || "").trim();
+    if (!name) return [];
+    const guests = Array.isArray(guestRows) ? guestRows : [];
+    const members = Array.isArray(groupMembers) ? groupMembers : [];
+    const memberGuestIds = new Set(
+      members.filter(m => m && m.groupId === groupId && m.guestId).map(m => m.guestId));
+    const pendingGuestIds = new Set(
+      (Array.isArray(claims) ? claims : []).filter(c => c && c.status === "pending").map(c => c.guest_id));
+    return guests.filter(g => g && !g.linked_profile_id && g.id !== meUserId
+      && !pendingGuestIds.has(g.id)
+      && memberGuestIds.has(g.id)
+      && String(g.display_name || "").trim() === name);
+  }
+  // Pending guest_claims rows on guests seated in one group, split into mine (I am the claimant —
+  // render "ממתין לאישור") and toApprove (visible to me only because guest_claims_select granted
+  // it — I am the guest's creator or an active admin of this group, exactly app_can_approve_
+  // guest_claim's own rule — so anything here is already safe to render as an approval entry).
+  function guestClaimsForGroup(claims, groupMembers, groupId, meUserId) {
+    const list = Array.isArray(claims) ? claims : [];
+    const members = Array.isArray(groupMembers) ? groupMembers : [];
+    const guestIdsInGroup = new Set(
+      members.filter(m => m && m.groupId === groupId && m.guestId).map(m => m.guestId));
+    const pending = list.filter(c => c && c.status === "pending" && guestIdsInGroup.has(c.guest_id));
+    return {
+      mine: pending.filter(c => c.claimant_profile_id === meUserId),
+      toApprove: pending.filter(c => c.claimant_profile_id !== meUserId),
+    };
   }
 
   // What each table will accept. A row that fails here is dropped before the request rather than
@@ -4966,6 +5069,8 @@
       inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
     }
     inner.appendChild(renderGroupLeaders(buildLeaderboard(collections.history, collections.groupMembers, currentGroupId)));
+    const previewClaimsSection = renderGroupGuestClaims(currentGroupId);
+    if (previewClaimsSection) inner.appendChild(previewClaimsSection);
     const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
     inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
@@ -5786,6 +5891,8 @@
       inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
     }
     inner.appendChild(renderGroupLeaders(buildLeaderboard(collections.history, collections.groupMembers, currentGroupId)));
+    const guestClaimsSection = renderGroupGuestClaims(currentGroupId);
+    if (guestClaimsSection) inner.appendChild(guestClaimsSection);
     const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
     inner.appendChild(renderGroupMembers(activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
@@ -7765,6 +7872,154 @@
     const token = pendingJoinToken || parseJoinToken(location.search);
     if (!token || joinRedeemRunning || !cloudMode()) return;
     showJoinNotice(token, true);
+  }
+
+  // ---------- guest claim: link a guest to an account ("זה אני") ----------
+  // Explicit, consent-based. Never auto-merged by name: guestClaimCandidatesInGroup (cloud
+  // mapping (pure), above) only ever produces a SUGGESTION — tapping "זה אני" sends a request,
+  // nothing merges until a second, independent person (the guest's creator, or an active admin of
+  // one of its groups — never the claimant) approves it. The real authorization rule and the
+  // actual re-pointing both live server-side in docs/backend/link-guest.sql
+  // (app_request_guest_claim / app_approve_guest_claim / app_decline_guest_claim); everything here
+  // is UI plumbing around those three RPCs. Every entry point below early-returns when
+  // !cloudMode(), so this whole feature is a no-op in local/offline mode.
+  let guestClaimError = ""; // last inline error, shown once above the group's guest-claim rows
+
+  function guestDisplayName(guestId) {
+    const row = cloudGuestRows.find(g => g && g.id === guestId);
+    return row ? row.display_name : "אורח";
+  }
+
+  // The RPCs raise a distinct GUEST_CLAIM_* message for every refusal they make on purpose
+  // (docs/backend/link-guest.sql); this turns each into the same short, direct Hebrew the rest of
+  // the app uses. Anything unrecognized (a network error, a status this device predates) falls
+  // back to the same neutral retry line join-invite's joinNoticeMessage uses for 'error'.
+  function guestClaimErrorMessage(error) {
+    const text = String((error && error.message) || error || "");
+    if (text.includes("GUEST_CLAIM_DOUBLE_SEAT")) return "אי אפשר לקשר — שניכם כבר יושבים באותו משחק";
+    if (text.includes("GUEST_CLAIM_NOT_AUTHORIZED")) return "רק מי שהוסיף את האורח או מנהל הקבוצה יכולים לאשר";
+    if (text.includes("GUEST_CLAIM_ALREADY_LINKED")) return "האורח הזה כבר מקושר לחשבון אחר";
+    return "הפעולה נכשלה, נסו שוב";
+  }
+
+  async function requestGuestClaim(guestId) {
+    if (!supabase) return;
+    if (!cloudMode() || guestClaimBusyIds.has(guestId)) return;
+    guestClaimBusyIds.add(guestId);
+    guestClaimError = "";
+    renderGroupSurface();
+    try {
+      const { data, error } = await supabase.rpc("app_request_guest_claim", { p_guest_id: guestId });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row && row.status !== "pending" && row.status !== "already-you") {
+        guestClaimError = guestClaimErrorMessage({ message: row.status });
+      }
+      await pullCloud();
+    } catch (e) {
+      guestClaimError = guestClaimErrorMessage(e);
+    }
+    guestClaimBusyIds.delete(guestId);
+    renderGroupSurface();
+  }
+
+  // "לא" — purely local and reversible only by a fresh pull: no request, no server write, so
+  // there is nothing to undo server-side. Matches D8's hiddenAt precedent for "quiet, local,
+  // never save()d" rather than inventing a new persisted dismissal.
+  function dismissGuestClaimCandidate(guestId) {
+    dismissedGuestClaimIds.add(guestId);
+    renderGroupSurface();
+  }
+
+  // Shared by "ביטול" (the claimant withdrawing their own request) and "דחה" (the approver
+  // declining someone else's) — both are exactly app_decline_guest_claim, which itself checks
+  // which of the two the caller is.
+  async function resolveGuestClaim(claimId, decide) {
+    if (!supabase) return;
+    if (!cloudMode() || guestClaimBusyIds.has(claimId)) return;
+    guestClaimBusyIds.add(claimId);
+    guestClaimError = "";
+    renderGroupSurface();
+    try {
+      const { error } = await supabase.rpc(decide, { p_claim_id: claimId });
+      if (error) throw error;
+      await pullCloud();
+    } catch (e) {
+      guestClaimError = guestClaimErrorMessage(e);
+    }
+    guestClaimBusyIds.delete(claimId);
+    renderGroupSurface();
+  }
+  function cancelGuestClaim(claimId) { return resolveGuestClaim(claimId, "app_decline_guest_claim"); }
+  function declineGuestClaim(claimId) { return resolveGuestClaim(claimId, "app_decline_guest_claim"); }
+
+  async function approveGuestClaim(claimId) {
+    if (!supabase) return;
+    if (!cloudMode() || guestClaimBusyIds.has(claimId)) return;
+    guestClaimBusyIds.add(claimId);
+    guestClaimError = "";
+    renderGroupSurface();
+    try {
+      const { data, error } = await supabase.rpc("app_approve_guest_claim", { p_claim_id: claimId });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row && row.status === "approved" && row.guest_id && row.claimant_profile_id) {
+        // Optimistic local mirror (applyGuestClaimLocally, groups domain (pure)) so this device's
+        // own screen stops showing the old guest name right away — the pull below would settle on
+        // the same result regardless, this just saves the approver a wait.
+        applyGuestClaimLocally(
+          { groups: state.groups, groupMembers: state.groupMembers, invites: state.invites,
+            friendships: state.friendships, players: state.players },
+          String(row.guest_id), String(row.claimant_profile_id));
+        save();
+      } else if (row && row.status && row.status !== "approved") {
+        guestClaimError = guestClaimErrorMessage({ message: row.status });
+      }
+      await pullCloud();
+    } catch (e) {
+      guestClaimError = guestClaimErrorMessage(e);
+    }
+    guestClaimBusyIds.delete(claimId);
+    renderGroupSurface();
+  }
+
+  // The group-page section: a calm "שיחקת כאן בעבר?" row per candidate, my own outgoing
+  // request's honest pending state, and — only for whoever guest_claims_select already decided
+  // has standing (never re-derived here) — the requests waiting on my approval. Returns null when
+  // there is nothing to show, so renderGroupPage() only appends and stagger-animates it when it
+  // is not empty. Reuses renderFriendGroup (the friend-request rows) rather than a new component.
+  function renderGroupGuestClaims(groupId) {
+    if (!cloudMode() || !authUser) return null;
+    const candidates = guestClaimCandidatesInGroup(cloudGuestRows, state.groupMembers, cloudGuestClaims, groupId, authUser.id, me)
+      .filter(g => !dismissedGuestClaimIds.has(g.id));
+    const claims = guestClaimsForGroup(cloudGuestClaims, state.groupMembers, groupId, authUser.id);
+    if (!candidates.length && !claims.mine.length && !claims.toApprove.length) return null;
+    const section = el("section", "games-section");
+    if (guestClaimError) section.appendChild(el("p", "friend-error", guestClaimError));
+    if (candidates.length) {
+      const refs = candidates.map(g => ({ displayName: "שיחקת כאן בעבר בשם " + g.display_name + "?" }));
+      renderFriendGroup(section, "זה אני?", refs, "", i => [
+        { label: "זה אני", primary: true, onClick: () => requestGuestClaim(candidates[i].id) },
+        { label: "לא", onClick: () => dismissGuestClaimCandidate(candidates[i].id) },
+      ]);
+    }
+    if (claims.mine.length) {
+      const refs = claims.mine.map(c => ({ displayName: guestDisplayName(c.guest_id) }));
+      renderFriendGroup(section, "הבקשה שלך", refs, "ממתין לאישור", i => [
+        { label: "ביטול", onClick: () => cancelGuestClaim(claims.mine[i].id) },
+      ]);
+    }
+    if (claims.toApprove.length) {
+      // The guest name is baked into each row's own text (not a shared metaLabel) because a group
+      // can have more than one pending claim in flight for different guests at once.
+      const refs = claims.toApprove.map(c =>
+        ({ displayName: c.claimant_display_name_snapshot + " מבקש/ת להיות " + guestDisplayName(c.guest_id) }));
+      renderFriendGroup(section, "בקשות קישור", refs, "", i => [
+        { label: "אשר", primary: true, onClick: () => approveGuestClaim(claims.toApprove[i].id) },
+        { label: "דחה", onClick: () => declineGuestClaim(claims.toApprove[i].id) },
+      ]);
+    }
+    return section;
   }
 
   // ---------- boot ----------
