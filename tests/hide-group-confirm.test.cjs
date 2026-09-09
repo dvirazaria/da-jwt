@@ -78,8 +78,8 @@ test('leftGroupReason says "עזבת"/"הוסרת" for my former row, and names 
 
 test('renderHideGroupAction renders nothing unless a left/removed membership of mine exists, and a refused confirm re-renders instead of returning silently', () => {
   const source = sourceBetween('  function renderHideGroupAction() {', '  function renderStartGamePanel() {');
-  assert.match(source, /^\s*if \(!findMyFormerMembership\(state\.groupMembers, currentGroupId, me\)\) return null;/m);
-  assert.match(source, /if \(!hideGroupForMember\(state\.groupMembers, currentGroupId, me, new Date\(\)\.toISOString\(\)\)\) \{ renderGroupSurface\(\); return; \}/);
+  assert.match(source, /^\s*if \(!findMyFormerMembership\(state\.groupMembers, currentGroupId, me(, \w+)?\)\) return null;/m);
+  assert.match(source, /if \(!hideGroupForMember\(state\.groupMembers, currentGroupId, me, new Date\(\)\.toISOString\(\)(, \w+)?\)\) \{ renderGroupSurface\(\); return; \}/);
   assert.doesNotMatch(source, /hideGroupForMember\([^\n]*\)\) return;/);
 });
 

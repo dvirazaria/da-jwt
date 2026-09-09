@@ -107,7 +107,7 @@ test('a hidden group stays hidden in the dashboard archive list as well', () => 
 test('the group page of a group I left offers the two-step "מחק קבוצה" that calls hideGroupForMember', () => {
   const source = sourceBetween('  function renderGroupPrimaryAction(summary, gate) {', '  function renderStartGamePanel() {');
   assert.match(source, /עזבת את הקבוצה/);
-  assert.match(source, /hideGroupForMember\(state\.groupMembers, currentGroupId, me, new Date\(\)\.toISOString\(\)\)/);
+  assert.match(source, /hideGroupForMember\(state\.groupMembers, currentGroupId, me, new Date\(\)\.toISOString\(\)(, \w+)?\)/);
   assert.match(source, /הקבוצה תוסר מהמכשיר שלך/);
   assert.match(source, /set-flat danger/);
   assert.match(source, /hideGroupArmed/);
