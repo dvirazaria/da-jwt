@@ -1,0 +1,421 @@
+<title>מסך הכניסה של סוגרים קופה</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800;900&display=swap">
+<style>
+  :root {
+    --ground: #F2F5F6; --surface: #FFFFFF; --ink: #10181C; --muted: #5C6B72; --hair: rgba(16,24,28,.12);
+    --accent: #0A9C96; --accent-ink: #076B67; --tier-must: #0A9C96; --tier-should: #7A6A2C; --tier-later: #5C6B72;
+    --chip-bg: rgba(10,156,150,.1);
+    /* the app's own dark screen — the phones keep this look in both page themes */
+    --app-bg: #05070A; --app-text: #EAF4F4; --app-dim: #64707A; --app-faint: #39434C; --app-line: rgba(234,244,244,.09);
+    --app-accent: #35E0DC; --app-bad: #FF6D6D;
+    /* the app's light screen, for the one light-theme phone */
+    --appl-bg: #F5F8F9; --appl-text: #0C1519; --appl-dim: #5A6870; --appl-faint: #9AA8AE; --appl-line: rgba(12,21,25,.12); --appl-accent: #089E98;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0B0F12; --surface: #11171B; --ink: #E6EEF0; --muted: #8A98A0; --hair: rgba(230,238,240,.11);
+      --accent: #35E0DC; --accent-ink: #35E0DC; --tier-must: #35E0DC; --tier-should: #D9C46A; --tier-later: #8A98A0;
+      --chip-bg: rgba(53,224,220,.12);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0B0F12; --surface: #11171B; --ink: #E6EEF0; --muted: #8A98A0; --hair: rgba(230,238,240,.11);
+    --accent: #35E0DC; --accent-ink: #35E0DC; --tier-must: #35E0DC; --tier-should: #D9C46A; --tier-later: #8A98A0;
+    --chip-bg: rgba(53,224,220,.12);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: Heebo, "Segoe UI", Arial, sans-serif; direction: rtl; line-height: 1.55; }
+  .page { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
+  .eyebrow { font-size: 12px; color: var(--muted); letter-spacing: .02em; margin: 0 0 10px; }
+  h1 { font-size: 34px; font-weight: 800; margin: 0 0 12px; line-height: 1.15; text-wrap: balance; }
+  h2 { font-size: 20px; font-weight: 700; margin: 0 0 6px; }
+  .lead { font-size: 16px; max-width: 68ch; margin: 0; color: var(--ink); }
+  .lead b { font-weight: 700; }
+  section { margin-top: 56px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 22px; max-width: 70ch; }
+  .board { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+  .variant { flex: 0 1 330px; display: flex; flex-direction: column; gap: 14px; }
+  .tag { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--accent-ink); }
+  .tag.alt { color: var(--muted); }
+  .tag i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; }
+  .verdict { font-size: 13px; color: var(--muted); margin: 0; }
+  .verdict b { color: var(--ink); font-weight: 700; }
+  .verdict ul { margin: 6px 0 0; padding-inline-start: 18px; }
+  .verdict li { margin: 2px 0; }
+
+  /* phone */
+  .phone { width: 330px; min-height: 690px; border-radius: 34px; padding: 16px 20px 22px; background: var(--app-bg); color: var(--app-text);
+    border: 1px solid rgba(255,255,255,.14); box-shadow: 0 20px 50px rgba(0,0,0,.28); display: flex; flex-direction: column; gap: 14px; position: relative; }
+  .phone.light { background: var(--appl-bg); color: var(--appl-text); border-color: rgba(12,21,25,.14); }
+  .status { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--app-dim); }
+  .light .status { color: var(--appl-dim); }
+  .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--app-accent); box-shadow: 0 0 8px var(--app-accent); }
+  .light .status .dot { background: var(--appl-accent); box-shadow: none; }
+  .brand { font-size: 11px; color: var(--app-dim); letter-spacing: .04em; margin-top: 18px; }
+  .light .brand { color: var(--appl-dim); }
+  .phone h3 { font-size: 30px; font-weight: 900; margin: 0; line-height: 1.1; }
+  .phone .p { font-size: 13px; color: var(--app-dim); margin: -4px 0 0; font-weight: 300; }
+  .light .p { color: var(--appl-dim); }
+  .phone .p.strong { color: var(--app-text); font-weight: 400; }
+  .light .p.strong { color: var(--appl-text); }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--app-dim); }
+  .light .field label { color: var(--appl-dim); }
+  .input { border-bottom: 1px solid var(--app-line); padding: 6px 0 8px; font-size: 16px; color: var(--app-faint); direction: ltr; text-align: left; font-family: Heebo, sans-serif; }
+  .light .input { border-color: var(--appl-line); color: var(--appl-faint); }
+  .input.filled { color: var(--app-text); }
+  .light .input.filled { color: var(--appl-text); }
+  .input.code { letter-spacing: .4em; font-size: 22px; font-weight: 700; color: var(--app-text); border-color: var(--app-accent); }
+  .light .input.code { color: var(--appl-text); border-color: var(--appl-accent); }
+  .help { font-size: 12px; color: var(--app-dim); margin: -6px 0 0; }
+  .light .help { color: var(--appl-dim); }
+  .help.err { color: var(--app-bad); }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 46px; border-radius: 999px; font-size: 15px; font-weight: 700; padding: 0 18px; border: 1px solid transparent; }
+  .btn.primary { background: var(--app-accent); color: var(--app-bg); }
+  .light .btn.primary { background: var(--appl-accent); color: #fff; }
+  .btn.outline { border-color: var(--app-accent); color: var(--app-accent); }
+  .light .btn.outline { border-color: var(--appl-accent); color: var(--appl-accent); }
+  .btn.quiet { border-color: var(--app-line); color: var(--app-text); }
+  .light .btn.quiet { border-color: var(--appl-line); color: var(--appl-text); }
+  .btn.google { background: #131314; border-color: #8E918F; color: #E3E3E3; font-family: Roboto, Heebo, Arial, sans-serif; font-weight: 500; font-size: 14px; }
+  .light .btn.google { background: #FFFFFF; border-color: #747775; color: #1F1F1F; }
+  .btn.google .g { width: 20px; height: 20px; border-radius: 50%; background: #fff; display: inline-flex; align-items: center; justify-content: center; }
+  .btn.google .g svg { width: 14px; height: 14px; }
+  .btn.disabled { opacity: .45; }
+  .divider { display: flex; align-items: center; gap: 12px; color: var(--app-faint); font-size: 12px; }
+  .light .divider { color: var(--appl-faint); }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--app-line); }
+  .light .divider::before, .light .divider::after { background: var(--appl-line); }
+  .hr { height: 1px; background: var(--app-line); margin: 6px 0; }
+  .light .hr { background: var(--appl-line); }
+  .legal { font-size: 11px; color: var(--app-dim); margin-top: auto; padding-top: 10px; }
+  .light .legal { color: var(--appl-dim); }
+  .legal u { text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .link { font-size: 13px; color: var(--app-dim); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .light .link { color: var(--appl-dim); }
+  .row3 { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--app-line); }
+  .row3:last-of-type { border-bottom: none; }
+  .row3 .ic { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--app-line); display: flex; align-items: center; justify-content: center; color: var(--app-dim); flex: 0 0 34px; }
+  .row3 .ic svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .row3 .t { font-size: 15px; font-weight: 700; }
+  .row3 .s { font-size: 12px; color: var(--app-dim); }
+  .row3 .chev { margin-inline-start: auto; color: var(--app-faint); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { border: 1px solid var(--app-line); border-radius: 999px; padding: 6px 14px; font-size: 13px; }
+  .continue { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: rgba(53,224,220,.12); color: var(--app-accent); font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .continue .n { font-size: 16px; font-weight: 700; }
+  .continue .m { font-size: 12px; color: var(--app-dim); direction: ltr; text-align: right; }
+  .note { font-size: 11px; color: var(--app-dim); background: rgba(234,244,244,.04); border-radius: 12px; padding: 8px 10px; }
+  .countdown { font-size: 12px; color: var(--app-dim); }
+  .callout { position: absolute; inset-inline-end: -10px; top: -10px; background: var(--surface); color: var(--ink); border: 1px solid var(--hair); font-size: 11px; padding: 3px 9px; border-radius: 999px; }
+
+  /* features */
+  .features { display: grid; grid-template-columns: 1fr; gap: 0; border-top: 1px solid var(--hair); }
+  .feat { display: grid; grid-template-columns: 74px 1fr 46px; gap: 14px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--hair); }
+  .feat .name { font-size: 14px; }
+  .feat .why { font-size: 12.5px; color: var(--muted); }
+  .pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--chip-bg); color: var(--tier-must); justify-self: start; }
+  .pill.should { color: var(--tier-should); background: rgba(217,196,106,.14); }
+  .pill.later { color: var(--tier-later); background: rgba(128,140,148,.14); }
+  .effort { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; justify-self: end; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; }
+  .q { border-top: 2px solid var(--accent); padding-top: 12px; }
+  .q h3 { font-size: 15px; margin: 0 0 6px; font-weight: 700; }
+  .q p { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .q p b { color: var(--ink); font-weight: 600; }
+  details { margin-top: 24px; }
+  summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+  .sources { columns: 2; column-gap: 32px; font-size: 12px; margin: 12px 0 0; padding-inline-start: 18px; }
+  .sources li { break-inside: avoid; margin: 0 0 4px; }
+  .sources a { color: var(--accent-ink); text-decoration: none; word-break: break-all; }
+  @media (max-width: 720px) { .sources { columns: 1; } .feat { grid-template-columns: 64px 1fr 40px; } }
+</style>
+
+<main class="page">
+  <p class="eyebrow">הצעה לדיון · 8 בספטמבר 2026 · לא נוגע בקוד</p>
+  <h1>מסך הכניסה: שלוש גרסאות להחלטה</h1>
+  <p class="lead">ההמלצה: <b>קוד למייל כמסלול הראשי</b>, Google בגובה שווה לפי כללי המיתוג שלו, ו"בלי חשבון" ככפתור אמיתי ולא כקישור. הסיבה המרכזית היא ה־PWA המותקן ב־iPhone: אימות קוד מסתיים בתוך האפליקציה, בעוד שכניסה עם Google פותחת חלון Safari שלא תמיד חוזר. במסך הראשון נשארות שלוש פעולות בלבד, בלי גלילה, וכל השאר נחשף במקום אחרי לחיצה.</p>
+
+  <section>
+    <h2>שלוש גרסאות למסך הראשון</h2>
+    <p class="sub">כולן בשפת העיצוב הקיימת: רקע כמעט שחור, טורקיז אחד, קפסולות, קווי הפרדה דקים, Heebo. ההבדל הוא בהיררכיה ובמה שגלוי לפני לחיצה.</p>
+    <div class="board">
+
+      <div class="variant">
+        <span class="tag"><i></i>מומלץ · קוד למייל ראשון</span>
+        <div class="phone">
+          <div class="status"><span>21:40</span><span class="dot"></span></div>
+          <div class="brand">סוגרים קופה</div>
+          <h3>כניסה</h3>
+          <p class="p">חשבון שומר את החובות והקבוצות שלך בין ערבים ובין מכשירים. בלי סיסמה.</p>
+          <div class="field"><label>אימייל</label><div class="input">name@mail.com</div></div>
+          <p class="help">נשלח לך קוד בן 6 ספרות. בלי סיסמה.</p>
+          <div class="btn primary">שלחו לי קוד</div>
+          <div class="divider">או</div>
+          <div class="btn google"><span class="g"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.99-4.3 2.99-7.35Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.42l-3.23-2.5c-.9.6-2.05.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H3.07v2.58A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.83V7.5H3.07a10 10 0 0 0 0 9l3.34-2.58Z"/><path fill="#EA4335" d="M12 5.98c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.95 2.99 14.7 2 12 2a10 10 0 0 0-8.93 5.5l3.34 2.59C7.2 7.73 9.4 5.98 12 5.98Z"/></svg></span>המשך עם Google</div>
+          <div class="hr"></div>
+          <div class="btn outline">המשך בלי חשבון</div>
+          <p class="help">לערב אחד, או בלי סנכרון. אפשר לחבר חשבון אחר כך מהפרופיל.</p>
+          <p class="legal">המשך הכניסה מהווה הסכמה ל<u>תנאי השימוש</u> ול<u>מדיניות הפרטיות</u>. לבני 18 ומעלה.</p>
+        </div>
+        <p class="verdict"><b>למה זו ההמלצה.</b>
+          <ul>
+            <li>המסלול היחיד שנגמר בתוך האפליקציה המותקנת ב־iPhone, וב־iOS 17 הקוד מתמלא לבד מהמייל.</li>
+            <li>כפתור מלא אחד בלבד. Google לפי המיתוג הרשמי (בלי מסגרת טורקיז).</li>
+            <li>האורח הוא כפתור ב־viewport הראשון, לא "דלג בינתיים".</li>
+          </ul>
+        </p>
+      </div>
+
+      <div class="variant">
+        <span class="tag alt"><i></i>חלופה א · Google ראשון, מינימלי</span>
+        <div class="phone">
+          <div class="status"><span>21:40</span><span class="dot"></span></div>
+          <div class="brand">סוגרים קופה</div>
+          <h3>כניסה</h3>
+          <p class="p">בלי סיסמה. החובות והקבוצות נשמרים בין מכשירים.</p>
+          <div style="height:14px"></div>
+          <div class="btn google"><span class="g"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.99-4.3 2.99-7.35Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.42l-3.23-2.5c-.9.6-2.05.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H3.07v2.58A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.83V7.5H3.07a10 10 0 0 0 0 9l3.34-2.58Z"/><path fill="#EA4335" d="M12 5.98c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.95 2.99 14.7 2 12 2a10 10 0 0 0-8.93 5.5l3.34 2.59C7.2 7.73 9.4 5.98 12 5.98Z"/></svg></span>המשך עם Google</div>
+          <div class="btn outline">כניסה עם קוד למייל</div>
+          <div class="btn quiet">המשך בלי חשבון</div>
+          <p class="help">שלוש בחירות, בלי שדה גלוי. שדה המייל נפתח במקום אחרי לחיצה.</p>
+          <p class="legal">המשך הכניסה מהווה הסכמה ל<u>תנאי השימוש</u> ול<u>מדיניות הפרטיות</u>.</p>
+        </div>
+        <p class="verdict"><b>המסך השקט ביותר.</b>
+          <ul>
+            <li>כמו Notion ו־Linear: שלושה כפתורים ובחירה אחת.</li>
+            <li>אבל ב־iPhone מותקן זה מציב בראש את המסלול השברירי (חלון Google, Done, טעינה מחדש), ומוסיף לחיצה למייל.</li>
+            <li>מתאים אם בדיקה על iPhone אמיתי תראה שהחזרה מ־Google אמינה.</li>
+          </ul>
+        </p>
+      </div>
+
+      <div class="variant">
+        <span class="tag alt"><i></i>חלופה ב · שלוש שורות שוות</span>
+        <div class="phone">
+          <div class="status"><span>21:40</span><span class="dot"></span></div>
+          <div class="brand">סוגרים קופה</div>
+          <h3>מי מגיע לשולחן?</h3>
+          <p class="p">בוחרים איך להיכנס. אפשר לשנות אחר כך מהפרופיל.</p>
+          <div style="height:6px"></div>
+          <div class="row3"><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><div><div class="t">קוד למייל</div><div class="s">בלי סיסמה, נשמר בין מכשירים</div></div><span class="chev">‹</span></div>
+          <div class="row3"><span class="ic" style="background:#fff;border-color:#fff"><svg viewBox="0 0 24 24" style="stroke:none"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.99-4.3 2.99-7.35Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.42l-3.23-2.5c-.9.6-2.05.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H3.07v2.58A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.83V7.5H3.07a10 10 0 0 0 0 9l3.34-2.58Z"/><path fill="#EA4335" d="M12 5.98c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.95 2.99 14.7 2 12 2a10 10 0 0 0-8.93 5.5l3.34 2.59C7.2 7.73 9.4 5.98 12 5.98Z"/></svg></span><div><div class="t">Google</div><div class="s">הכי מהיר בדפדפן</div></div><span class="chev">‹</span></div>
+          <div class="row3"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20c1.6-4 4.6-5.6 7.5-5.6s5.9 1.6 7.5 5.6"/></svg></span><div><div class="t">בלי חשבון</div><div class="s">לערב אחד, אפשר לחבר חשבון אחר כך</div></div><span class="chev">‹</span></div>
+          <p class="legal">המשך הכניסה מהווה הסכמה ל<u>תנאי השימוש</u> ול<u>מדיניות הפרטיות</u>.</p>
+        </div>
+        <p class="verdict"><b>הכי ברור מה ההבדל בין המסלולים.</b>
+          <ul>
+            <li>אורח בגובה שווה, נוח לנחיתה מהזמנה.</li>
+            <li>אין היררכיה: משתמש חוזר בוחר מחדש בכל פעם.</li>
+            <li>שורות עם תת־טקסט הן רכיב חדש בשפה, ולוגו Google בתוך שורה גנרית חורג מהמיתוג.</li>
+          </ul>
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>המצבים של הגרסה המומלצת</h2>
+    <p class="sub">הכול נחשף במקום, בלי מעבר לעמוד שני: שלב הקוד מחליף את אזור המייל, שלב השם נפתח מתחת ל"בלי חשבון", ומכשיר זכור מקבל שורת "להמשיך בתור".</p>
+    <div class="board">
+
+      <div class="variant">
+        <span class="tag alt"><i></i>שלב הקוד</span>
+        <div class="phone">
+          <div class="status"><span>21:41</span><span class="dot"></span></div>
+          <div class="brand">סוגרים קופה</div>
+          <h3>כניסה</h3>
+          <p class="p strong">הקוד נשלח ל־<span dir="ltr">dvir@gmail.com</span> · <span class="link">שינוי כתובת</span></p>
+          <div class="field"><label>קוד בן 6 ספרות</label><div class="input code">48 1</div></div>
+          <p class="help">הקוד תקף ל־10 דקות. כדאי לבדוק גם בספאם.</p>
+          <div class="btn outline">אישור</div>
+          <p class="countdown">לא הגיע? שליחה חוזרת בעוד 0:47</p>
+          <div class="divider">או</div>
+          <div class="btn google" style="opacity:.8"><span class="g"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.99-4.3 2.99-7.35Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.42l-3.23-2.5c-.9.6-2.05.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H3.07v2.58A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.83V7.5H3.07a10 10 0 0 0 0 9l3.34-2.58Z"/><path fill="#EA4335" d="M12 5.98c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.95 2.99 14.7 2 12 2a10 10 0 0 0-8.93 5.5l3.34 2.59C7.2 7.73 9.4 5.98 12 5.98Z"/></svg></span>המשך עם Google</div>
+          <div class="hr"></div>
+          <div class="btn outline">המשך בלי חשבון</div>
+          <p class="legal">שדה אחד, מתמלא לבד מהמייל, אימות אוטומטי רבע שנייה אחרי הספרה השישית. שגיאה: "הקוד שגוי או שפג תוקפו. אפשר לבקש קוד חדש."</p>
+        </div>
+      </div>
+
+      <div class="variant">
+        <span class="tag alt"><i></i>נחיתה מקישור הזמנה</span>
+        <div class="phone">
+          <div class="status"><span>21:40</span><span class="dot"></span></div>
+          <div class="brand">הזמנה</div>
+          <h3>דני מזמין אותך ל־חמישי בערב</h3>
+          <p class="p">כניסה שומרת אותך בקבוצה גם בפעם הבאה.</p>
+          <div class="field"><label>אימייל</label><div class="input">name@mail.com</div></div>
+          <div class="btn primary">שלחו לי קוד</div>
+          <div class="divider">או</div>
+          <div class="btn google"><span class="g"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.99-4.3 2.99-7.35Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.42l-3.23-2.5c-.9.6-2.05.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H3.07v2.58A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.83V7.5H3.07a10 10 0 0 0 0 9l3.34-2.58Z"/><path fill="#EA4335" d="M12 5.98c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.95 2.99 14.7 2 12 2a10 10 0 0 0-8.93 5.5l3.34 2.59C7.2 7.73 9.4 5.98 12 5.98Z"/></svg></span>המשך עם Google</div>
+          <div class="hr"></div>
+          <div class="btn outline">הצטרפות בלי חשבון</div>
+          <p class="help">מצטרפים בשם בלבד. המנהל מאשר, ואפשר לחבר חשבון אחר כך.</p>
+          <p class="legal">הטוקן נשמר במכשיר לפני כל צעד אימות, ואחרי הכניסה מצטרפים לקבוצה בלי מסך ביניים.</p>
+        </div>
+      </div>
+
+      <div class="variant">
+        <span class="tag alt"><i></i>מכשיר זכור · "להמשיך בתור"</span>
+        <div class="phone">
+          <div class="status"><span>21:40</span><span class="dot"></span></div>
+          <div class="brand">סוגרים קופה</div>
+          <h3>כניסה</h3>
+          <div class="continue"><span class="avatar">ד</span><div><div class="n">להמשיך בתור דביר?</div><div class="m">dv…@gmail.com</div></div></div>
+          <div class="btn primary">המשך</div>
+          <span class="link">כניסה עם חשבון אחר</span>
+          <div class="hr"></div>
+          <p class="help">מייל זכור מדלג ישר לשלב הקוד עם הכתובת ממולאת. בלי חשבון: "דביר · במכשיר הזה".</p>
+          <div style="height:10px"></div>
+          <span class="tag alt" style="font-size:11px"><i></i>שלב השם (אחרי "בלי חשבון")</span>
+          <p class="p strong">איך קוראים לך?</p>
+          <div class="field"><label>שמות מהמכשיר הזה</label><div class="chips"><span class="chip">דביר</span><span class="chip">אבי</span><span class="chip">בני</span><span class="chip">רון</span></div></div>
+          <div class="field"><div class="input" style="direction:rtl;text-align:right">השם שלך</div></div>
+          <div class="btn primary">המשך</div>
+          <span class="link">חזרה</span>
+        </div>
+      </div>
+
+      <div class="variant">
+        <span class="tag alt"><i></i>ערכה בהירה</span>
+        <div class="phone light">
+          <div class="status"><span>21:40</span><span class="dot"></span></div>
+          <div class="brand">סוגרים קופה</div>
+          <h3>כניסה</h3>
+          <p class="p">חשבון שומר את החובות והקבוצות שלך בין ערבים ובין מכשירים. בלי סיסמה.</p>
+          <div class="field"><label>אימייל</label><div class="input">name@mail.com</div></div>
+          <p class="help">נשלח לך קוד בן 6 ספרות. בלי סיסמה.</p>
+          <div class="btn primary">שלחו לי קוד</div>
+          <div class="divider">או</div>
+          <div class="btn google"><span class="g"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.99-4.3 2.99-7.35Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.42l-3.23-2.5c-.9.6-2.05.95-3.38.95-2.6 0-4.8-1.75-5.59-4.11H3.07v2.58A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.83V7.5H3.07a10 10 0 0 0 0 9l3.34-2.58Z"/><path fill="#EA4335" d="M12 5.98c1.47 0 2.79.5 3.83 1.5l2.86-2.86C16.95 2.99 14.7 2 12 2a10 10 0 0 0-8.93 5.5l3.34 2.59C7.2 7.73 9.4 5.98 12 5.98Z"/></svg></span>המשך עם Google</div>
+          <div class="hr"></div>
+          <div class="btn outline">המשך בלי חשבון</div>
+          <p class="help">לערב אחד, או בלי סנכרון. אפשר לחבר חשבון אחר כך מהפרופיל.</p>
+          <p class="legal">המשך הכניסה מהווה הסכמה ל<u>תנאי השימוש</u> ול<u>מדיניות הפרטיות</u>. לבני 18 ומעלה.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>פיצ'רים מומלצים</h2>
+    <p class="sub">מדורגים לפי מה שחייב להיות לפני שמשחררים את הכניסה לחברים, מה שכדאי, ומה שאפשר לדחות. המאמץ: S עד יום, M כמה ימים, L שבוע ומעלה.</p>
+    <div class="features">
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">"המשך בלי חשבון" ככפתור, שלב השם נחשף במקום</div><div class="why">האורח הוא קהל ליבה. "דלג בינתיים" כקישור מסתיר אותו.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">שדה קוד יחיד עם מילוי אוטומטי ואימות אוטומטי</div><div class="why">מתמלא מ־Mail ב־iOS 17, הדבקה פשוטה, כמעט בלי JS. לא שישה ריבועים.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">שלב קוד מלא: "נשלח ל־", "שינוי כתובת", ספירה לאחור של 60 שניות, טקסט תוקף</div><div class="why">חלון 60 השניות של Supabase; הספירה מונעת שגיאת 429 גלויה.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">מיפוי שגיאות Supabase להודעות עבריות במקום</div><div class="why">קוד פג, חסימת קצב למייל, חסימת קצב למכשיר, כתובת לא תקינה. בלי alert.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">כפתור Google לפי המיתוג בשתי הערכות</div><div class="why">המסגרת הטורקיזית הנוכחית חורגת מהכללים, ונדרש לאימות אפליקציית ה־OAuth.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">המשך הזמנה: הטוקן נשמר במכשיר לפני אימות, הצטרפות אוטומטית בחזרה</div><div class="why">ה־redirect מאבד את ה־query, וה־PWA ב־iOS עלול להיטען מחדש.</div></div><span class="effort">M</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">SMTP חיצוני ותבנית מייל עם הקוד בשורה הראשונה</div><div class="why">ברירת המחדל היא 2 מיילים לשעה לכל הפרויקט. ערב עם 6 חברים ייחסם מיד.</div></div><span class="effort">M</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">אופליין: אין מסך כניסה כשיש מצב מקומי, כשל רשת אינו יציאה</div><div class="why">ערב פוקר במרתף בלי קליטה הוא תרחיש אמיתי.</div></div><span class="effort">M</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">בדיקת מסלול Google על iPhone אמיתי במצב מותקן</div><div class="why">הדיווחים סותרים. סדר הכפתורים הסופי נקבע לפי מכשיר.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">יציאה בתחתית הפרופיל, בשני היקפים: מהמכשיר הזה, מכל שאר המכשירים</div><div class="why">ברירת המחדל של signOut מנתקת את כל המכשירים.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">דף פרטיות ותנאים באותו דומיין ושורה משפטית שקטה</div><div class="why">נדרש לאימות אפליקציית ה־OAuth של Google. שורת הגיל: לאשר מול עורך דין.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill">חובה</span><div><div class="name">מיקרו־קופי ניטרלי מגדרית ובמשלב "כניסה / יציאה"</div><div class="why">"מי אתה?", "בחר", "דלג" פונים בזכר. שמות פעולה הם הסטנדרט.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill should">כדאי</span><div><div class="name">שורת "להמשיך בתור X?" למכשיר זכור</div><div class="why">מונע חשבונות כפולים; ציון המייל מונע בלבול.</div></div><span class="effort">M</span></div>
+      <div class="feat"><span class="pill should">כדאי</span><div><div class="name">קישור זהות: אורח אנונימי שמחבר חשבון שומר את אותו מזהה</div><div class="why">ההיסטוריה והחובות של "בלי חשבון" לא הולכים לאיבוד. מסך "לחבר את הרקורד של דביר?"</div></div><span class="effort">L</span></div>
+      <div class="feat"><span class="pill should">כדאי</span><div><div class="name">נחיתת הזמנה בהקשר והצטרפות אורח כחבר ממתין לאישור</div><div class="why">הרגע שבו הערך ברור. Splitwise ו־PokerNow הם התקדים.</div></div><span class="effort">L</span></div>
+      <div class="feat"><span class="pill should">כדאי</span><div><div class="name">סדר כפתורים לפי פלטפורמה: iPhone מותקן מייל ראשון, דפדפן ואנדרואיד Google ראשון</div><div class="why">בוליאן אחד בטעינה לפי display-mode.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill should">כדאי</span><div><div class="name">Google בתוך העמוד באנדרואיד ובמחשב</div><div class="why">כניסה בלי לעזוב את האפליקציה במקום שזה נתמך. ב־iOS לא פותר כלום.</div></div><span class="effort">M</span></div>
+      <div class="feat"><span class="pill should">כדאי</span><div><div class="name">הצעה עדינה לחיבור חשבון אחרי סגירת השולחן הראשון במצב אורח</div><div class="why">שלושה יתרונות קונקרטיים בסוף התהליך, לא באמצע משחק.</div></div><span class="effort">M</span></div>
+      <div class="feat"><span class="pill should">כדאי</span><div><div class="name">תגי תצוגה מקדימה בעברית לוואטסאפ</div><div class="why">משם יגיעו כמעט כל קישורי ההזמנה.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill should">כדאי</span><div><div class="name">מחיקת חשבון בתוך האפליקציה</div><div class="why">נדרש ברגע שיש יצירת חשבון. חובות פתוחים נשארים אנונימיים.</div></div><span class="effort">M</span></div>
+      <div class="feat"><span class="pill should">כדאי</span><div><div class="name">קיצור תוקף הקוד ל־10 דקות והעברת השם עם הקוד</div><div class="why">כדי ש"תקף ל־10 דקות" יהיה אמת, ולא לשאול שם אחרי כניסה.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill later">אחר כך</span><div><div class="name">קישור כניסה נוסף בגוף המייל, למחשב בלבד</div><div class="why">קישור מ־Mail ב־iOS נוחת ב־Safari ולא באפליקציה.</div></div><span class="effort">S</span></div>
+      <div class="feat"><span class="pill later">אחר כך</span><div><div class="name">Passkeys ("כניסה מהירה עם Face ID") כשדרוג מהפרופיל</div><div class="why">בטא ב־Supabase, ה־API עלול להשתנות.</div></div><span class="effort">M</span></div>
+      <div class="feat"><span class="pill later">אחר כך</span><div><div class="name">קוד בטלפון או בוואטסאפ</div><div class="why">כרבע דולר להודעה לישראל. טלפון כשדה פרופיל, לא כאמצעי כניסה.</div></div><span class="effort">L</span></div>
+      <div class="feat"><span class="pill later">אחר כך</span><div><div class="name">Sign in with Apple</div><div class="why">לא נדרש ל־PWA. יידרש רק אם האפליקציה תיעטף ל־App Store.</div></div><span class="effort">M</span></div>
+      <div class="feat"><span class="pill later">אחר כך</span><div><div class="name">רשימת מכשירים בפרופיל</div><div class="why">אין API בצד הלקוח. יציאה בשני היקפים מספיקה עכשיו.</div></div><span class="effort">L</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>ארבע החלטות שרק אתה יכול לקבל</h2>
+    <div class="cols">
+      <div class="q"><h3>1 · מי ראשון: קוד למייל או Google?</h3><p>ההמלצה היא מייל, בגלל iPhone מותקן. <b>אם רוב החברים ייכנסו מדפדפן או מאנדרואיד</b>, חלופה א עדיפה. אפשר גם לשלב: הסדר נקבע לפי הפלטפורמה.</p></div>
+      <div class="q"><h3>2 · כמה בולט "בלי חשבון"?</h3><p>קפסולה שלמה כמו בהמלצה, או שורה שווה כמו בחלופה ב. <b>ככל שהאורח בולט יותר, פחות חברים יפתחו חשבון</b>, אבל פחות יינטשו בנחיתה מהזמנה.</p></div>
+      <div class="q"><h3>3 · שורה משפטית וגיל</h3><p>Google דורשת קישור למדיניות פרטיות כדי לאשר את אפליקציית ה־OAuth. שורת "לבני 18 ומעלה" מחזקת את ההגנה של משחק בחוג סגור, <b>אבל כדאי לאשר את הניסוח מול עורך דין</b>.</p></div>
+      <div class="q"><h3>4 · חיבור הרקורד המקומי לחשבון</h3><p>אחרי כניסה ראשונה במכשיר שיש בו רקורד בשם, להציע "לחבר את הרקורד של דביר לחשבון הזה?" <b>זה פותר גם את הבאג של "מחק קבוצה"</b> שנבע מאי־התאמה בין השם המקומי לשם בחשבון.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>מה לא לעשות</h2>
+    <p class="sub">כללים שעלו מהמחקר ושווה לקבע כדי שלא נחזור אליהם.</p>
+    <ul style="margin:0;padding-inline-start:20px;font-size:14px;max-width:80ch">
+      <li>"דלג בינתיים" כקישור טקסט בתחתית. האורח חייב להיות כפתור ב־viewport הראשון.</li>
+      <li>שני כפתורים מלאים בטורקיז שמתחרים על הבכורה (היום: "שלחו לי קוד" ו"המשך").</li>
+      <li>כפתור Google עם מסגרת בצבע המותג, G מונוכרומטי, או Google מאחורי "עוד אפשרויות".</li>
+      <li>שישה ריבועי ספרות לקוד, או שליחה אוטומטית באפס השהיה אחרי הספרה השישית.</li>
+      <li>קישור קסם כמסלול ראשי ב־PWA מותקן. הוא נוחת ב־Safari ולא באפליקציה.</li>
+      <li>שאלת "מה השם שלך" אחרי כניסה עם Google. השם נלקח מהפרופיל.</li>
+      <li>צ'קבוקס לתנאים, או שורה משפטית בתוך מסלול "בלי חשבון".</li>
+      <li>התייחסות לכשל רשת כיציאה מהחשבון, או מסך כניסה בכל פתיחה.</li>
+      <li>השקה עם ספק המייל המובנה של Supabase.</li>
+    </ul>
+    <details>
+      <summary>מקורות (60+)</summary>
+      <ul class="sources">
+        <li><a href="https://www.nngroup.com/articles/login-walls/">nngroup.com/articles/login-walls</a></li>
+        <li><a href="https://www.nngroup.com/articles/checklist-registration-login/">nngroup.com/articles/checklist-registration-login</a></li>
+        <li><a href="https://www.nngroup.com/articles/passwordless-accounts/">nngroup.com/articles/passwordless-accounts</a></li>
+        <li><a href="https://developer.apple.com/design/human-interface-guidelines/managing-accounts">HIG: managing accounts</a></li>
+        <li><a href="https://developer.apple.com/design/human-interface-guidelines/sign-in-with-apple">HIG: Sign in with Apple</a></li>
+        <li><a href="https://developers.google.com/identity/branding-guidelines">Google identity branding guidelines</a></li>
+        <li><a href="https://developers.google.com/identity/gsi/web/guides/display-button">Google: display the button</a></li>
+        <li><a href="https://developers.google.com/identity/gsi/web/guides/personalized-button">Google: personalized button</a></li>
+        <li><a href="https://developers.google.com/identity/gsi/web/guides/supported-browsers">Google: supported browsers</a></li>
+        <li><a href="https://support.google.com/accounts/answer/12849458?hl=iw">Google בעברית: כניסה באמצעות חשבון Google</a></li>
+        <li><a href="https://support.google.com/cloud/answer/13464321?hl=en">OAuth app verification requirements</a></li>
+        <li><a href="https://baymard.com/blog/make-guest-checkout-prominent">Baymard: make guest checkout prominent</a></li>
+        <li><a href="https://baymard.com/blog/delayed-account-creation">Baymard: delayed account creation</a></li>
+        <li><a href="https://baymard.com/blog/simplifying-sign-in">Baymard: simplifying sign-in</a></li>
+        <li><a href="https://www.smashingmagazine.com/2024/06/2-page-login-pattern-how-fix-it/">Smashing: the 2-page login pattern</a></li>
+        <li><a href="https://www.twilio.com/en-us/blog/developers/best-practices/otp-input-forms-html">Twilio: OTP input forms</a></li>
+        <li><a href="https://cloudfour.com/thinks/simple-one-time-passcode-inputs/">Cloud Four: simple OTP inputs</a></li>
+        <li><a href="https://uxpatterns.dev/patterns/forms/code-confirmation">uxpatterns.dev: code confirmation</a></li>
+        <li><a href="https://www.cultofmac.com/news/ios-17-autofill-verification-codes-safari-mail-app">iOS 17 autofills codes from Mail</a></li>
+        <li><a href="https://supabase.com/docs/guides/auth/rate-limits">Supabase auth rate limits</a></li>
+        <li><a href="https://supabase.com/docs/guides/auth/debugging/error-codes">Supabase auth error codes</a></li>
+        <li><a href="https://supabase.com/docs/reference/javascript/auth-signinwithotp">signInWithOtp</a></li>
+        <li><a href="https://supabase.com/docs/reference/javascript/auth-verifyotp">verifyOtp</a></li>
+        <li><a href="https://supabase.com/docs/guides/auth/auth-email-templates">Supabase email templates</a></li>
+        <li><a href="https://supabase.com/docs/guides/auth/redirect-urls">Supabase redirect URLs</a></li>
+        <li><a href="https://supabase.com/docs/guides/auth/sessions/pkce-flow">Supabase PKCE flow</a></li>
+        <li><a href="https://supabase.com/docs/guides/auth/social-login/auth-google">Supabase Google sign-in</a></li>
+        <li><a href="https://supabase.com/docs/guides/auth/auth-anonymous">Supabase anonymous sign-ins</a></li>
+        <li><a href="https://supabase.com/docs/reference/javascript/auth-signout">signOut scopes</a></li>
+        <li><a href="https://supabase.com/docs/guides/auth/passkeys">Supabase passkeys</a></li>
+        <li><a href="https://supabase.com/docs/guides/auth/auth-hooks/send-sms-hook">Send SMS hook</a></li>
+        <li><a href="https://github.com/orgs/supabase/discussions/37607">Supabase discussion: iOS PWA OAuth window stays open</a></li>
+        <li><a href="https://github.com/orgs/supabase/discussions/36434">Supabase discussion: offline token refresh</a></li>
+        <li><a href="https://developer.apple.com/forums/thread/649699">Apple forums: PWA OAuth redirect</a></li>
+        <li><a href="https://firt.dev/ios-pwa/">firt.dev: iOS PWA compatibility</a></li>
+        <li><a href="https://www.netguru.com/blog/how-to-share-session-cookie-or-state-between-pwa-in-standalone-mode-and-safari-on-ios">Netguru: PWA vs Safari session on iOS</a></li>
+        <li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/@media/display-mode">MDN: display-mode</a></li>
+        <li><a href="https://alefalefalef.co.il/microcopy/">אלף אלף אלף: מיקרו־קופי בעברית</a></li>
+        <li><a href="https://www.twilio.com/en-us/sms/pricing/il">Twilio SMS pricing, Israel</a></li>
+        <li><a href="https://kb.splitwise.com/groups/how-do-i-join-an-existing-group">Splitwise: join an existing group</a></li>
+        <li><a href="https://help.tricount.com/articles/tricount-faqs">Tricount FAQ</a></li>
+        <li><a href="https://www.pokernow.com/blog/no-download-poker-with-friends-tutorial">PokerNow: no-download tutorial</a></li>
+        <li><a href="https://linear.app/docs/login-methods">Linear login methods</a></li>
+        <li><a href="https://www.notion.com/help/log-in-and-out">Notion: log in and out</a></li>
+        <li><a href="https://www.airbnb.com/login">Airbnb login</a></li>
+        <li><a href="https://auth.uber.com/v2/">Uber login</a></li>
+        <li><a href="https://login.settleup.app/">Settle Up login</a></li>
+        <li><a href="https://zapier.com/engineering/google-one-tap-inline/">Zapier: Google One Tap inline</a></li>
+        <li><a href="https://developer.apple.com/news/?id=12m75xbj">Apple: account deletion requirement</a></li>
+        <li><a href="https://support.google.com/googleplay/android-developer/answer/13327111?hl=en">Google Play: account deletion</a></li>
+        <li><a href="https://developer.apple.com/app-store/review/guidelines/">App Store review guidelines</a></li>
+        <li><a href="https://supabase.com/changelog/46458-passkeys-for-supabase-auth-beta">Supabase changelog: passkeys beta</a></li>
+        <li><a href="https://www.authgear.com/post/login-signup-ux-guide/">Authgear: login/signup UX guide</a></li>
+        <li><a href="https://material.io/archive/guidelines/usability/bidirectionality.html">Material: bidirectionality</a></li>
+      </ul>
+    </details>
+  </section>
+</main>
