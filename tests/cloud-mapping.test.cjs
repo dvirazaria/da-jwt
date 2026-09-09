@@ -498,22 +498,31 @@ test('the push writes the five tables in FK order, upserting on the primary key'
   assert.match(store, /ignoreDuplicates: true/);
 });
 
-test('a push error shows the sync dot in its error state and re-reads from the server', () => {
+// 2026-09-09: a push error no longer writes a fixed label directly -- refreshSyncDot computes one
+// of the four honest states (cloudSyncLabel, tests/cloud-resilience.test.cjs) from cloudSurfaceError
+// / cloudPushing / state.cloudPendingIds every time, and a retryable failure never even sets the
+// error flag (it backs off and tries again instead of surfacing).
+test('a push error is classified, surfaces on the dot only when it is not retryable, and re-reads from the server', () => {
   const store = appScript.slice(
     appScript.indexOf('  // ---------- cloud store (Supabase) ----------'),
     appScript.indexOf('  // Example data promises'));
-  assert.ok(store.includes('setSync(false, "שגיאת שמירה — נשמר מקומית")'));
-  assert.ok(store.includes('setSync(true, "מסונכרן לחשבון")'));
+  assert.match(store, /classifyCloudError\(e\) === "retry"/);
+  assert.match(store, /cloudSurfaceError = true;/);
   assert.match(store, /scheduleCloudPull\(/);
+  assert.match(store, /function refreshSyncDot\(\) \{/);
   // No alert/confirm anywhere in the new code — the sandbox blocks them.
   assert.ok(!/\balert\(|\bconfirm\(/.test(store));
 });
 
-test('every cloud call sits behind a session guard and the pull runs on visibility', () => {
+test('every cloud call sits behind a session guard and a reconnect flushes the outbox before it pulls', () => {
   assert.match(appScript, /async function pushCloud\(\) \{\n    if \(!supabase \|\| !authUser\) return;/);
   assert.match(appScript, /async function pullCloud\(\) \{\n    if \(!supabase \|\| !authUser\) return;/);
   assert.match(appScript, /function scheduleCloudPush\(\) \{\n    if \(!supabase \|\| !authUser\) return;/);
-  assert.match(appScript, /if \(cloudMode\(\)\) pullCloud\(\);/);
+  // visibilitychange -> visible used to call pullCloud() directly; cloudRetryNow flushes any
+  // outbox left over from before the tab was hidden first (a durable one across a refresh, or a
+  // live one within the same tab session), so a stale pull can never win that race.
+  assert.match(appScript, /if \(cloudMode\(\)\) cloudRetryNow\(\);/);
+  assert.match(appScript, /function cloudRetryNow\(\) \{\n {4}if \(!cloudMode\(\)\) return;/);
 });
 
 test('phase 2a still ships no secret key and invents no userId on a local ref', () => {
