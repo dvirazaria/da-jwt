@@ -1,0 +1,97 @@
+name: Keep Supabase awake
+
+# Supabase pauses a free-tier project after 7 consecutive days with no database activity
+# (https://supabase.com/docs/guides/platform/free-project-pausing). A paused "kupa-sgura-prod"
+# project (ref aztfjlssjbjhxdqsflgn, Frankfurt) means sign-in and cloud sync silently stop working
+# for everyone, with no in-app warning. This workflow's only job is to make sure that never
+# happens on its own: one cheap, read-only, authenticated request every 3 days — well inside the
+# 7-day window — using nothing but the publishable/anon key that already ships inside
+# kupa-sgura.html. Full write-up (why this endpoint, how to verify a run, how to resume a project
+# that already paused, upgrade path): docs/backend/keepalive.md.
+#
+# Zero setup required: this works out of the box with the fallback key hardcoded below. An
+# optional SUPABASE_PUBLISHABLE_KEY repository secret can override it later (e.g. after a key
+# rotation) without touching this file — see the doc.
+
+on:
+  schedule:
+    # 04:17 UTC, every 3rd day-of-month (1, 4, 7, ..., 31). A fixed off-the-hour minute avoids
+    # the top-of-hour pile-up that delays GitHub's shared cron runners.
+    - cron: "17 4 */3 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping Supabase (register project activity)
+        env:
+          SUPABASE_URL: "https://aztfjlssjbjhxdqsflgn.supabase.co"
+          # Public by design — this is the exact value of SUPABASE_PUBLISHABLE_KEY inside
+          # kupa-sgura.html's own "backend config (public values; RLS is the security boundary)"
+          # block. Never put a service-role/secret key in this file.
+          SUPABASE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_JsCuQh8iaszmRzjITbhOVA_vWqEXrUV' }}
+        run: |
+          set -euo pipefail
+
+          # ---- endpoint choice, and why -----------------------------------------------------
+          #
+          # NOT /auth/v1/health: GoTrue's health handler returns a hardcoded
+          # {version, name, description} struct and never queries Postgres at all — see
+          # HealthCheck() in github.com/supabase/auth internal/api/api.go, which does nothing but
+          # `sendJSON(w, http.StatusOK, HealthCheckResponse{...})`. It proves the auth container
+          # answers, not that the database saw any activity. Supabase's own docs say pausing is
+          # decided by "sufficient user database activity" — a request that never reaches
+          # Postgres is a weak signal for the one thing this workflow exists to do.
+          #
+          # Instead: a REST read of `profiles`, the smallest table. Every table has RLS enabled
+          # with policies scoped TO authenticated only (docs/backend/rls-policies.sql), on
+          # purpose — this repo's rule is that RLS, not the key, is the security boundary. The
+          # anon/publishable role still carries Supabase's default table-level SELECT grant, so
+          # the request itself is accepted; RLS then filters out every row because no policy
+          # targets anon. Verified against the live project: HTTP 200 with body `[]`. That is a
+          # real query Postgres planned, authorized and executed — genuine database activity —
+          # not a canned response from the API gateway. If a table's grants are ever locked down
+          # further (no SELECT for anon at all), Postgres answers instead with SQLSTATE 42501
+          # (permission denied) over HTTP 401/403 — also verified live, with a different key; that
+          # still proves the query reached the database, so it is accepted too. Supabase's
+          # documented paused-project response is HTTP 540
+          # (https://supabase.com/docs/guides/troubleshooting/http-status-codes); that, and
+          # anything else (bad key, timeout, 5xx, ...), fails the job loudly instead of staying
+          # silent.
+
+          url="$SUPABASE_URL/rest/v1/profiles?select=id&limit=1"
+          body_file="$(mktemp)"
+
+          http_status=$(curl -sS --max-time 15 \
+            -o "$body_file" -w '%{http_code}' \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            "$url") || { echo "::error::request to Supabase failed outright (network/DNS/timeout)"; exit 1; }
+
+          body="$(cat "$body_file")"
+          echo "HTTP $http_status"
+          echo "$body"
+
+          if [ "$http_status" = "200" ]; then
+            echo "Healthy: 200 — the database served the read."
+            exit 0
+          fi
+
+          if { [ "$http_status" = "401" ] || [ "$http_status" = "403" ]; } \
+              && printf '%s' "$body" | grep -q '"code":"42501"'; then
+            echo "Healthy: $http_status with Postgres 42501 (permission denied) — the query reached the database, which is the expected outcome for the anon role on this schema."
+            exit 0
+          fi
+
+          if [ "$http_status" = "540" ]; then
+            echo "::error::Supabase project is PAUSED (HTTP 540). Resume it from the dashboard — see docs/backend/keepalive.md."
+            exit 1
+          fi
+
+          echo "::error::Unexpected response from Supabase (HTTP $http_status). The project may be paused, broken, or the publishable key may be stale — see docs/backend/keepalive.md."
+          exit 1
