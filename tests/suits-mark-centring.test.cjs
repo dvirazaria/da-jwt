@@ -70,11 +70,11 @@ function glyphs(img) {
       const al = img.alpha(x, y);
       if (al) { total += al; sum += al * (x + 0.5); }
     }
-    return { a, b, centroid: sum / total };
+    return { a, b, centroid: sum / total, total, sum };
   });
 }
 
-test('the suit mark is nudged by exactly the offset its own glyph centres are out by', () => {
+test('the suit mark is nudged by exactly the offset its own ink is out by', () => {
   const width = Number(html.match(/\.suits-mark img \{ display: block; width: (\d+)px;/)[1]);
   const shift = Number(html.match(/\.suits-mark img \{[^}]*transform: translateX\((-?[\d.]+)px\)/)[1]);
 
@@ -92,12 +92,16 @@ test('the suit mark is nudged by exactly the offset its own glyph centres are ou
     assert.ok(Math.abs(edgeCentre - middle) * scale < 0.25,
       `${cls}: outer edges should be symmetric, off by ${((edgeCentre - middle) * scale).toFixed(2)}px`);
 
-    // The glyphs grow left→right, so the mean of their centres — what the eye actually reads as
-    // the middle of the row — sits left of it. That gap is what translateX cancels.
-    const meanCentre = marks.reduce((s, m) => s + m.centroid, 0) / marks.length;
-    const offset = (middle - meanCentre) * scale;
-    assert.ok(offset > 0, `${cls}: the glyph centres should lean to the start edge, got ${offset.toFixed(2)}px`);
-    assert.ok(Math.abs(shift - offset) < 0.25,
+    // What the eye weighs is ink, not glyph boxes. The four suits grow left→right
+    // (67/71/76/79px wide), so more ink sits on the end side and the row reads end-heavy even
+    // though its bounding box is centred. The alpha-weighted centroid of the whole row is that
+    // lean, and it is what translateX cancels — a plain mean of the four glyph centres points the
+    // other way, because it gives the narrow start glyph and the wide end glyph equal say.
+    const totalInk = marks.reduce((s, m) => s + m.total, 0);
+    const inkCentre = marks.reduce((s, m) => s + m.sum, 0) / totalInk;
+    const offset = (inkCentre - middle) * scale;
+    assert.ok(offset > 0, `${cls}: the ink should lean to the end edge, got ${offset.toFixed(2)}px`);
+    assert.ok(Math.abs(shift + offset) < 0.25,
       `${cls}: translateX(${shift}px) should cancel the measured ${offset.toFixed(2)}px lean`);
   }
 });

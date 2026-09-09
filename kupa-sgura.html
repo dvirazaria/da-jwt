@@ -49,12 +49,14 @@
     width: 100%; height: 40px; margin: 0 auto 8px;
     pointer-events: none;
   }
-  /* Optical centring. The image box is already centred to the pixel, and the artwork's outer
-     edges are symmetric on its 408px canvas — but the four glyphs grow left→right (67/70/75/79px
-     wide), so the mean of their centres lands 4.99 canvas px = 1.8 css px left of the middle at
-     this width. The eye reads a row of discrete symbols by their centres, which is why the group
-     looks pulled to the start edge. Nudge it back. Re-measure if `width` here ever changes. */
-  .suits-mark img { display: block; width: 150px; height: auto; transform: translateX(1.8px); }
+  /* Optical centring. The image box and the artwork's bounding box are both centred to the pixel
+     (8px of empty canvas each side). What is NOT centred is the ink: the four glyphs grow
+     left->right (67/71/76/79px wide on the 408px canvas), so the alpha-weighted centroid sits
+     3.54 canvas px = 1.3 css px right of the middle at this width, and the row reads right-heavy.
+     Nudge it back by that much. An earlier pass measured the mean of the glyphs' bounding-box
+     centres instead, which points the other way (-1.79px) and moved it further off. Re-measure the
+     centroid, not the boxes, if the artwork or `width` here ever changes. */
+  .suits-mark img { display: block; width: 150px; height: auto; transform: translateX(-1.3px); }
   .suits-mark .suits-mark-light { display: none; }
   :root[data-theme="light"] .suits-mark-dark { display: none; }
   :root[data-theme="light"] .suits-mark-light { display: block; }
