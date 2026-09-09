@@ -187,12 +187,12 @@ test('renderGroupLeaders never references fmtSigned, a .net field, or fmt( at al
 
 // ---------- wiring: history rows expand via an in-memory Set, ranking rendered names-only ----------
 
-test('renderGroupHistory toggles expandedGroupGames by gameId and re-renders the group page', () => {
+test('renderGroupHistory toggles expandedGroupGames by gameId and re-renders the active group surface', () => {
   const source = sourceBetween('  function renderGroupHistory(gameSummaries) {', '  function renderGroupInvite(');
   assert.match(source, /expandedGroupGames\.has\(game\.gameId\)/);
   assert.match(source, /expandedGroupGames\.delete\(game\.gameId\)/);
   assert.match(source, /expandedGroupGames\.add\(game\.gameId\)/);
-  assert.match(source, /renderGroupPage\(\)/);
+  assert.match(source, /renderGroupSurface\(\)/);
 });
 
 test('renderGroupHistoryRow renders the ranking as numbered, names-only rows using game.ranking', () => {

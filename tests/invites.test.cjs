@@ -160,10 +160,10 @@ test('the boot join-notice flow never pushes to state.groupMembers or state.grou
   assert.doesNotMatch(bootSource, /state\.groups\.push/);
 });
 
-test('createGroupInvite and revokeGroupInvite save() and re-render the group page, using no alert/confirm', () => {
+test('createGroupInvite and revokeGroupInvite save() and re-render the active group surface, using no alert/confirm', () => {
   const source = sourceBetween('  function createGroupInvite(groupId) {', '  function resetCreateGroupPanel(');
   assert.match(source, /save\(\);/);
-  assert.match(source, /renderGroupPage\(\);/);
+  assert.match(source, /renderGroupSurface\(\);/);
   assert.doesNotMatch(source, /\balert\(/);
   assert.doesNotMatch(source, /\bconfirm\(/);
 });

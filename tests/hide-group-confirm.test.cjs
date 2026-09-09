@@ -79,7 +79,7 @@ test('leftGroupReason says "עזבת"/"הוסרת" for my former row, and names 
 test('renderHideGroupAction renders nothing unless a left/removed membership of mine exists, and a refused confirm re-renders instead of returning silently', () => {
   const source = sourceBetween('  function renderHideGroupAction() {', '  function renderStartGamePanel() {');
   assert.match(source, /^\s*if \(!findMyFormerMembership\(state\.groupMembers, currentGroupId, me\)\) return null;/m);
-  assert.match(source, /if \(!hideGroupForMember\(state\.groupMembers, currentGroupId, me, new Date\(\)\.toISOString\(\)\)\) \{ renderGroupPage\(\); return; \}/);
+  assert.match(source, /if \(!hideGroupForMember\(state\.groupMembers, currentGroupId, me, new Date\(\)\.toISOString\(\)\)\) \{ renderGroupSurface\(\); return; \}/);
   assert.doesNotMatch(source, /hideGroupForMember\([^\n]*\)\) return;/);
 });
 
@@ -95,5 +95,5 @@ test('both callers (primary action and the archived note) append the hide-group 
 
 test('the overlay "מחק קבוצה" confirm is never a silent no-op either', () => {
   const source = sourceBetween('  document.getElementById("groupSetDeleteBtn").addEventListener("click"', '  document.getElementById("groupSetLeaveBtn")');
-  assert.match(source, /if \(!deleteGroup\(state\.groups, currentGroupId, new Date\(\)\.toISOString\(\)\)\) \{ closeGroupSettings\(\); renderGroupPage\(\); return; \}/);
+  assert.match(source, /if \(!deleteGroup\(state\.groups, currentGroupId, new Date\(\)\.toISOString\(\)\)\) \{ closeGroupSettings\(\); renderGroupSurface\(\); return; \}/);
 });
