@@ -1734,6 +1734,10 @@
   // pull resolves it. In memory only -- after a refresh the app is going to try again regardless.
   let cloudSurfaceError = false;
   let lastPushedRows = null; // the diff baseline: what the server is known to hold
+  // INSERT ... DO NOTHING cannot tell a newly-created row from an existing row it ignored. Keep
+  // this account-scoped marker in memory until a pull rebuilds the baseline, then retry the local
+  // row as a real update. The state document remains the only durable outbox.
+  let cloudInsertReconcileAccountId = "";
   let cloudProfileIds = [];  // every profile id seen in a pulled row (see CloudCtx)
   let cloudGameCreators = {}; // gameId -> games.created_by, so a second device never rewrites it
   let cloudGameChannel = null;   // the postgres_changes subscription for the open table
@@ -1920,6 +1924,7 @@
         // policy — removal is a soft column (deleted_at / status), which the upsert carries.
         // Entry undo and player removal ARE real deletes and run in pushCloudGameDeletes below.
         let upserts = diff.upserts;
+        let unknownInsertIds = new Set();
         if (pair[0] === "games") {
           // A game that is already closed locally but is not on the server yet has to arrive
           // open before it can be closed (games_insert_member forbids inserting a closed game).
@@ -1955,6 +1960,11 @@
             if (split.inserts.length) {
               const result = await supabase.from(pair[1]).upsert(split.inserts, { onConflict: "id", ignoreDuplicates: true });
               if (result && result.error) throw result.error;
+              // DO NOTHING reports success both when it inserted and when the row was already on
+              // the server. Do not promote either case into the local baseline until a pull
+              // resolves it; otherwise an unseen server row would swallow this local edit forever.
+              split.inserts.forEach(row => unknownInsertIds.add(String(row.id)));
+              cloudInsertReconcileAccountId = authUser.id;
             }
             if (split.updates.length) {
               const result = await supabase.from(pair[1]).upsert(split.updates, { onConflict: "id" });
@@ -1962,7 +1972,11 @@
             }
           }
         }
-        confirmed[pair[0]] = rows;
+        // Unknown INSERT ... DO NOTHING rows stay out of the confirmed baseline. A reconciliation
+        // pull below either proves they were newly inserted or makes their next pass an UPDATE.
+        confirmed[pair[0]] = unknownInsertIds.size
+          ? rows.filter(row => !unknownInsertIds.has(String(row && row.id)))
+          : rows;
         if (pair[0] === "gameParticipants" || pair[0] === "entries") {
           await pushCloudGameDeletes(pair[1], diff.deletes.filter(row => notFrozen(row) && isEditable(row)));
         }
@@ -2009,6 +2023,7 @@
     clearCloudPending(confirmed);
     dirtyUntil = 0;
     syncCloudGameChannel();
+    if (cloudInsertReconcileAccountId === authUser.id) scheduleCloudPull(50);
   }
 
   // "בטל אחרונה" really removes an entry, and undoing a player's last buy-in removes the player.
@@ -2047,6 +2062,7 @@
     if (cloudPushTimer || cloudPushing) { scheduleCloudPull(600); return; }
     cloudPulling = true;
     const pullSeq = cloudWriteSeq;
+    const pullAccountId = authUser.id;
     try {
       // RLS already narrows this to the groups I am an active member of (or created), so there
       // is nothing to filter here — group_members/invites then follow those ids.
@@ -2092,7 +2108,7 @@
         transfers: children.transfers,
         debts: debtsResult.error ? [] : (debtsResult.data || []),
         guests: guestsResult.error ? [] : (guestsResult.data || []),
-      }, pullSeq);
+      }, pullSeq, pullAccountId);
     } catch (e) {
       setSync(false, "שגיאת סנכרון — נשמר מקומית");
     } finally {
@@ -2127,8 +2143,8 @@
     return { participants: of(payload.participants), entries: of(payload.entries), transfers: of(payload.transfers) };
   }
 
-  function applyCloudPull(payload, pullSeq) {
-    if (!authUser) return;
+  function applyCloudPull(payload, pullSeq, pullAccountId) {
+    if (!authUser || (pullAccountId && authUser.id !== pullAccountId)) return;
     // The payload was read before a local write happened, so it cannot know about that write.
     // Drop it and read again rather than merging a snapshot that is older than this device.
     if (pullSeq !== undefined && pullSeq !== cloudWriteSeq) { scheduleCloudPull(800); return; }
@@ -2200,17 +2216,30 @@
       debts: (payload.debts || []).map(row => rowToDebt(row, ctx, transfersByGame)),
       game: picked.action === "load" ? picked.game : null,
     };
-    const merged = normalize(mergeCloudIntoState(state, pulled, { keepLocalIds: cloudKeepLocalIds() }));
-    if (merged) state = merged;
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
-    // The baseline is what the SERVER holds, not what we now hold: a record the merge kept is
-    // absent from it and goes up on the next push (that is the first-device seeding rule).
-    lastPushedRows = buildCloudRows({
+    const serverBaseline = buildCloudRows({
       ...pulled,
       games: (picked.action === "load" && picked.game ? [gameSnapshotFromState({ ...picked.game, example: false })] : [])
         .concat(history.map(gameSnapshotFromHistory)),
       debts: pulled.debts,
     }, cloudContext());
+    // Keep the working copy untouched while resolving an ambiguous INSERT ... DO NOTHING. The
+    // rebuilt server baseline makes an existing row known, so scheduleCloudPush sends the local
+    // intended version through the normal UPDATE pass. A newer write aborts this pull above, and
+    // a changed account cannot consume another account's reconciliation marker.
+    if (cloudInsertReconcileAccountId === authUser.id) {
+      lastPushedRows = serverBaseline;
+      cloudInsertReconcileAccountId = "";
+      cloudSurfaceError = false;
+      scheduleCloudPush();
+      refreshSyncDot();
+      return;
+    }
+    const merged = normalize(mergeCloudIntoState(state, pulled, { keepLocalIds: cloudKeepLocalIds() }));
+    if (merged) state = merged;
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    // The baseline is what the SERVER holds, not what we now hold: a record the merge kept is
+    // absent from it and goes up on the next push (that is the first-device seeding rule).
+    lastPushedRows = serverBaseline;
     cloudSurfaceError = false; // the server's view just landed and superseded whatever was refused
     render();
     refreshSyncDot();
@@ -2316,6 +2345,7 @@
     gameDoc = null;
     pendingRemote = null;
     lastPushedRows = null;
+    cloudInsertReconcileAccountId = "";
     cloudGameCreators = {};
     cloudPushAttempt = 0;
     cloudSurfaceError = false;
@@ -2337,6 +2367,7 @@
     state.cloudPendingIds = [];
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
     lastPushedRows = null;
+    cloudInsertReconcileAccountId = "";
     cloudProfileIds = [];
     cloudGameCreators = {};
     cloudGuestRows = [];

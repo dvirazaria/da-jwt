@@ -54,6 +54,33 @@ test('splitCloudWrites ignores rows with no id and tolerates a missing baseline'
   assert.equal(out.updates.length, 0);
 });
 
+test('an unknown local row that already exists on the server is reconciled into an update', () => {
+  const ctx = load();
+  const local = { id: 'group-1', name: 'השם החדש' };
+  const server = { id: 'group-1', name: 'השם הישן' };
+
+  // A cleared local baseline sends the edit as INSERT ... DO NOTHING. The write itself cannot
+  // distinguish a newly-created row from this conflict, so it must not become confirmed yet.
+  const first = ctx.splitCloudWrites([local], [], 'id');
+  assert.deepEqual(JSON.parse(JSON.stringify(first.inserts)), [local]);
+  assert.deepEqual(JSON.parse(JSON.stringify(first.updates)), []);
+
+  // Re-reading the server baseline before the next write turns that same intended edit into the
+  // regular UPDATE pass. This is the convergence path; the local value is deliberately retained.
+  const retryDiff = ctx.diffCollections([server], [local], 'id');
+  const retry = ctx.splitCloudWrites(retryDiff.upserts, [server.id], 'id');
+  assert.deepEqual(JSON.parse(JSON.stringify(retry.inserts)), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(retry.updates)), [local]);
+
+  assert.match(storeSource, /cloudInsertReconcileAccountId/,
+    'successful unknown inserts must re-pull a server baseline before their retry');
+  assert.match(storeSource,
+    /if \(cloudInsertReconcileAccountId === authUser\.id\) \{[\s\S]*?lastPushedRows = serverBaseline;[\s\S]*?scheduleCloudPush\(\);/,
+    'the reconciliation must retain the local working copy, install the server baseline, then schedule the update pass');
+  assert.match(storeSource, /authUser\.id !== pullAccountId/,
+    'a pull started by another account must not reconcile this account\'s local rows');
+});
+
 test('the push plan keeps FK order as data: parents before children', () => {
   const match = storeSource.match(/const CLOUD_TABLES = \[([\s\S]*?)\];/);
   assert.ok(match, 'CLOUD_TABLES literal not found');
