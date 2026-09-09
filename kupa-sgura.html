@@ -1693,6 +1693,11 @@
     ["gamesClosed", "games"],
     ["debts", "debts"],
   ];
+  // groups / groupMembers / invites / games / gameParticipants must NOT move into this map: their
+  // UPDATE policies (docs/backend/security-fixes.sql §F6) no longer carry a standing creator
+  // fallback, so a row that lands here would skip splitCloudWrites and go up as a plain merge
+  // upsert -- reopening the exact 42501-on-first-write bug commit 9eafade fixed. See the
+  // splitCloudWrites doc comment below and security-review-2026-09-09.md's F6 addendum.
   const CLOUD_INSERT_ONLY = { entries: true, transfers: true, debts: true };
   const EMPTY_CLOUD_ROWS = {
     guests: [], groups: [], groupMembers: [], invites: [], friendships: [],
@@ -4405,6 +4410,14 @@
   //
   // So: new rows go up as INSERT ... ON CONFLICT DO NOTHING (insert policy only, and a re-send
   // after a failed push is a harmless no-op), known rows keep the merge upsert.
+  //
+  // This is also why docs/backend/security-fixes.sql's §F6 can safely drop the "OR I am the
+  // creator" fallback those same UPDATE policies picked up as a workaround: as long as every
+  // caller reaches this function instead of upserting a whole diff directly (CLOUD_INSERT_ONLY
+  // above must stay limited to append-only tables with no UPDATE policy of their own), the UPDATE
+  // arm only ever runs against a row `known` already proves is server-side, so the STABLE
+  // SECURITY DEFINER helpers are reading something committed by an earlier, already-finished
+  // request -- never the row this same call is still writing.
   function splitCloudWrites(upserts, knownIds, key) {
     const k = key || "id";
     const known = new Set((Array.isArray(knownIds) ? knownIds : []).map(String));

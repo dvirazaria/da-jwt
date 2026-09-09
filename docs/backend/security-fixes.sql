@@ -16,6 +16,22 @@
 -- immediately: each fix only removes access the legitimate client never
 -- uses (verified against kupa-sgura.html's actual query shapes), so no
 -- product behaviour changes for a non-attacker.
+--
+-- F8 has no block here on purpose: it is an application-layer rate-limit
+-- observation about app_redeem_invite (join-invite.sql), not an RLS/grant
+-- fix, and there is nothing in this file's vocabulary (POLICY / REVOKE /
+-- GRANT / helper function) that closes it. See security-review-2026-09-09.md
+-- §F8 for the reasoning and the (non-SQL) future-hardening suggestion.
+--
+-- §F6 UPDATE (2026-09-09): F6's fix collides with fix-upsert-policies.sql —
+-- dropping the creator branch from an UPDATE policy is exactly what made
+-- the FIRST push of a brand-new row fail with 42501 before commit 9eafade.
+-- This was investigated (not assumed) before the F6 block below was left
+-- unchanged: kupa-sgura.html's pushCloudRun never merge-upserts a row it
+-- does not already hold confirmed server-side for any of the five policies
+-- this section touches — see the per-policy comments in §F6 below, the
+-- collision write-up appended to security-review-2026-09-09.md, and
+-- tools/rls-introspect.sql for a live read-only check before applying.
 -- =====================================================================
 
 BEGIN;
@@ -196,6 +212,16 @@ CREATE POLICY game_participants_update ON game_participants FOR UPDATE TO authen
 -- always had its own "g.created_by = app_current_profile_id()" branch built
 -- in (rls-policies.sql). Dropped here for clarity; nothing was relying on
 -- the duplicate.
+--
+-- Upsert-safe, and always was — this is the one of the five contested
+-- policies that never depended on a same-table creator branch in the first
+-- place: app_can_write_game(game_id) queries `games`, a DIFFERENT table
+-- from the one this policy guards, and by the time any push writes
+-- game_participants, the game_participants row's own `games` parent was
+-- already inserted and committed as an earlier, separate PostgREST request
+-- in the same pushCloudRun() call (CLOUD_TABLES orders "games" before
+-- "gameParticipants"). There was never a 42501 risk here to trade away —
+-- see the collision addendum in security-review-2026-09-09.md §F6.
 
 -- ---------------------------------------------------------------------
 -- F6 (MEDIUM) — permanent creator/founder power surviving demotion, plus
@@ -242,6 +268,35 @@ CREATE POLICY game_participants_update ON game_participants FOR UPDATE TO authen
 -- "HOW TO VERIFY" section (a fresh game/group upsert must still succeed
 -- with no 42501). If it does not, STOP and re-open this finding instead of
 -- forcing these branches back — see docs/backend/security-review-2026-09-09.md §F6.
+--
+-- WHY DROPPING THE BRANCH DOES NOT REOPEN THE UPSERT BUG (verified against
+-- kupa-sgura.html, not just reasoned about) — the same argument for all
+-- four policies below, so it is written once here rather than four times:
+--
+--   pushCloudRun() never sends a plain `.upsert(rows, { onConflict: "id" })`
+--   for groups / group_members / invites / games — CLOUD_INSERT_ONLY
+--   (kupa-sgura.html) lists only entries/transfers/debts, so all four of
+--   these tables fall into the OTHER branch of that function, which calls
+--   splitCloudWrites(upserts, known, "id") first. A row whose id is not in
+--   `known` (the confirmed-on-server baseline, sourced only from a prior
+--   push's own success or a pull's own SELECT — never from an optimistic
+--   local write) goes up as `.upsert(rows, { onConflict: "id",
+--   ignoreDuplicates: true })`, which PostgREST compiles to
+--   INSERT ... ON CONFLICT (id) DO NOTHING. DO NOTHING never evaluates an
+--   UPDATE policy at all (it needs only INSERT privilege) — so the very
+--   first write of any row on any of these four tables never reaches the
+--   UPDATE policy below, with or without a creator branch. Only a row
+--   already in `known` — i.e. already proven to exist server-side — goes
+--   up as a real `.upsert(rows, { onConflict: "id" })`, and by then the
+--   USING/WITH CHECK helpers (app_is_group_admin / app_is_active_group_
+--   member) are reading a row from a transaction that committed strictly
+--   before this one started, so they see it like any other read. See the
+--   splitCloudWrites doc comment in kupa-sgura.html for the same argument
+--   in the client's own words, and the addendum appended to
+--   security-review-2026-09-09.md for the full investigation (including
+--   why this does NOT extend to a same-statement, same-table race — it
+--   does not arise here because every write above is its own PostgREST
+--   request/transaction, awaited in sequence).
 -- ---------------------------------------------------------------------
 DROP POLICY IF EXISTS games_update_member ON games;
 CREATE POLICY games_update_member ON games FOR UPDATE TO authenticated
@@ -249,21 +304,39 @@ CREATE POLICY games_update_member ON games FOR UPDATE TO authenticated
          AND (group_id IS NULL OR app_is_active_group_member(group_id))
          AND (app_can_read_game(id)))
   WITH CHECK (group_id IS NULL OR app_is_active_group_member(group_id));
+-- Upsert-safe: "games" is not in CLOUD_INSERT_ONLY, so a games row this
+-- device has not seen confirmed goes up via cloudGameOpenShell + splitCloud-
+-- Writes' insert arm (DO NOTHING) first; this UPDATE policy is only ever
+-- evaluated once the row is already known-committed (including the later
+-- open -> closed transition, which targets that same already-known row).
 
 DROP POLICY IF EXISTS groups_update_admin ON groups;
 CREATE POLICY groups_update_admin ON groups FOR UPDATE TO authenticated
   USING (app_is_group_admin(id))
   WITH CHECK (app_is_group_admin(id));
+-- Upsert-safe: a brand-new group is never merge-upserted (splitCloudWrites'
+-- insert arm, DO NOTHING, per groups_insert_self) — this UPDATE policy
+-- only ever fires on a rename/archive/soft-delete of a group already
+-- confirmed to exist, by which point app_is_group_admin(id) can see the
+-- (equally already-committed) group_members admin row normally.
 
 DROP POLICY IF EXISTS group_members_update_admin ON group_members;
 CREATE POLICY group_members_update_admin ON group_members FOR UPDATE TO authenticated
   USING (app_is_group_admin(group_id))
   WITH CHECK (app_is_group_admin(group_id));
+-- Upsert-safe: a brand-new membership row is never merge-upserted (splitCloud-
+-- Writes' insert arm) — this UPDATE policy only ever fires on a role change
+-- to an EXISTING member, which by definition already exists server-side, so
+-- app_is_group_admin(group_id) sees the caller's own (already-committed)
+-- admin row like any other read.
 
 DROP POLICY IF EXISTS invites_update_admin ON invites;
 CREATE POLICY invites_update_admin ON invites FOR UPDATE TO authenticated
   USING (app_is_group_admin(group_id))
   WITH CHECK (app_is_group_admin(group_id));
+-- Upsert-safe: a brand-new invite is never merge-upserted (splitCloudWrites'
+-- insert arm) — this UPDATE policy only ever fires on revoking/editing an
+-- invite already confirmed to exist, same reasoning as the three above.
 
 -- ---------------------------------------------------------------------
 -- F5 (MEDIUM), active half — profiles.phone is schema-provisioned but
