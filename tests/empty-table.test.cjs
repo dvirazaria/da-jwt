@@ -215,6 +215,6 @@ test('finish-game gates and the group summary use isGameOpen, not phase alone', 
   assert.match(html, /if \(appView !== "game" \|\| state\.phase !== "active" \|\| !isGameOpen\(state\)\) return;/);
   const finish = sourceBetween('  function finishGame() {', '  function returnToGameEdit() {');
   assert.match(finish, /!isGameOpen\(state\)/);
-  const summary = sourceBetween('  function getGroupSummary(collections, groupId, meName) {', '  function getGroupSummaries(');
+  const summary = sourceBetween('  function getGroupSummary(collections, groupId, meName, aggregates) {', '  function getGroupSummaries(');
   assert.match(summary, /const hasActiveGame = isGameOpen\(currentGame\) && currentGame\.groupId === groupId;/);
 });

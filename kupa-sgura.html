@@ -1793,6 +1793,16 @@
   // docs/backend/link-guest.sql). In-memory session cache only, same pattern as cloudProfileIds/
   // cloudGameCreators: never a new localStorage key, never part of `state`, rebuilt every pull.
   let cloudGuestRows = [];
+  // Safe server-side aggregates for group screens (group_leaderboard_public_v /
+  // group_game_summaries_v — docs/backend/group-summaries.sql): no per-player money, and
+  // computed across every closed game in the group regardless of whether this viewer played
+  // in it, so player-boundary.sql's per-participant narrowing of entries/game_participants
+  // never shrinks group history or leaderboard completeness. `available` is true only when
+  // both queries came back without error THIS pull; false (the default, and always after
+  // sign-out) means "degrade to local computation from history", not "the aggregate is empty".
+  // In-memory session cache only, same pattern as cloudGuestRows: never a new localStorage key,
+  // never part of `state`, rebuilt every pull.
+  let cloudGroupAggregates = { available: false, leaderboard: [], gameSummaries: [] };
 
   // `authUser` is declared further down, in the auth section; every caller here runs after boot.
   function cloudMode() { return !!(supabase && authUser); }
@@ -2189,6 +2199,15 @@
       // narrows it to what this device may see, so nothing here needs its own filter. Best-effort:
       // a query error degrades to "no candidates offered" instead of failing the whole pull.
       const guestsResult = await supabase.from("guests").select("*");
+      // Safe group aggregates (docs/backend/group-summaries.sql, plus the existing
+      // group_leaderboard_public_v) — no per-player money, computed for every closed game in a
+      // group this account actively belongs to, independent of the per-participant narrowing on
+      // entries/game_participants. Either view can legitimately not exist yet (the migration is
+      // written but "DO NOT RUN THIS YET" until this client change ships) — a missing-relation
+      // error degrades to "aggregate unavailable", never to an empty-but-trusted result.
+      const leaderboardResult = await supabase.from("group_leaderboard_public_v").select("*");
+      const gameSummariesResult = await supabase.from("group_game_summaries_v").select("*");
+      const groupAggregatesOk = !leaderboardResult.error && !gameSummariesResult.error;
       applyCloudPull({
         groups: groupRows,
         members: memberRows,
@@ -2201,6 +2220,9 @@
         transfers: children.transfers,
         debts: debtsResult.error ? [] : (debtsResult.data || []),
         guests: guestsResult.error ? [] : (guestsResult.data || []),
+        groupAggregatesOk,
+        groupLeaderboardRows: groupAggregatesOk ? (leaderboardResult.data || []) : [],
+        groupGameSummaryRows: groupAggregatesOk ? (gameSummariesResult.data || []) : [],
       }, pullSeq, pullAccountId);
     } catch (e) {
       failCloudPull(pullAccountId);
@@ -2245,6 +2267,11 @@
     // the merge below defers for a focused input, since nothing here can clobber what someone is
     // typing.
     cloudGuestRows = payload.guests || [];
+    cloudGroupAggregates = {
+      available: !!payload.groupAggregatesOk,
+      leaderboard: payload.groupLeaderboardRows || [],
+      gameSummaries: payload.groupGameSummaryRows || [],
+    };
     const groupRows = payload.groups || [];
     const memberRows = payload.members || [];
     const inviteRows = payload.invites || [];
@@ -2464,6 +2491,7 @@
     cloudPushAttempt = 0;
     cloudSurfaceError = false;
     cloudGuestRows = [];
+    cloudGroupAggregates = { available: false, leaderboard: [], gameSummaries: [] };
     // Push before pull: anything still unconfirmed locally must reach the server before the
     // server's view can overwrite it. The guest cache is rebuilt by that first pull.
     pushCloud().then(() => { if (cloudMode()) return pullCloud(); }).catch(() => {});
@@ -2485,6 +2513,7 @@
     cloudProfileIds = [];
     cloudGameCreators = {};
     cloudGuestRows = [];
+    cloudGroupAggregates = { available: false, leaderboard: [], gameSummaries: [] };
     pendingCloudGame = null;
     leaveCloudGameChannel();
     setSync(false, "שמירה מקומית");
@@ -2996,18 +3025,84 @@
       return { rank, identityKey: row.identityKey, displayName: row.displayName, gamesPlayed: row.gamesPlayed, wins: row.wins, isFormerMember: row.isFormerMember };
     });
   }
-  function getGroupSummary(collections, groupId, meName) {
+  // ---------- group aggregate adapters (pure) ----------
+  // Safe-aggregate shape (docs/backend/group-summaries.sql, group_leaderboard_public_v):
+  //   LeaderboardEntry rows straight off group_leaderboard_public_v, snake_case mapped to camel.
+  //   GroupGameSummary rows off group_game_summaries_v — no per-player net/cashout, matching
+  //   toGroupGameSummary's own output shape exactly, minus totalEntries (not exposed; unused by
+  //   the group-history renderer) and with `ranking` as names only (already alphabetical, since
+  //   the safe view carries no net to rank by).
+  // Both resolvers prefer the aggregate ONLY when this pull's queries actually succeeded
+  // (`aggregates.available`); otherwise they fall back to the exact local computation this file
+  // has always used, so an offline device or a pre-migration server keeps working exactly as
+  // before — never a zero-player row, never a wrong total, never silently short of games.
+  function groupLeaderboardFromAggregate(rows, groupId) {
+    return (Array.isArray(rows) ? rows : [])
+      .filter(r => r && String(r.group_id) === String(groupId))
+      .map(r => ({
+        rank: Number(r.rank) || 0,
+        identityKey: r.identity_key,
+        displayName: r.display_name || "",
+        gamesPlayed: Number(r.games_played) || 0,
+        wins: Number(r.wins) || 0,
+        isFormerMember: !!r.is_former_member,
+      }))
+      .sort((a, b) => a.rank - b.rank);
+  }
+  function groupGameSummariesFromAggregate(rows, groupId) {
+    return (Array.isArray(rows) ? rows : [])
+      .filter(r => r && String(r.group_id) === String(groupId))
+      .map(r => {
+        const startedAt = r.started_at || null;
+        const at = r.at || null;
+        const startedMs = startedAt ? new Date(startedAt).getTime() : NaN;
+        const atMs = at ? new Date(at).getTime() : NaN;
+        const durationMinutes = Number.isFinite(startedMs) && Number.isFinite(atMs)
+          ? Math.max(0, Math.round((atMs - startedMs) / 60000))
+          : null;
+        const playerNames = Array.isArray(r.player_names) ? r.player_names.filter(Boolean) : [];
+        return {
+          gameId: r.game_id,
+          at,
+          startedAt,
+          playerCount: Number(r.player_count) || 0,
+          playerNames,
+          winnerNames: Array.isArray(r.winner_names) ? r.winner_names.filter(Boolean) : [],
+          ranking: playerNames.slice(),
+          durationMinutes,
+          potSize: Number(r.pot_size) || 0,
+          totalEntries: null,
+          isBalanced: !!r.is_balanced,
+        };
+      })
+      .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  }
+  // The group leaderboard: the safe aggregate when this pull actually fetched one, otherwise the
+  // existing local computation from history (unchanged behaviour offline / pre-migration).
+  function resolveGroupLeaderboard(collections, groupId, aggregates) {
+    const agg = aggregates || {};
+    if (agg.available) return groupLeaderboardFromAggregate(agg.leaderboard, groupId);
+    const c = collections || {};
+    return buildLeaderboard(Array.isArray(c.history) ? c.history : [], c.groupMembers, groupId);
+  }
+  // The group's closed-game history rows: same rule.
+  function resolveGroupGameSummaries(collections, groupId, aggregates) {
+    const agg = aggregates || {};
+    if (agg.available) return groupGameSummariesFromAggregate(agg.gameSummaries, groupId);
+    const c = collections || {};
+    return groupClosedGames(Array.isArray(c.history) ? c.history : [], groupId).map(toGroupGameSummary);
+  }
+  function getGroupSummary(collections, groupId, meName, aggregates) {
     const c = collections || {};
     const groups = Array.isArray(c.groups) ? c.groups : [];
     const group = groups.find(g => g && g.id === groupId);
     if (!group) return null;
     const members = Array.isArray(c.groupMembers) ? c.groupMembers : [];
-    const history = Array.isArray(c.history) ? c.history : [];
     const active = activeMembers(members, groupId);
-    const games = groupClosedGames(history, groupId);
+    const games = resolveGroupGameSummaries(c, groupId, aggregates);
     const currentGame = c.currentGame || {};
     const hasActiveGame = isGameOpen(currentGame) && currentGame.groupId === groupId;
-    const leaderboard = buildLeaderboard(history, members, groupId);
+    const leaderboard = resolveGroupLeaderboard(c, groupId, aggregates);
     const topRank = leaderboard.length ? leaderboard[0].rank : null;
     const leaderNames = topRank === null ? [] : leaderboard.filter(l => l.rank === topRank).map(l => l.displayName);
     return {
@@ -3025,22 +3120,22 @@
       isMember: !!findMyMembership(members, groupId, meName),
     };
   }
-  function getGroupSummaries(collections, meName) {
+  function getGroupSummaries(collections, meName, aggregates) {
     const c = collections || {};
     const members = Array.isArray(c.groupMembers) ? c.groupMembers : [];
     return visibleGroups(Array.isArray(c.groups) ? c.groups : [])
       .filter(g => !isGroupHiddenForMember(members, g.id, meName))
-      .map(g => getGroupSummary(c, g.id, meName))
+      .map(g => getGroupSummary(c, g.id, meName, aggregates))
       .filter(Boolean);
   }
   // Same shape as getGroupSummaries, but for archived-not-deleted groups (archivedGroups) — the
   // dashboard's collapsed "ארכיון" list and the read-only archived group page read from this.
-  function getArchivedGroupSummaries(collections, meName) {
+  function getArchivedGroupSummaries(collections, meName, aggregates) {
     const c = collections || {};
     const members = Array.isArray(c.groupMembers) ? c.groupMembers : [];
     return archivedGroups(Array.isArray(c.groups) ? c.groups : [])
       .filter(g => !isGroupHiddenForMember(members, g.id, meName))
-      .map(g => getGroupSummary(c, g.id, meName))
+      .map(g => getGroupSummary(c, g.id, meName, aggregates))
       .filter(Boolean);
   }
   // "An empty table is not a game": the current-game slot counts as an open game only when it is
@@ -5646,8 +5741,8 @@
     inner.appendChild(el("p", "games-home-lead", "המשחקים הפעילים והקבוצות שלך במקום אחד."));
     renderQuickActions(inner);
     renderActiveGamesSection(inner, getActiveGameSummaries(state, state.groups), enterStagger);
-    renderGroupsSection(inner, getGroupSummaries(collectionsOf(state), me), enterStagger);
-    renderArchivedGroupsSection(inner, getArchivedGroupSummaries(collectionsOf(state), me));
+    renderGroupsSection(inner, getGroupSummaries(collectionsOf(state), me, cloudGroupAggregates), enterStagger);
+    renderArchivedGroupsSection(inner, getArchivedGroupSummaries(collectionsOf(state), me, cloudGroupAggregates));
     box.appendChild(inner);
   }
 
@@ -5675,7 +5770,7 @@
     const collections = collectionsOf(state);
     const rawGroup = (Array.isArray(collections.groups) ? collections.groups : []).find(g => g && g.id === currentGroupId);
     if (!rawGroup || rawGroup.deletedAt) { closeGroupPreview(); renderGamesDashboard(); return; }
-    const summary = getGroupSummary(collections, currentGroupId, me);
+    const summary = getGroupSummary(collections, currentGroupId, me, cloudGroupAggregates);
     if (!summary) { closeGroupPreview(); renderGamesDashboard(); return; }
     const inner = el("div", "games-home-in");
     inner.appendChild(renderGroupHeader(summary, closeGroupPreview, openGroupSettings));
@@ -5686,10 +5781,10 @@
     } else {
       inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
     }
-    inner.appendChild(renderGroupLeaders(buildLeaderboard(collections.history, collections.groupMembers, currentGroupId)));
+    inner.appendChild(renderGroupLeaders(resolveGroupLeaderboard(collections, currentGroupId, cloudGroupAggregates)));
     const previewClaimsSection = renderGroupGuestClaims(currentGroupId);
     if (previewClaimsSection) inner.appendChild(previewClaimsSection);
-    const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
+    const gameSummaries = resolveGroupGameSummaries(collections, currentGroupId, cloudGroupAggregates);
     inner.appendChild(renderGroupMembers(summary, activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
     box.appendChild(inner);
@@ -6578,7 +6673,7 @@
     const collections = collectionsOf(state);
     const rawGroup = (Array.isArray(collections.groups) ? collections.groups : []).find(g => g && g.id === currentGroupId);
     if (rawGroup && rawGroup.deletedAt) { setAppView("games"); return; } // a deleted group is gone — don't strand the user
-    const summary = getGroupSummary(collections, currentGroupId, me);
+    const summary = getGroupSummary(collections, currentGroupId, me, cloudGroupAggregates);
     if (!summary) { setAppView("games"); return; } // the group is gone on this device — don't strand the user
     const isArchived = !!(rawGroup && rawGroup.archivedAt);
     const inner = el("div", "games-home-in");
@@ -6594,10 +6689,10 @@
     } else {
       inner.appendChild(renderGroupPrimaryAction(summary, canStartGroupGame(collections, currentGroupId)));
     }
-    inner.appendChild(renderGroupLeaders(buildLeaderboard(collections.history, collections.groupMembers, currentGroupId)));
+    inner.appendChild(renderGroupLeaders(resolveGroupLeaderboard(collections, currentGroupId, cloudGroupAggregates)));
     const guestClaimsSection = renderGroupGuestClaims(currentGroupId);
     if (guestClaimsSection) inner.appendChild(guestClaimsSection);
-    const gameSummaries = groupClosedGames(collections.history, currentGroupId).map(toGroupGameSummary);
+    const gameSummaries = resolveGroupGameSummaries(collections, currentGroupId, cloudGroupAggregates);
     inner.appendChild(renderGroupMembers(summary, activeMembers(collections.groupMembers, currentGroupId), formerMembers(collections.groupMembers, currentGroupId), summary.isAdmin));
     inner.appendChild(renderGroupHistory(gameSummaries));
     // D1: the invite block and "+ הוסף חבר" live in the group settings overlay now — this page
@@ -8295,7 +8390,7 @@
   }
   function refreshGroupSettings() {
     const group = (state.groups || []).find(g => g && g.id === currentGroupId);
-    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
+    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me, cloudGroupAggregates);
     if (!group || !summary) { closeGroupSettings(); return; }
     resetGroupLeaveArm();
     resetGroupDeleteArm();
@@ -8372,7 +8467,7 @@
     refreshGroupSettings();
   });
   document.getElementById("groupSetAvatarBtn").addEventListener("click", () => {
-    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
+    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me, cloudGroupAggregates);
     if (!summary || !summary.isAdmin) return;
     document.getElementById("groupSetAvatarFile").click();
   });
@@ -8392,7 +8487,7 @@
     const group = (state.groups || []).find(g => g && g.id === currentGroupId);
     if (!group) return;
     const wasArchived = !!group.archivedAt;
-    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
+    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me, cloudGroupAggregates);
     if (!wasArchived && summary && summary.hasActiveGame) return; // refused — inline reason already shown
     const ok = wasArchived ? unarchiveGroup(state.groups, currentGroupId) : archiveGroup(state.groups, currentGroupId, new Date().toISOString());
     if (!ok) return;
@@ -8401,7 +8496,7 @@
     if (wasArchived) renderGroupSurface(); else setAppView("games");
   });
   document.getElementById("groupSetDeleteBtn").addEventListener("click", (e) => {
-    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me);
+    const summary = getGroupSummary(collectionsOf(state), currentGroupId, me, cloudGroupAggregates);
     if (!summary || summary.hasActiveGame) return; // refused — inline reason already shown
     const btn = e.currentTarget;
     if (!groupDeleteArmed) {
