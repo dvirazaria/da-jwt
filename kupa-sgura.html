@@ -1207,7 +1207,7 @@
         </div>
       </div>
     </div>
-    <p class="empty-note" style="margin-top:6px">גרסה 69</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 70</p>
     <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
 </div>
@@ -6690,7 +6690,7 @@
   }
 
   // Inline "+ הוסף חבר" add action, same collapse/expand pattern and CSS (.games-create-panel)
-  // as the create-group panel (Task 3). Guest-only for now — no accounts yet — hence the note.
+  // as the create-group panel (Task 3). Guest refs work in both modes; the note is local-only.
   function renderAddMemberPanel() {
     const wrap = el("div", "games-member-add");
     const toggle = el("button", "games-member-add-toggle", "+ הוסף חבר");
@@ -6734,7 +6734,7 @@
     // Row 32: same shape as the create-group panel — title, full-width field, confirm + cancel.
     content.appendChild(el("h3", "games-section-title", "חבר חדש"));
     content.append(nameInput, submitBtn, cancelBtn);
-    content.appendChild(el("p", "games-member-add-note", SERVER_NOTE));
+    if (!cloudMode()) content.appendChild(el("p", "games-member-add-note", SERVER_NOTE));
     panelIn.appendChild(content);
     panel.appendChild(panelIn);
 

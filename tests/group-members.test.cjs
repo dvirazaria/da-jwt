@@ -263,7 +263,7 @@ test('renderGroupMembers takes active and former members and keeps the former-me
   assert.match(html, /function renderGroupMembers\(summary, members, former, isAdmin\)/);
   assert.match(html, /\+ הוסף חבר/);
   assert.match(html, /חברים לשעבר/);
-  assert.match(html, /el\("p", "games-member-add-note", SERVER_NOTE\)/);
+  assert.match(html, /if \(!cloudMode\(\)\) content\.appendChild\(el\("p", "games-member-add-note", SERVER_NOTE\)\)/);
 });
 
 test('a duplicate add-member submission shakes the input instead of silently failing', () => {
