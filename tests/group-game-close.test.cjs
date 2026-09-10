@@ -15,18 +15,20 @@ function sourceBetween(startMarker, endMarker) {
 
 // ---------- finishCloseTable frees the group slot and routes back to the group page ----------
 
-test('finishCloseTable captures the closing group, frees groupId/leaderRef, and routes to the group page', () => {
+test('finishCloseTable captures the closing group, drops the closing game\'s own slot, and routes to the group page', () => {
   const source = sourceBetween(
     '  function finishCloseTable() {',
     '  document.getElementById("closeTableBtn").addEventListener("click"'
   );
   // Captured before any mutation so buildDebtRecords/buildHistoryEntry still see the real groupId.
   assert.match(source, /const closedGroupId = state\.groupId;/);
-  // The current-game slot is free for a new group game after close.
-  assert.match(source, /state\.groupId = null;/);
-  assert.match(source, /state\.leaderRef = null;/);
-  // startedAt belongs to the closed game only — a fresh current-game slot must not inherit it.
-  assert.match(source, /state\.startedAt = null;/);
+  // Round 1: state.games is authoritative -- the closing game's own slot (which carries its
+  // groupId/leaderRef/startedAt) is dropped from the array before a fresh placeholder gameId is
+  // minted; save()'s mirror then finds no slot for that id and resets groupId/leaderRef/startedAt
+  // to null the same way this test always required, just derived instead of hand-assigned (proved
+  // generically by the staleness guard in tests/multi-game-migration.test.cjs).
+  assert.match(source, /state\.games = \(Array\.isArray\(state\.games\) \? state\.games : \[\]\)\.filter\(g => g\.gameId !== state\.gameId\);/);
+  assert.match(source, /state\.gameId = newId\(\);/);
   // A group game returns to its group page; an ungrouped game still lands on Games.
   assert.match(source, /openGroup\(closedGroupId\)/);
   assert.match(source, /else setAppView\("games"\);/);
@@ -75,9 +77,13 @@ test('buildHistoryEntry copies groupId, startedAt, leaderRef and per-player gues
 // ---------- newCurrentGame frees groupId/leaderRef the way the reset button relies on ----------
 
 test('newCurrentGame resets groupId and leaderRef to null even when the patch (like the reset button) omits them', () => {
-  const source = sourceBetween('  function newCurrentGame', '  // Builds a new Group');
+  // Round 1: newCurrentGame now calls hasOpenPhase/syncCurrentGameMirror (it self-mirrors before
+  // returning, so callers reading state.groupId/leaderRef right after it -- without an intervening
+  // save() -- see correct values) -- load the whole groups-domain pure section, not just
+  // newCurrentGame's own body, the same slice every sibling suite already uses for it.
+  const groupsPureSource = sourceBetween('  // ---------- groups domain (pure) ----------', '  function el(');
   const context = vm.createContext({ newId: () => 'stub-reset-id' });
-  vm.runInContext(source, context);
+  vm.runInContext(groupsPureSource, context);
   Object.assign(context, {
     base: {
       groupId: 'grp-1',
