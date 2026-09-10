@@ -190,7 +190,7 @@ test('openGroup keeps setting currentGroupId and calling setAppView("group") unc
 });
 
 test('the group route is a real overlay (#groupSheet/#groupSheetContent markup) that syncGroupSheet opens/closes off appView, reversing the transition before hiding', () => {
-  assert.match(html, /<div class="group-sheet" id="groupSheet" hidden>/);
+  assert.match(html, /<div class="group-sheet" id="groupSheet" role="dialog" aria-modal="true" aria-label="[^"]*" hidden>/);
   assert.match(html, /<div class="group-sheet-panel">/);
   assert.match(html, /<div class="group-sheet-in" id="groupSheetContent"><\/div>/);
   const source = sourceBetween('  function syncGroupSheet() {', '  function renderAddRowChips() {');
@@ -287,4 +287,38 @@ test('both group surfaces still open through afterNextFrame, and close by revers
   const close = html.slice(html.indexOf('function closeGroupPreview'), html.indexOf('function closeGroupPreview') + 700);
   assert.match(close, /classList\.remove\("open"\)/);
   assert.match(close, /setTimeout/);
+});
+
+// ---------- a modal must have more than one way out, and it must keep it reachable ----------
+
+test('the group modal cannot trap the reader: pinned corner controls, Escape, backdrop, focus', () => {
+  // The X is absolutely positioned inside .games-group-header. Left in the panel's scroll flow it
+  // rides away with the content, and it is the only dismissal control in the header.
+  const header = html.match(/\.group-sheet-panel \.games-group-header \{[^}]*\}/)[0];
+  assert.match(header, /position: sticky/, 'the header carrying the X must not scroll out of reach');
+  assert.match(header, /background: var\(--bg\)/, 'a pinned header needs an opaque backing');
+
+  // Two more exits, because one control can always be missed.
+  assert.match(html, /function dismissOpenGroupModal\(\)/);
+  assert.match(html, /if \(e\.key === "Escape"\) dismissOpenGroupModal\(\)/);
+  assert.match(html, /if \(e\.target === backdrop\) dismissOpenGroupModal\(\)/,
+    'only a click on the backdrop itself may dismiss — never one that started inside the panel');
+  // The settings overlay sits above the modal and must consume Escape first.
+  assert.match(html, /groupSettings[\s\S]{0,200}if \(e\.key === "Escape"\)/);
+
+  // Focus has to enter the dialog, or a keyboard user is left on the dimmed page behind it.
+  assert.match(html, /const close = overlay\.querySelector\("\.back-arrow"\)/);
+  for (const id of ['groupPreview', 'groupSheet']) {
+    assert.match(html, new RegExp(`id="${id}" role="dialog" aria-modal="true"`), `${id} needs dialog semantics`);
+  }
+});
+
+test('the modal reads as a distinct surface in the dark theme, where panel and scrim share a colour', () => {
+  // --bg is #05070A and the scrim used to be rgba(5,7,10,.6) — the identical colour, so the only
+  // separation was a black shadow on a near-black ground, i.e. none.
+  const backdrop = html.match(/\.group-sheet \{[^}]*\}/)[0];
+  const scrim = backdrop.match(/background: (rgba\([^)]*\))/)[1];
+  assert.doesNotMatch(scrim, /5\s*,\s*7\s*,\s*10/, 'the scrim must not be the panel colour');
+  const panel = html.match(/\.group-sheet-panel \{[^}]*\}/)[0];
+  assert.match(panel, /border: 1px solid var\(--line\)/, 'a hairline carries the edge a shadow cannot');
 });

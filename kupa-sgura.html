@@ -798,7 +798,7 @@
      can never drift apart. */
   .group-sheet {
     position: fixed; inset: 0; z-index: 41;
-    background: rgba(5,7,10,.6);
+    background: rgba(0,0,0,.72);
     display: flex; align-items: center; justify-content: center;
     padding: max(24px, env(safe-area-inset-top, 0px)) 20px max(24px, env(safe-area-inset-bottom, 0px));
     opacity: 0; pointer-events: none;
@@ -815,7 +815,8 @@
     width: 100%; max-width: 440px; max-height: min(640px, 84vh);
     background: var(--bg);
     border-radius: 20px;
-    box-shadow: 0 20px 48px rgba(0,0,0,.4);
+    border: 1px solid var(--line);
+    box-shadow: 0 24px 60px rgba(0,0,0,.55);
     overflow-y: auto; -webkit-overflow-scrolling: touch;
     padding: 20px 18px 24px;
     transform: scale(.96);
@@ -829,7 +830,13 @@
      .games-group-header .back-arrow / .games-group-settings-btn below) need clearance below
      them -- so the header keeps real top padding here instead of the old "sheet already gives
      us room" zero-out. */
-  .group-sheet-panel .games-group-header { padding-top: 56px; }
+  /* The X is the only dismissal, and it is absolutely positioned inside this header. Left in the
+     scroll flow it rides away with the content and a scrolled-down group has no way to close.
+     Pinning the header keeps both corner controls (and the group's name) reachable throughout. */
+  .group-sheet-panel .games-group-header {
+    padding-top: 56px; position: sticky; top: -20px; z-index: 3;
+    background: var(--bg); margin: -20px -18px 0; padding-inline: 18px; padding-bottom: 8px;
+  }
   .group-sheet-panel .games-section { text-align: start; }
   .group-sheet-panel .games-section-title, .group-sheet-panel .games-member-add,
   .group-sheet-panel .games-former-members, .group-sheet-panel .games-history-item { text-align: center; }
@@ -1178,7 +1185,7 @@
         </div>
       </div>
     </div>
-    <p class="empty-note" style="margin-top:6px">גרסה 67</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 68</p>
     <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
 </div>
@@ -1202,7 +1209,7 @@
   </div>
 </div>
 
-<div class="group-sheet" id="groupPreview" hidden>
+<div class="group-sheet" id="groupPreview" role="dialog" aria-modal="true" aria-label="קבוצה" hidden>
   <div class="group-sheet-panel">
     <div class="group-sheet-in" id="groupPreviewContent"></div>
   </div>
@@ -1211,7 +1218,7 @@
 <!-- The "group" appView route (renderGroupPage/openGroup) -- presented as a sheet rising over
      the games dashboard rather than a full-screen swap. See syncGroupSheet() for the open/close
      motion and the ".group-sheet" rules above. -->
-<div class="group-sheet" id="groupSheet" hidden>
+<div class="group-sheet" id="groupSheet" role="dialog" aria-modal="true" aria-label="קבוצה" hidden>
   <div class="group-sheet-panel">
     <div class="group-sheet-in" id="groupSheetContent"></div>
   </div>
@@ -6023,7 +6030,38 @@
     // A class added in the same frame as the unhide has no start value to animate from, so the
     // sheet would simply appear. Two frames: one to let `hidden` come off and the closed state
     // compute, one to flip to open.
-    afterNextFrame(() => { if (!overlay.hidden) overlay.classList.add("open"); });
+    afterNextFrame(() => {
+      if (overlay.hidden) return;
+      overlay.classList.add("open");
+      // Without this, focus stays on the dimmed dashboard behind the dialog and Tab never
+      // reaches the X or the settings control.
+      const close = overlay.querySelector(".back-arrow");
+      if (close) close.focus();
+    });
+  }
+
+  // A modal needs more than one way out. The X is absolutely positioned inside the panel, so a
+  // scrolled-down group would otherwise trap the reader; Escape and a tap on the dimmed backdrop
+  // are the two exits every dialog is expected to have. Registered once, for both surfaces.
+  function dismissOpenGroupModal() {
+    const preview = document.getElementById("groupPreview");
+    if (preview && !preview.hidden) { closeGroupPreview(); return true; }
+    if (appView === "group") { setAppView("games"); return true; }
+    return false;
+  }
+  function initGroupModalDismissal() {
+    document.addEventListener("keydown", (e) => {
+      // Let the group-settings overlay above us take Escape first.
+      const settings = document.getElementById("groupSettings");
+      if (settings && !settings.hidden) return;
+      if (e.key === "Escape") dismissOpenGroupModal();
+    });
+    ["groupPreview", "groupSheet"].forEach(id => {
+      const backdrop = document.getElementById(id);
+      if (!backdrop) return;
+      // Only the backdrop itself, never a click that started inside the panel.
+      backdrop.addEventListener("click", (e) => { if (e.target === backdrop) dismissOpenGroupModal(); });
+    });
   }
 
   function closeGroupPreview() {
@@ -9583,6 +9621,7 @@
   appView = initialAppView(state);
   render();
   initIosInstallHint();
+  initGroupModalDismissal();
   if (typeof screen.orientation?.lock === "function" && matchMedia("(display-mode: standalone)").matches) {
     try { screen.orientation.lock("portrait").catch(() => {}); } catch (e) {}
   }
