@@ -171,3 +171,53 @@ test('renderGroupCard formats its member count with formatMemberCount, not a raw
   assert.match(source, /formatMemberCount\(Number\(group\.memberCount \|\| 0\)\)/);
   assert.doesNotMatch(source, /\+ " חברים"/);
 });
+
+// ---------- group page as a sheet over the dashboard ----------
+
+test('renderGroupPage renders into the #groupSheet overlay, not into #gamesHome (which it used to replace)', () => {
+  const source = sourceBetween('  function renderGroupPage() {', '  function syncGroupSheet() {');
+  assert.match(source, /document\.getElementById\("groupSheetContent"\)/);
+  assert.doesNotMatch(source, /document\.getElementById\("gamesHome"\)/);
+  // the currentGroupId/appView route contract itself is untouched by the presentation change
+  assert.match(source, /if \(appView !== "group"\) return;/);
+});
+
+test('openGroup keeps setting currentGroupId and calling setAppView("group") unchanged by the sheet presentation', () => {
+  const source = sourceBetween('  function openGroup(groupId) {', '  function repairMyGroupMembership(');
+  assert.match(source, /currentGroupId = String\(groupId \|\| ""\);/);
+  assert.match(source, /repairMyGroupMembership\(currentGroupId\);/);
+  assert.match(source, /setAppView\("group"\);/);
+});
+
+test('the group route is a real overlay (#groupSheet/#groupSheetContent markup) that syncGroupSheet opens/closes off appView, reversing the transition before hiding', () => {
+  assert.match(html, /<div class="group-sheet" id="groupSheet" hidden>/);
+  assert.match(html, /<div class="group-sheet-panel">/);
+  assert.match(html, /<div class="group-sheet-in" id="groupSheetContent"><\/div>/);
+  const source = sourceBetween('  function syncGroupSheet() {', '  function renderAddRowChips() {');
+  assert.match(source, /if \(appView === "group"\)/);
+  assert.match(source, /backdrop\.classList\.add\("open"\)/);
+  // closing (any navigation away from "group", including the default back-arrow's setAppView("games")
+  // in renderGroupHeader) removes .open first and only hides the sheet after the reverse transition
+  assert.match(source, /backdrop\.classList\.remove\("open"\)/);
+  assert.match(source, /backdrop\.hidden = true/);
+});
+
+test('the group sheet CSS reuses existing tokens (18px/24px .wrap+section padding, the 16px install-hint radius, the .28s grid-open timing) instead of inventing new spacing/motion values', () => {
+  const source = sourceBetween('  .group-sheet {', '  .group-set-section { width: 100%; }');
+  assert.match(source, /padding: 24px 18px calc\(28px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.match(source, /border-radius: 16px 16px 0 0;/);
+  assert.match(source, /transition: transform \.28s ease;/);
+  // header/section spacing inside the sheet still comes from the shared .games-group-header /
+  // .games-primary-action / .games-section rules (24px section rhythm) — no sheet-only overrides.
+  assert.match(html, /\.games-section \{ margin-top: 24px; text-align: center; \}/);
+});
+
+test('the reduced-motion rule stays the very last rule in the stylesheet, after the new group-sheet CSS', () => {
+  const groupSheetIdx = html.indexOf('.group-sheet {');
+  const reducedMotionIdx = html.indexOf('@media (prefers-reduced-motion: reduce)');
+  const styleCloseIdx = html.indexOf('</style>');
+  assert.ok(groupSheetIdx > 0, 'group-sheet CSS should exist');
+  assert.ok(reducedMotionIdx > groupSheetIdx, 'reduced-motion rule should come after the group-sheet CSS');
+  const tail = html.slice(html.indexOf('{', reducedMotionIdx), styleCloseIdx);
+  assert.match(tail, /\* \{ animation: none !important; transition: none !important; \}\s*\}\s*$/);
+});

@@ -762,6 +762,38 @@
   #groupPreview .games-section { text-align: start; }
   #groupPreview .games-section-title, #groupPreview .games-member-add,
   #groupPreview .games-former-members, #groupPreview .games-history-item { text-align: center; }
+  /* ---------- group page sheet ---------- */
+  /* The "group" appView (renderGroupPage) used to swap out #gamesHome in place; it now rises as
+     a bottom sheet over the (still-rendered, dimmed) games dashboard behind it -- #groupSettings
+     (z-index 42) keeps nesting above it unchanged since both are position:fixed siblings in the
+     same stacking context. Motion mirrors the app's .28s grid-open timing (DESIGN.md) with a
+     translate instead of a grid track, since this is a full panel, not an inline expand. */
+  .group-sheet {
+    position: fixed; inset: 0; z-index: 41;
+    background: rgba(5,7,10,.6);
+    opacity: 0; pointer-events: none;
+    transition: opacity .28s ease;
+  }
+  :root[data-theme="light"] .group-sheet { background: rgba(12,21,25,.32); }
+  .group-sheet.open { opacity: 1; pointer-events: auto; }
+  .group-sheet-panel {
+    position: absolute; inset-inline: 0; bottom: 0;
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    background: var(--bg);
+    border-radius: 16px 16px 0 0;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 24px 18px calc(28px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(100%);
+    transition: transform .28s ease;
+  }
+  .group-sheet.open .group-sheet-panel { transform: translateY(0); }
+  .group-sheet-in { width: 100%; max-width: 440px; margin-inline: auto; }
+  /* The sheet already supplies 24px of top padding, so the page-mode header gap (40px on
+     .games-group-header) would double up here -- same fix #groupPreview applies above. */
+  .group-sheet-panel .games-group-header { padding-top: 0; }
+  .group-sheet-panel .games-section { text-align: start; }
+  .group-sheet-panel .games-section-title, .group-sheet-panel .games-member-add,
+  .group-sheet-panel .games-former-members, .group-sheet-panel .games-history-item { text-align: center; }
   .group-set-section { width: 100%; }
   .group-set-section .games-section { margin-top: 0; }
   .join-notice-actions { display: flex; align-items: center; gap: 16px; }
@@ -1115,6 +1147,15 @@
   <div class="group-preview-in" id="groupPreviewContent"></div>
 </div>
 
+<!-- The "group" appView route (renderGroupPage/openGroup) -- presented as a sheet rising over
+     the games dashboard rather than a full-screen swap. See syncGroupSheet() for the open/close
+     motion and the ".group-sheet" rules above. -->
+<div class="group-sheet" id="groupSheet" hidden>
+  <div class="group-sheet-panel">
+    <div class="group-sheet-in" id="groupSheetContent"></div>
+  </div>
+</div>
+
   <div class="login" id="login" hidden>
   <div class="login-in">
     <h2>כניסה</h2>
@@ -1368,6 +1409,9 @@
   let animName = null;        // the player to animate when animNext === "one"
   let groupPageEnterNext = false; // group page sections should stagger in on the next renderGroupPage() —
                                    // set only by openGroup()/setAppView(), never by an in-place re-render
+  let groupSheetOpen = false; // UI-only: whether #groupSheet has already played its enter transition —
+                               // lets syncGroupSheet() play the reverse (exit) transition exactly once
+                               // regardless of which action navigated away from appView "group"
   let gamesPageEnterNext = false; // dashboard cards should stagger in on the next renderGamesDashboard() —
                                    // set only by setAppView(), never by an in-place re-render (Task 15, same
                                    // pattern as groupPageEnterNext above)
@@ -5234,6 +5278,11 @@
   // share #gamesHome; game/settle share #rows; profile/friends use their own sections). Adds the shared .load-in
   // class and removes it once its animation finishes so the next switch can replay it.
   function flashViewEnter(nextView) {
+    // "group" plays its own enter motion via syncGroupSheet()/.group-sheet.open — flashing
+    // #gamesHome here too would replay the dashboard's fade+rise underneath the sheet on every
+    // navigation into it, which reads as a stray flicker rather than the dashboard just sitting
+    // there dimmed.
+    if (nextView === "group") return;
     const id = nextView === "profile" ? "profile" : nextView === "friends" ? "friendsPage" : (nextView === "game" || nextView === "settle") ? "rows" : "gamesHome";
     const container = document.getElementById(id);
     if (!container) return;
@@ -5856,8 +5905,10 @@
   function renderGamesDashboard() {
     // A deferred call (a panel's collapse setTimeout) can still fire after the user has
     // navigated away from the dashboard — bail instead of rebuilding a #gamesHome that's now
-    // showing a different view (same guard as renderGroupPage).
-    if (appView !== "games") return;
+    // showing a different view (same guard as renderGroupPage). The "group" sheet now rises over
+    // #gamesHome rather than replacing it, so the dashboard still needs to render (and stay
+    // current) underneath while appView is "group".
+    if (appView !== "games" && appView !== "group") return;
     // Only a fresh navigation into the dashboard (setAppView) stagger-animates the cards below;
     // an in-place re-render after e.g. toggling a card's expand state must not replay it (Task 15,
     // same pattern as renderGroupPage's enterStagger).
@@ -5921,7 +5972,9 @@
   function renderGroupSurface() {
     const preview = document.getElementById("groupPreview");
     if (preview && !preview.hidden) renderGroupPreview();
-    else if (appView === "group") renderGroupPage();
+    // The group page is a sheet over the dashboard now — keep the dimmed dashboard behind it
+    // current too, same as render() does for a fresh navigation into "group".
+    else if (appView === "group") { renderGamesDashboard(); renderGroupPage(); }
     else if (appView === "games") renderGamesDashboard();
   }
 
@@ -6790,13 +6843,13 @@
   function renderGroupPage() {
     // A deferred call (a panel's collapse setTimeout, the async avatar handler) can still fire
     // after the user has navigated away from the group page — bail instead of rebuilding a
-    // #gamesHome that's now showing a different view.
+    // #groupSheetContent that's now showing a different view.
     if (appView !== "group") return;
     // Only a fresh navigation into the group page (openGroup()/setAppView) stagger-animates the
     // sections below; an in-place re-render after e.g. removing a member must not replay it.
     const enterStagger = groupPageEnterNext;
     groupPageEnterNext = false;
-    const box = document.getElementById("gamesHome");
+    const box = document.getElementById("groupSheetContent");
     box.innerHTML = "";
     const collections = collectionsOf(state);
     const rawGroup = (Array.isArray(collections.groups) ? collections.groups : []).find(g => g && g.id === currentGroupId);
@@ -6832,6 +6885,28 @@
       });
     }
     box.appendChild(inner);
+  }
+
+  // Keeps #groupSheet's open/closed state (and its .28s rise/reverse transition) in sync with
+  // appView on every render() — one reactive spot instead of hooking every place that can leave
+  // "group" (back arrow, a bottom-nav tap, hideGroupForMember succeeding, etc.). Mirrors
+  // closeArchivedGroups()'s class-then-setTimeout pattern for playing a CSS transition backwards
+  // before hiding the element.
+  function syncGroupSheet() {
+    const backdrop = document.getElementById("groupSheet");
+    if (!backdrop) return;
+    if (appView === "group") {
+      backdrop.hidden = false;
+      if (!groupSheetOpen) {
+        groupSheetOpen = true;
+        void backdrop.offsetWidth; // force reflow so the transition plays from translateY(100%)
+        backdrop.classList.add("open");
+      }
+    } else if (groupSheetOpen) {
+      groupSheetOpen = false;
+      backdrop.classList.remove("open");
+      setTimeout(() => { if (appView !== "group") backdrop.hidden = true; }, 280);
+    }
   }
 
   // Member chips above the "שם שחקן חדש" input, shown only for a group game (Task 9): one chip
@@ -7239,7 +7314,9 @@
     renderProfile();
     renderFriendsPage();
     if (appView === "games") renderGamesDashboard();
-    else if (appView === "group") renderGroupPage();
+    // The group page is a sheet over the dashboard: render the (dimmed) dashboard underneath too.
+    else if (appView === "group") { renderGamesDashboard(); renderGroupPage(); }
+    syncGroupSheet();
     // A remote sync (applyRemote -> render) can change group data while the settings overlay is
     // open on top of the group page — keep it in sync instead of showing stale name/admin state.
     if (!document.getElementById("groupSettings").hidden) refreshGroupSettings();

@@ -117,7 +117,10 @@ test('appView accepts "group" as a navigable view, opened via openGroup', () => 
   assert.match(html, /setAppView\("group"\)/);
   assert.match(html, /function renderGroupPage\(\)/);
   assert.match(html, /function renderGroupHeader\(summary, onBack, onSettings\)/);
-  assert.match(html, /else if \(appView === "group"\) renderGroupPage\(\);/);
+  // Updated for the group-page-as-sheet change: "group" now renders the dashboard *and* the
+  // group page (the sheet rises over the still-rendered, dimmed dashboard) instead of replacing
+  // it outright — stronger than the old assertion, which only checked renderGroupPage() ran.
+  assert.match(html, /else if \(appView === "group"\) \{ renderGamesDashboard\(\); renderGroupPage\(\); \}/);
 });
 
 test('the group view reuses the games dashboard shell and hides the game/settle rows', () => {
