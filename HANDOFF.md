@@ -517,3 +517,14 @@ enabled), but it is still entirely local/per-device: no remote membership, no re
 no cross-device identity. `ActiveGameSummary` remains the only data shape the active-game dashboard
 UI should consume; `GroupSummary`/`LeaderboardEntry`/`GroupGameSummary` are the equivalent contracts
 for groups. Card/panel expansion stays in-memory UI state and must never call `save()`.
+
+## Backend — applied to production (2026-09-10)
+
+Every file under `docs/backend/` has now been applied, in this order: `schema.sql`, `rls-policies.sql`,
+`join-invite.sql`, `fix-upsert-policies.sql`, `delete-account.sql`, `security-fixes.sql`, `link-guest.sql`
+(plus its trailing REVOKE block), `group-summaries.sql`, `player-boundary.sql`, `friend-invites.sql`.
+Each was verified live afterwards with an anonymous `curl` (every SECURITY DEFINER function and view must
+answer `401 permission denied`, never 200/404), and `node tools/rls-probe.mjs` reports 0 findings.
+Google OAuth consent screen is **In production**. Version 65 ships `state.games` as the authoritative
+store (multi-game Round 1); Round 2 (route, dashboard, cloud, realtime) is planned in
+`docs/superpowers/plans/2026-09-10-multi-game.md`.
