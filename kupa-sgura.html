@@ -70,9 +70,18 @@
     display: flex; align-items: center; gap: 8px;
     font-size: 11px; letter-spacing: .06em; color: var(--dim); font-weight: 400;
   }
-  /* Visually a 7px circle; ::before pads its tap target to 44px without shifting any layout. */
+  /* Visually a 7px circle; ::before pads its tap target to 44px without shifting any layout.
+     Pinned into the true top-right corner instead of sitting in the eyebrow's in-flow spot below
+     the logo, which read as "near the edge" but not "in the corner". -25px (relative to header,
+     itself pinned by the rule above) is that same in-flow position moved up ~25px -- header's own
+     top edge already carries env(safe-area-inset-top) via .wrap's padding, so the dot inherits the
+     safe-area clearance without repeating the calc. inset-inline-start (= the right edge in this
+     RTL layout) keeps it on the opposite physical edge from .corner-btn (#resetBtn/#themeBtn,
+     pinned with a physical `left`), so the two never collide. */
   .dot {
-    width: 7px; height: 7px; border-radius: 50%; background: var(--faint); position: relative;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--faint);
+    position: absolute; top: -25px; inset-inline-start: 18px;
+    z-index: 30;
     transition: background .4s, box-shadow .4s, opacity .3s;
   }
   .dot::before { content: ""; position: absolute; inset-block-start: 50%; inset-inline-start: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
@@ -733,7 +742,11 @@
   .corner-btn:hover { color: var(--accent); }
   .corner-btn:active .cicon { transform: scale(.85) rotate(-30deg); }
   .corner-btn.danger-armed { color: var(--bad); }
-  header { padding-inline-end: 96px; }
+  /* position: relative makes header (not its own .load-in entrance transform, which would
+     otherwise silently become the containing block -- a transform's computed value never
+     resolves back to the literal keyword "none" once an animation with fill-mode "both" has
+     played) the deliberate, stable anchor for #syncDot's absolute placement below. */
+  header { padding-inline-end: 96px; position: relative; }
   /* Keep the main content below the fixed corner controls after the app title was removed. */
   .game-view .wrap > header, .settle-view .wrap > header { min-height: 64px; }
   /* D2: back-to-the-group line on the table and settlement screens. It sits inside <header>, so
