@@ -36,10 +36,10 @@ test('renderGroupPage guards on appView !== "group" so a deferred panel-close/av
   assert.match(html.slice(idx, idx + 400), /if \(appView !== "group"\) return;/);
 });
 
-test('renderGamesDashboard guards on appView !== "games", the same way', () => {
+test('renderGamesDashboard guards the same way, and now also renders while appView is "group" (the dashboard stays live behind the group sheet)', () => {
   const idx = html.indexOf('  function renderGamesDashboard() {');
   assert.ok(idx >= 0, 'renderGamesDashboard not found');
-  assert.match(html.slice(idx, idx + 400), /if \(appView !== "games"\) return;/);
+  assert.match(html.slice(idx, idx + 650), /if \(appView !== "games" && appView !== "group"\) return;/);
 });
 
 test('setAppView disarms the armed "הסר" member row and resets the create-group panel, like it already does the start-game panel', () => {
