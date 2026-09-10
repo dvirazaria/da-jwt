@@ -118,6 +118,10 @@ async function runReadOnlyProbes() {
     const { status, data } = await rest(`/rest/v1/${name}?select=*`);
     if (status === 200 && Array.isArray(data) && data.length === 0) ok(name, "200, 0 rows");
     else if (status === 200 && Array.isArray(data)) bad(name, `200 but returned ${data.length} row(s) to an anonymous caller`);
+    // After security-fixes.sql §F4, a view whose body calls an RLS helper cannot even be
+    // evaluated by anon (the helper's EXECUTE was revoked). That is the stronger of the two
+    // correct outcomes, not a regression.
+    else if (status === 401 && /permission denied for function app_/.test(JSON.stringify(data))) ok(name, "401 — view calls a revoked helper; anon cannot evaluate it (F4)");
     else warn(name, `unexpected response: HTTP ${status} ${JSON.stringify(data).slice(0, 200)}`);
   }
 
