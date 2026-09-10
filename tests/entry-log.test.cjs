@@ -31,9 +31,19 @@ test('saved timestamps and entry identities survive loading', () => {
 test('each added amount has a distinct identity, timestamp, player and game; save and remote body retain them', () => {
   const saveSource=html.slice(html.indexOf('  function save()'),html.indexOf('  // --- server sync'));
   const remoteSource=html.slice(html.indexOf('  function remoteBody()'),html.indexOf('  function scheduleRemoteSave()'));
-  const context=vm.createContext({crypto:require('node:crypto').webcrypto});
-  vm.runInContext(normalizeSource + saveSource + remoteSource + `
-    let state = {gameId:'game-one', phase:'active', players:[], history:[], debts:[{id:'d1',status:'open'}], settlementStatuses:{payment:true}, groupId:'group-one', example:false};
+  // Multi-game round 1: save() now also reconciles state.games (syncCurrentGameMirror, in the
+  // groups-domain pure section), so this slice needs that section too -- same reason the
+  // normalize() tests above load groupsPureSource. state.games is now the AUTHORITATIVE store, so
+  // the open slot the mutations below land in must be seeded there too, or save()'s mirror would
+  // reset the singular fields this test reads through (stored/remoteBody) to their closed/empty
+  // defaults instead of what was actually typed.
+  const context=vm.createContext({crypto:require('node:crypto').webcrypto, newId: () => 'stub-new-id'});
+  vm.runInContext(normalizeSource + groupsPureSource + saveSource + remoteSource + `
+    const player={id:'player-one',name:'א',buyins:[],entryLog:[]};
+    let state = {gameId:'game-one', phase:'active',
+      games: [{ gameId: 'game-one', phase: 'active', players: [player], groupId: 'group-one',
+        startedAt: null, leaderRef: null, settlementStatuses: {payment:true} }],
+      players:[player], history:[], debts:[{id:'d1',status:'open'}], settlementStatuses:{payment:true}, groupId:'group-one', example:false};
     let pendingRemote = null;
     const CLIENT_ID='test', KEY='game';
     let stored, scheduled=0;
@@ -41,8 +51,6 @@ test('each added amount has a distinct identity, timestamp, player and game; sav
     function scheduleRemoteSave(){scheduled++;}
     function cloudMode(){return false;} // no Supabase session in this slice: the local path
     function scheduleCloudPush(){throw new Error('the cloud push must not run without a session');}
-    const player={id:'player-one',name:'א',buyins:[],entryLog:[]};
-    state.players.push(player);
     addEntry(player,50); addEntry(player,100); addEntry(player,100);
     save();
   `, context);
@@ -194,23 +202,34 @@ test('adding a player records the first entry but leaves every rebuy menu closed
   assert.ok(source.includes('function addPlayerToTable'), 'shared player-add tail exists');
   const context = vm.createContext({
     MIN_BUYIN: 50,
-    state: { players: [], phase: 'settlement' },
+    // Round 1: state.games is authoritative -- addPlayerToTable() writes the current slot, not
+    // the singular mirror directly. save() is stubbed below (a counter, not the real mirror), so
+    // seed an empty games array and assert the player landed in the slot addPlayerToTable() itself
+    // builds/finds (currentGameSlot, loaded via groupsPureSource).
+    state: { gameId: 'g1', players: [], phase: 'settlement', games: [] },
     appView: 'settle', openMenu: 'שחקן אחר', customOpen: 'שחקן אחר', pendingAmount: 100,
     animNext: null, animName: null, saves: 0, renders: 0,
   });
+  // Only the slot machinery (currentGameSlot/hasOpenPhase/isGameOpen) is needed here, not the
+  // whole groups-domain pure section -- that also defines the REAL createPlayer (which calls
+  // newId(), not stubbed in this minimal context) and would shadow the simplified stub below.
+  const slotSource = html.slice(html.indexOf('  function hasOpenPhase(currentGame) {'), html.indexOf('  // The engine has one current-game slot'));
   vm.runInContext(`
     function createPlayer({name, guestId, memberId}) { return {name, guestId, memberId, buyins: [], entryLog: []}; }
     function addEntry(player, amount) { player.buyins.push(amount); player.entryLog.push({amount}); }
     function save() { saves += 1; }
     function render() { renders += 1; }
+    ${slotSource}
     ${source}
     addPlayerToTable('רותם', {guestId: 'guest-rotem', memberId: 'member-rotem'});
   `, context);
   assert.equal(vm.runInContext('openMenu', context), null);
   assert.equal(vm.runInContext('customOpen', context), null);
   assert.equal(vm.runInContext('pendingAmount', context), null);
-  assert.deepEqual(JSON.parse(vm.runInContext('JSON.stringify(state.players[0].buyins)', context)), [50]);
-  assert.equal(vm.runInContext('state.phase', context), 'active');
+  const slot = JSON.parse(vm.runInContext('JSON.stringify(currentGameSlot(state))', context));
+  assert.ok(slot, 'a slot exists for the current game after the first player lands');
+  assert.deepEqual(slot.players.map(p => p.buyins), [[50]]);
+  assert.equal(slot.phase, 'active');
   assert.equal(vm.runInContext('appView', context), 'game');
   assert.equal(vm.runInContext('animNext', context), 'one');
   assert.equal(vm.runInContext('saves', context), 1);

@@ -38,7 +38,12 @@ test('initial app view follows the persisted phase and does not open an empty ta
 });
 
 test('the persisted state carries an explicit phase', () => {
-  assert.match(html, /phase:\s*normalizePhase\(/);
+  // Round 1: normalize() still computes the raw phase via normalizePhase(), but only as a local
+  // scratch value used to shape state.games (migrateGamesArray) -- the normalized document's own
+  // `phase` field is written exclusively by syncCurrentGameMirror now (games -> singular), so the
+  // literal `phase: normalizePhase(...)` object-literal shape this test used to look for no longer
+  // exists; the assignment shape does instead.
+  assert.match(html, /const phase = normalizePhase\(/);
   assert.match(html, /phase:\s*state\.phase/);
   assert.match(html, /phase:\s*data\.phase/);
 });
@@ -189,36 +194,50 @@ test('active game finish is a one-second hold and settlement can return to editi
   assert.match(html, /id="finishGameBtn"/);
   assert.match(html, /סיים משחק/);
   assert.match(html, /function finishGame\(\)/);
-  assert.match(html, /state\.phase = "settlement"/);
+  // Round 1: state.games is authoritative -- finishGame()/returnToGameEdit() flip the CURRENT
+  // SLOT's phase (save() mirrors it onto state.phase); the literal `state.phase = "..."` shape
+  // this test used to look for now exists only inside syncCurrentGameMirror itself (proved
+  // generically by the staleness guard in tests/multi-game-migration.test.cjs).
+  assert.match(html, /slot\.phase = "settlement"/);
   assert.match(html, /id="returnToGameBtn"/);
   assert.match(html, /חזור לעריכת המשחק/);
   assert.match(html, /function returnToGameEdit\(\)/);
-  assert.match(html, /state\.phase = "active"/);
+  assert.match(html, /slot\.phase = "active"/);
 });
 
 test('finish and return actions preserve the current game data', () => {
   const start = html.indexOf('  function finishGame()');
   const end = html.indexOf('  function clearCloseHold()', start);
   const context = vm.createContext({
-    state: { example: false, phase: 'active', gameId: 'g1', players: [{id: 'p1', buyins: [50]}], history: [] },
+    state: {
+      example: false, phase: 'active', gameId: 'g1', players: [{id: 'p1', buyins: [50]}], history: [],
+      // Round 1: state.games is authoritative -- seed the matching slot finishGame()/
+      // returnToGameEdit() actually write; save() is stubbed below (as it always was, to isolate
+      // the hold-gesture wiring from persistence) so it never runs the real mirror.
+      games: [{ gameId: 'g1', phase: 'active', players: [{id: 'p1', buyins: [50]}],
+        groupId: null, startedAt: null, leaderRef: null, settlementStatuses: {} }],
+    },
     saved: 0,
     view: null,
   });
   vm.runInContext('function save() { saved += 1; } function setAppView(next) { view = next; }' + openGameSource + html.slice(start, end), context);
   vm.runInContext('finishGame()', context);
-  assert.equal(vm.runInContext('state.phase', context), 'settlement');
+  assert.equal(vm.runInContext('currentGameSlot(state).phase', context), 'settlement');
   assert.equal(vm.runInContext('view', context), 'settle');
   assert.equal(vm.runInContext('saved', context), 1);
-  assert.equal(vm.runInContext('state.players[0].buyins[0]', context), 50);
+  assert.equal(vm.runInContext('currentGameSlot(state).players[0].buyins[0]', context), 50);
   vm.runInContext('returnToGameEdit()', context);
-  assert.equal(vm.runInContext('state.phase', context), 'active');
+  assert.equal(vm.runInContext('currentGameSlot(state).phase', context), 'active');
   assert.equal(vm.runInContext('view', context), 'game');
   assert.equal(vm.runInContext('saved', context), 2);
 });
 
 test('final close archives the game and returns to the Games dashboard', () => {
-  assert.match(html, /state\.phase = "closed";/);
-  assert.match(html, /state\.players = \[\];/);
+  // Round 1: state.games is authoritative -- finishCloseTable() drops the closing game's own slot
+  // and mints a fresh placeholder gameId with no slot of its own; save()'s mirror then resets
+  // phase/players (and every other mirrored field) to their closed/empty defaults itself.
+  assert.match(html, /state\.games = \(Array\.isArray\(state\.games\) \? state\.games : \[\]\)\.filter\(g => g\.gameId !== state\.gameId\);/);
+  assert.match(html, /state\.gameId = newId\(\);/);
   assert.match(html, /setAppView\("games"\);/);
 });
 
