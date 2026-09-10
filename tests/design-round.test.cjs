@@ -402,7 +402,7 @@ test('the photographed suit artwork sits first in the safe-area-padded app shell
 });
 
 test('renderGamesDashboard has no big title: the lead line is first and the column clears the corner stack', () => {
-  const source = sourceBetween('  function renderGamesDashboard() {', '  // Back arrow, 64px avatar');
+  const source = sourceBetween('  function renderGamesDashboard() {', '  function renderGroupHeader(');
   assert.doesNotMatch(source, /games-home-title/);
   assert.doesNotMatch(source, /"h2"/);
   assert.match(source, /el\("div", "games-home-in games-home-dash"\)/);

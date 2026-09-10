@@ -202,42 +202,79 @@ test('the group route is a real overlay (#groupSheet/#groupSheetContent markup) 
   assert.match(source, /backdrop\.hidden = true/);
 });
 
-test('the group sheet CSS reuses existing tokens (18px/24px .wrap+section padding, the 16px install-hint radius, the .28s grid-open timing) instead of inventing new spacing/motion values', () => {
-  const source = sourceBetween('  .group-sheet {', '  .group-set-section { width: 100%; }');
-  // 8px top, not 24px: the sticky grabber above the content contributes the rest of that gap.
-  assert.match(source, /padding: 8px 18px calc\(28px \+ env\(safe-area-inset-bottom, 0px\)\);/);
-  assert.match(source, /border-radius: 20px 20px 0 0;/);
-  // A sheet travels further than a panel expands, so it gets the iOS sheet easing rather than
-  // the .28s grid-open timing shared by in-place expansions.
-  assert.match(source, /transition: transform \.3s cubic-bezier\(\.32,\.72,0,1\);/);
-  // header/section spacing inside the sheet still comes from the shared .games-group-header /
-  // .games-primary-action / .games-section rules (24px section rhythm) — no sheet-only overrides.
-  assert.match(html, /\.games-section \{ margin-top: 24px; text-align: center; \}/);
+test('the group modal is centred and capped, not edge-anchored to the bottom of the viewport', () => {
+  const backdrop = html.match(/\.group-sheet \{[^}]*\}/)[0];
+  const panel = html.match(/\.group-sheet-panel \{[^}]*\}/)[0];
+  // Centred flex layout with padding on every side, so the dimmed dashboard stays visible all
+  // the way around the dialog instead of it filling the screen edge-to-edge.
+  assert.match(backdrop, /display: flex; align-items: center; justify-content: center;/);
+  assert.match(backdrop, /padding: max\(24px,/, 'margin on every side of the backdrop');
+  // No bottom-sheet leftovers: not absolutely anchored to an edge, no "starts N vh down" rule,
+  // no one-sided radius, no off-screen starting transform.
+  assert.doesNotMatch(panel, /position: absolute/);
+  assert.doesNotMatch(panel, /bottom: 0/);
+  assert.doesNotMatch(panel, /top: max\(/);
+  assert.doesNotMatch(panel, /border-radius: \d+px \d+px 0 0/);
+  assert.doesNotMatch(panel, /translateY\(100%\)/);
+  // Bounded on both axes with internal scroll for anything that doesn't fit.
+  assert.match(panel, /max-width: 440px/);
+  assert.match(panel, /max-height: min\(/);
+  assert.match(panel, /overflow-y: auto/);
+  assert.match(panel, /border-radius: 20px;/, 'rounded on all four corners, not just the top');
+  // The grabber was a sheet-only affordance — gone along with the sheet.
+  assert.doesNotMatch(html, /\.group-sheet-panel::before/);
 });
 
-test('the reduced-motion rule stays the very last rule in the stylesheet, after the new group-sheet CSS', () => {
+test('the modal scales+fades in on the app\'s existing .28s timing, not the old iOS-sheet slide', () => {
+  const panel = html.match(/\.group-sheet-panel \{[^}]*\}/)[0];
+  assert.match(panel, /transform: scale\(\.96\)/);
+  assert.match(panel, /opacity: 0;/);
+  assert.match(panel, /transition: transform \.28s ease, opacity \.28s ease;/);
+  assert.doesNotMatch(panel, /cubic-bezier/, 'the iOS sheet easing is retired with the sheet');
+  assert.match(html, /\.group-sheet\.open \.group-sheet-panel \{ transform: scale\(1\); opacity: 1; \}/);
+});
+
+test('the close control is an X pinned to the top-right (inline-start) of the modal, settings to the top-left (inline-end), both 44px targets with aria-labels', () => {
+  const header = sourceBetween('  function renderGroupHeader(summary, onBack, onSettings) {', '  // The group\'s own game has an active table');
+  // RTL: inset-inline-start is the physical right edge, inset-inline-end is the physical left —
+  // "top-right"/"top-left" as the owner sees them, not a directional guess.
+  assert.match(header, /back\.setAttribute\("aria-label", "סגור"\)/);
+  assert.match(header, /<path d="M6 6l12 12M18 6L6 18">/, 'an X glyph, not the old back chevron');
+  assert.doesNotMatch(header, /M9 5l7 7-7 7/, 'the chevron path must be gone from this header');
+  assert.match(header, /settingsBtn\.setAttribute\("aria-label", "הגדרות קבוצה"\)/);
+  const cornerCss = html.match(/\.games-group-header \.back-arrow, \.games-group-header \.games-group-settings-btn \{[^}]*\}/)[0];
+  assert.match(cornerCss, /min-width: 44px; min-height: 44px;/);
+  assert.match(html, /\.games-group-header \.back-arrow \{ inset-inline-start: 8px; \}/);
+  assert.match(html, /\.games-group-header \.games-group-settings-btn \{ inset-inline-end: 8px; \}/);
+});
+
+test('the settings corner control drops its text label at this size — icon-only, matching the X as a pair', () => {
+  const header = sourceBetween('  function renderGroupHeader(summary, onBack, onSettings) {', '  // The group\'s own game has an active table');
+  assert.doesNotMatch(header, /appendChild\(el\("span", "", "הגדרות"\)\)/);
+});
+
+test('an empty leaderboard keeps its copy and position but is visually de-emphasised, not removed', () => {
+  const source = sourceBetween('  function renderGroupLeaders(entries) {', '  function renderGroupMembers(');
+  assert.match(source, /section\.classList\.add\("games-section-empty"\)/);
+  assert.match(source, /הדירוג יופיע אחרי המשחק הראשון/);
+  assert.match(html, /\.group-sheet-panel \.games-section\.games-section-empty \{ margin-top: 12px; \}/);
+});
+
+test('the reduced-motion rule stays the very last rule in the stylesheet, after the new group modal CSS', () => {
   const groupSheetIdx = html.indexOf('.group-sheet {');
   const reducedMotionIdx = html.indexOf('@media (prefers-reduced-motion: reduce)');
   const styleCloseIdx = html.indexOf('</style>');
   assert.ok(groupSheetIdx > 0, 'group-sheet CSS should exist');
-  assert.ok(reducedMotionIdx > groupSheetIdx, 'reduced-motion rule should come after the group-sheet CSS');
+  assert.ok(reducedMotionIdx > groupSheetIdx, 'reduced-motion rule should come after the group modal CSS');
   const tail = html.slice(html.indexOf('{', reducedMotionIdx), styleCloseIdx);
   assert.match(tail, /\* \{ animation: none !important; transition: none !important; \}\s*\}\s*$/);
 });
 
-// ---------- the sheet must be legible AS a sheet, and must animate open ----------
+// ---------- the modal must still animate open/closed through the existing safe pattern ----------
 
-test('both group surfaces open as an animated sheet, not a full-screen swap', () => {
-  const panel = html.match(/\.group-sheet-panel \{[^}]*\}/)[0];
-  // Starting at 64px filled the screen; sharing --bg with the page behind it, that read as a
-  // full page. It must start well down the viewport and carry a lifted edge.
-  assert.match(panel, /top: max\(/, 'the panel must start well below the top of the viewport');
-  assert.match(panel, /box-shadow:/, 'a sheet needs a lifted edge against a same-coloured page');
-  assert.match(panel, /transform: translateY\(100%\)/);
-  assert.match(panel, /transition: transform/);
-  assert.match(html, /\.group-sheet-panel::before \{[^}]*position: sticky/, 'grabber affordance');
+test('both group surfaces still open through afterNextFrame, and close by reversing the transition before hiding', () => {
   // Adding .open in the same frame as the unhide gives the transition no start value, so the
-  // sheet would just appear. Both surfaces must wait two frames.
+  // modal would just appear. Both surfaces must wait two frames.
   for (const fn of ['openGroupPreview', 'syncGroupSheet', 'pressThenOpen']) {
     const body = html.slice(html.indexOf('function ' + fn));
     assert.match(body.slice(0, 900), /afterNextFrame\(/, fn + ' must defer through afterNextFrame');
