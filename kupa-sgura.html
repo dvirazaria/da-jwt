@@ -784,58 +784,78 @@
     padding-block: calc(58px + env(safe-area-inset-top, 0px)) calc(28px + env(safe-area-inset-bottom, 0px));
   }
   #groupSettings .login-in { margin-inline: auto; }
-  #groupPreview {
-    z-index: 41; align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch;
-    padding-block: calc(58px + env(safe-area-inset-top, 0px)) calc(28px + env(safe-area-inset-bottom, 0px));
-  }
-  #groupPreview .games-group-header { padding-top: 0; }
-  #groupPreview .games-section { text-align: start; }
-  #groupPreview .games-section-title, #groupPreview .games-member-add,
-  #groupPreview .games-former-members, #groupPreview .games-history-item { text-align: center; }
-  /* ---------- group page sheet ---------- */
-  /* The "group" appView (renderGroupPage) used to swap out #gamesHome in place; it now rises as
-     a bottom sheet over the (still-rendered, dimmed) games dashboard behind it -- #groupSettings
-     (z-index 42) keeps nesting above it unchanged since both are position:fixed siblings in the
-     same stacking context. Motion mirrors the app's .28s grid-open timing (DESIGN.md) with a
-     translate instead of a grid track, since this is a full panel, not an inline expand. */
+  /* ---------- group page modal ---------- */
+  /* The dashboard's group-card preview (#groupPreview) and the "group" appView route
+     (#groupSheet / renderGroupPage) open the same centred modal -- a small, bounded look-up
+     and action surface, not a drawer or a navigation destination, so it sits in the middle of
+     the viewport rather than rising from an edge (Apple HIG "Modality": a centred dialog is
+     right for self-contained, dismissible content; Material's dialog guidance sizes a dialog to
+     its content with a capped max-height and internal scroll instead of letting it grow off
+     screen). The games dashboard stays rendered and dimmed behind it -- #groupSettings
+     (z-index 42) keeps nesting above it unchanged, since both are position:fixed siblings in the
+     same stacking context. #groupPreview and #groupSheet carry no id-scoped rules of their own
+     any more: both are driven entirely by .group-sheet/.group-sheet-panel so the two surfaces
+     can never drift apart. */
   .group-sheet {
     position: fixed; inset: 0; z-index: 41;
     background: rgba(5,7,10,.6);
+    display: flex; align-items: center; justify-content: center;
+    padding: max(24px, env(safe-area-inset-top, 0px)) 20px max(24px, env(safe-area-inset-bottom, 0px));
     opacity: 0; pointer-events: none;
     transition: opacity .28s ease;
   }
   :root[data-theme="light"] .group-sheet { background: rgba(12,21,25,.46); }
   .group-sheet.open { opacity: 1; pointer-events: auto; }
+  /* Capped well under the viewport on every side, so the dimmed dashboard stays visible all the
+     way around it; a dialog scales+fades in place (Material's dialog transition) rather than
+     sliding from an edge, since a slide implies the edge it came from -- there isn't one here.
+     Same .28s duration as the backdrop fade and every grid-open transition elsewhere in the app;
+     only the property changed, not the timing. */
   .group-sheet-panel {
-    position: absolute; inset-inline: 0; bottom: 0;
-    /* Starts well down the viewport on purpose: at 64px the panel filled the screen and, sharing
-       --bg with the page behind it, was indistinguishable from a full-page swap. */
-    top: max(calc(96px + env(safe-area-inset-top, 0px)), 16vh);
+    width: 100%; max-width: 440px; max-height: min(640px, 84vh);
     background: var(--bg);
-    border-radius: 20px 20px 0 0;
-    box-shadow: 0 -14px 34px rgba(0,0,0,.34);
+    border-radius: 20px;
+    box-shadow: 0 20px 48px rgba(0,0,0,.4);
     overflow-y: auto; -webkit-overflow-scrolling: touch;
-    padding: 8px 18px calc(28px + env(safe-area-inset-bottom, 0px));
-    transform: translateY(100%);
-    transition: transform .3s cubic-bezier(.32,.72,0,1);
+    padding: 20px 18px 24px;
+    transform: scale(.96);
+    opacity: 0;
+    transition: transform .28s ease, opacity .28s ease;
   }
-  /* The grabber is the affordance that says "sheet". Sticky so it survives internal scrolling. */
-  .group-sheet-panel::before {
-    content: ""; display: block; position: sticky; top: 0; z-index: 2;
-    width: 38px; height: 4px; margin: 8px auto 14px;
-    border-radius: 999px; background: var(--line);
-  }
-  .group-sheet.open .group-sheet-panel { transform: translateY(0); }
-  .group-sheet-in { width: 100%; max-width: 440px; margin-inline: auto; }
-  /* The sheet already supplies 24px of top padding, so the page-mode header gap (40px on
-     .games-group-header) would double up here -- same fix #groupPreview applies above. */
-  .group-sheet-panel .games-group-header { padding-top: 0; }
+  :root[data-theme="light"] .group-sheet-panel { box-shadow: 0 20px 40px rgba(12,21,25,.22); }
+  .group-sheet.open .group-sheet-panel { transform: scale(1); opacity: 1; }
+  .group-sheet-in { width: 100%; }
+  /* The panel supplies 20px of its own top padding, and the corner controls (see
+     .games-group-header .back-arrow / .games-group-settings-btn below) need clearance below
+     them -- so the header keeps real top padding here instead of the old "sheet already gives
+     us room" zero-out. */
+  .group-sheet-panel .games-group-header { padding-top: 56px; }
   .group-sheet-panel .games-section { text-align: start; }
   .group-sheet-panel .games-section-title, .group-sheet-panel .games-member-add,
   .group-sheet-panel .games-former-members, .group-sheet-panel .games-history-item { text-align: center; }
+  /* Layout recommendation L1 (see DESIGN.md): a tighter inter-section rhythm than the 24px the
+     full-width dashboard uses, so more of דירוג/חברים starts inside the capped modal height
+     before internal scroll takes over. */
+  .group-sheet-panel .games-section { margin-top: 18px; }
+  /* L2: an empty דירוג carries no information yet (no game has closed) -- it keeps the same
+     copy and position (Splitwise/WhatsApp both keep a placeholder section rather than hiding it,
+     so the page doesn't reflow once data appears), but does not claim the same vertical weight
+     as a populated section. */
+  .group-sheet-panel .games-section.games-section-empty { margin-top: 12px; }
   .group-set-section { width: 100%; }
   .group-set-section .games-section { margin-top: 0; }
   .join-notice-actions { display: flex; align-items: center; gap: 16px; }
+  /* L3: the modal's two corner controls are a matched pair of 44px icon targets -- an X to
+     close (inline-start, the physical right edge in this RTL app) and the group-settings gear
+     (inline-end, physical left) -- pinned to the header's own top edge rather than the old
+     safe-area-aware offset the full-screen login/settings overlays need (this panel already sits
+     well clear of the real screen edge, so that offset would only add dead space here). */
+  .games-group-header .back-arrow, .games-group-header .games-group-settings-btn {
+    top: 8px; min-width: 44px; min-height: 44px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0;
+  }
+  .games-group-header .back-arrow { inset-inline-start: 8px; }
+  .games-group-header .games-group-settings-btn { inset-inline-end: 8px; }
   .login .eyebrow { justify-content: flex-start; }
   .login h2 { font-weight: 900; font-size: 34px; margin: 0; line-height: 1.1; }
   .login p { color: var(--dim); font-size: 14px; font-weight: 300; margin: -8px 0 0; }
@@ -6052,13 +6072,17 @@
     else if (appView === "games") renderGamesDashboard();
   }
 
-  // Back arrow, 64px avatar (image or initial), name and member count — the top of the group page.
+  // Close (X, top-right/inline-start in this RTL app) and settings gear (top-left/inline-end),
+  // 64px avatar (image or initial), name and member count — the top of the group modal.
+  // The close control used to be a "back" chevron; as a centred modal (not a page you navigate
+  // into) an X reads correctly as "dismiss", so both the glyph and the aria-label changed —
+  // onBack itself is unchanged (still closeGroupPreview/setAppView("games")).
   function renderGroupHeader(summary, onBack, onSettings) {
     const header = el("div", "games-group-header");
     const back = el("button", "back-arrow");
     back.type = "button";
-    back.setAttribute("aria-label", "חזרה");
-    back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>';
+    back.setAttribute("aria-label", "סגור");
+    back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
     back.addEventListener("click", onBack || (() => setAppView("games")));
     header.appendChild(back);
     // Reachable by any active member — not admin-only — since "עזוב קבוצה" must stay reachable
@@ -6068,8 +6092,10 @@
       settingsBtn.type = "button";
       settingsBtn.setAttribute("aria-label", "הגדרות קבוצה");
       // Row 34: same gear as the profile's corner control, so "הגדרות" looks the same in both.
+      // Icon-only at this size: paired with the X as two matched 44px corner targets, the old
+      // text label made this one read heavier than its counterpart — the aria-label still names
+      // it for assistive tech.
       settingsBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>';
-      settingsBtn.appendChild(el("span", "", "הגדרות"));
       settingsBtn.addEventListener("click", onSettings || openGroupSettings);
       header.appendChild(settingsBtn);
     }
@@ -6372,6 +6398,10 @@
     section.appendChild(el("h3", "games-section-title", "דירוג"));
     const list = Array.isArray(entries) ? entries : [];
     if (!list.length) {
+      // L2 (DESIGN.md): a pre-first-game leaderboard carries no information yet — same copy and
+      // position, but a quieter class so it doesn't claim the same vertical weight as a populated
+      // ranking (see .group-sheet-panel .games-section.games-section-empty).
+      section.classList.add("games-section-empty");
       section.appendChild(el("p", "games-empty", "הדירוג יופיע אחרי המשחק הראשון"));
     } else {
       list.forEach((entry, i) => {
