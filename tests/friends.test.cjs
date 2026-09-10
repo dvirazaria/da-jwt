@@ -214,3 +214,43 @@ test('createFriendRequest and respondToFriendRequest each have exactly one UI ca
   assert.match(html, /if \(!createFriendRequest\(state\.friendships, meRef, toRef, new Date\(\)\.toISOString\(\)\)\)/);
   assert.match(html, /if \(!respondToFriendRequest\(state\.friendships \|\| \[\], id, myFriendRef\(\), accept, new Date\(\)\.toISOString\(\)\)\) return;/);
 });
+
+// ---------- empty-state redesign (researched empty state, one primary action) ----------
+
+const friendsPageSource = sourceBetween('  function renderFriendsPage()', '  function renderProfile()');
+
+test('the empty state (no friends, no pending requests) renders a headline, a benefit line, and promotes the share link to the page\'s one primary action', () => {
+  const emptyBranch = friendsPageSource.slice(
+    friendsPageSource.indexOf('if (!hasFriendData) {'),
+    friendsPageSource.indexOf('} else {')
+  );
+  assert.match(emptyBranch, /el\("h2", "friends-hero-title", "עוד אין חברים\?"\)/);
+  assert.match(emptyBranch, /el\("p", "friends-hero-benefit",/);
+  // the share-link action is the page's real .btn-primary; add-by-name is the quieter .btn-quiet
+  // secondary (same weighting the login screen already uses for its lead vs. skip action).
+  assert.match(friendsPageSource, /el\("button", "btn-primary friends-share-btn", friendInviteSharing \? "יוצר קישור…" : "שתפו קישור חברות"\)/);
+  assert.match(friendsPageSource, /el\("button", "btn-quiet friends-add-toggle", "הוסף חבר"\)/);
+});
+
+test('when there is data, incoming and outgoing requests are rendered before the accepted-friends list', () => {
+  const populatedBranch = friendsPageSource.slice(
+    friendsPageSource.indexOf('} else {'),
+    friendsPageSource.indexOf('// Primary path')
+  );
+  const incomingIdx = populatedBranch.indexOf('renderFriendGroup(friendsSec, "בקשות שהתקבלו"');
+  const outgoingIdx = populatedBranch.indexOf('renderFriendGroup(friendsSec, "בקשות שנשלחו"');
+  const friendsIdx = populatedBranch.indexOf('renderFriendGroup(friendsSec, "חברים"');
+  assert.ok(incomingIdx >= 0, 'incoming requests must render');
+  assert.ok(outgoingIdx > incomingIdx, 'outgoing requests must follow incoming requests');
+  assert.ok(friendsIdx > outgoingIdx, 'the friends list must follow both request groups, never lead them');
+});
+
+test('the share action is appended before the add-by-name action, keeping the primary path first in reading and tab order', () => {
+  const shareAppendIdx = friendsPageSource.indexOf('friendsSec.appendChild(inviteMeBtn)');
+  const addAppendIdx = friendsPageSource.indexOf('friendsSec.appendChild(addFriendBtn)');
+  assert.ok(shareAppendIdx >= 0 && addAppendIdx > shareAppendIdx);
+});
+
+test('the empty-state redesign changes presentation only -- no localStorage access inside renderFriendsPage', () => {
+  assert.doesNotMatch(friendsPageSource, /localStorage\./);
+});

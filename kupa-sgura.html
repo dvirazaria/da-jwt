@@ -676,6 +676,17 @@
   .debt-paid-btn { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); font-size: 12px; font-weight: 500; padding: 4px 10px; min-height: 30px; }
   .debt-paid-btn:hover { color: var(--accent); border-color: var(--accent); }
   .friend-helper { color: var(--dim); font-size: 12px; font-weight: 300; margin-top: 8px; text-align: center; }
+  /* Friends screen empty state (Apple HIG / Material "no contacts yet" pattern, and the same
+     headline+benefit+one-button shape as .login h2/.login-benefit/.btn-primary above): a single
+     headline, one benefit line, then the share-link action as the page's one primary button. No
+     new illustration — the app already reserves the suits mark for the header, not per-screen. */
+  .friends-hero { align-self: stretch; text-align: center; }
+  .friends-hero-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+  .friends-hero-benefit { margin: 8px 0 0; color: var(--dim); font-size: 14px; font-weight: 300; }
+  /* Section rhythm matches the dashboard's 24px; the secondary add-by-name path sits closer
+     underneath, quieter, echoing the login screen's primary/.btn-quiet spacing. */
+  .friends-share-btn { margin-top: 24px; }
+  .friends-add-toggle { margin-top: 12px; }
   /* friend request row actions — a full 44px target inside the flat .debt-row */
   .friend-action {
     flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; color: var(--dim);
@@ -8245,10 +8256,16 @@
       ? friendRequestsFor(state.friendships || [], myFriendRef())
       : { friends: [], incoming: [], outgoing: [] };
     const hasFriendData = friendData.friends.length || friendData.incoming.length || friendData.outgoing.length;
+    // Empty state: a real headline, a one-sentence benefit and nothing else competing for
+    // attention — the share-link button just below is the page's one primary action (see the
+    // CSS comment on .friends-hero for the pattern this follows). A request always needs a
+    // decision, so when there is data it leads; the accepted-friends list follows.
     if (!hasFriendData) {
-      friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים"));
+      const hero = el("div", "friends-hero");
+      hero.appendChild(el("h2", "friends-hero-title", "עוד אין חברים?"));
+      hero.appendChild(el("p", "friends-hero-benefit", "חברים שמצטרפים דרך קישור זמינים מיד לבחירה בכל משחק וקבוצה."));
+      friendsSec.appendChild(hero);
     } else {
-      renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
       renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך",
         online ? (i => {
           const id = friendData.incoming[i].id;
@@ -8262,32 +8279,30 @@
           const id = friendData.outgoing[i].id;
           return [{ label: "בטל", onClick: () => withdrawFriendRequest(id) }];
         }) : null);
+      renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
     }
-    const addFriendBtn = el("button", "btn-primary", "הוסף חבר");
-    addFriendBtn.type = "button";
-    addFriendBtn.disabled = !online;
-    addFriendBtn.setAttribute("aria-disabled", online ? "false" : "true");
-    addFriendBtn.setAttribute("aria-expanded", addFriendOpen ? "true" : "false");
-    addFriendBtn.style.marginTop = "14px";
-    if (online) addFriendBtn.addEventListener("click", toggleAddFriendPanel);
-    friendsSec.appendChild(addFriendBtn);
-    if (online) renderAddFriendPanel(friendsSec);
-    if (!online) friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
-    // The reverse direction uses a stable server token, so it is disabled until a signed-in
+    // Primary path: share my personal link — the frictionless route, no lookup or typed name.
+    // The reverse direction uses a stable server token, so it stays disabled until a signed-in
     // cloud session can create a redeemable link.
     if (me) {
-      const inviteMeBtn = el("button", "games-invite-action", friendInviteSharing ? "יוצר קישור…" : "הוסף אותי כחבר");
+      const inviteMeBtn = el("button", "btn-primary friends-share-btn", friendInviteSharing ? "יוצר קישור…" : "שתפו קישור חברות");
       inviteMeBtn.type = "button";
       inviteMeBtn.disabled = !online || friendInviteSharing;
-      inviteMeBtn.style.marginTop = "14px";
-      // .games-invite-action's documented 40px (DESIGN.md) matches its three existing siblings
-      // ("העתק קישור"/"שתף"/"וואטסאפ") on the group invite card; this one stands alone on the
-      // friends screen, so it gets the full 44px touch target on top of that shared style.
-      inviteMeBtn.style.minHeight = "44px";
       if (online) inviteMeBtn.addEventListener("click", shareFriendInvite);
       friendsSec.appendChild(inviteMeBtn);
       if (friendInviteShareError) friendsSec.appendChild(el("p", "friend-error", friendInviteShareError));
     }
+    // Secondary path: look someone up by exact email or name — quieter, same shape as the
+    // login screen's "המשך בלי חשבון": a real, bordered, 44px action, just not the lead one.
+    const addFriendBtn = el("button", "btn-quiet friends-add-toggle", "הוסף חבר");
+    addFriendBtn.type = "button";
+    addFriendBtn.disabled = !online;
+    addFriendBtn.setAttribute("aria-disabled", online ? "false" : "true");
+    addFriendBtn.setAttribute("aria-expanded", addFriendOpen ? "true" : "false");
+    if (online) addFriendBtn.addEventListener("click", toggleAddFriendPanel);
+    friendsSec.appendChild(addFriendBtn);
+    if (online) renderAddFriendPanel(friendsSec);
+    if (!online) friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
     box.appendChild(friendsSec);
   }
 
