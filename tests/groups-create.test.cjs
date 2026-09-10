@@ -149,10 +149,12 @@ test('the group card row opens its preview and is keyboard-accessible, without a
 
 // ---------- group card press + layout (owner ask: animate on tap, count beside the name) ----------
 
-test('pressThenOpen holds the pressed class for one animation frame before calling onOpen', () => {
+test('pressThenOpen paints the press, then opens even when rAF is paused', () => {
   const source = sourceBetween('  function pressThenOpen(card, onOpen) {', '  function renderGroupsSection(');
   assert.match(source, /card\.classList\.add\("pressed"\)/);
-  assert.match(source, /requestAnimationFrame\(\(\) => \{/);
+  // Not a bare requestAnimationFrame: rAF is paused in a hidden/background tab, so gating the
+  // navigation on it alone makes the tap silently do nothing there.
+  assert.match(source, /afterNextFrame\(\(\) => \{/);
   assert.match(source, /card\.classList\.remove\("pressed"\)/);
   assert.match(source, /onOpen\(\);/);
 });

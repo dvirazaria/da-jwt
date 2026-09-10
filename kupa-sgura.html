@@ -80,7 +80,7 @@
      pinned with a physical `left`), so the two never collide. */
   .dot {
     width: 7px; height: 7px; border-radius: 50%; background: var(--faint);
-    position: absolute; top: -25px; inset-inline-start: 18px;
+    position: absolute; top: -40px; inset-inline-start: 18px;
     z-index: 30;
     transition: background .4s, box-shadow .4s, opacity .3s;
   }
@@ -788,7 +788,6 @@
     z-index: 41; align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch;
     padding-block: calc(58px + env(safe-area-inset-top, 0px)) calc(28px + env(safe-area-inset-bottom, 0px));
   }
-  .group-preview-in { width: 100%; max-width: 440px; margin-inline: auto; }
   #groupPreview .games-group-header { padding-top: 0; }
   #groupPreview .games-section { text-align: start; }
   #groupPreview .games-section-title, #groupPreview .games-member-add,
@@ -805,17 +804,26 @@
     opacity: 0; pointer-events: none;
     transition: opacity .28s ease;
   }
-  :root[data-theme="light"] .group-sheet { background: rgba(12,21,25,.32); }
+  :root[data-theme="light"] .group-sheet { background: rgba(12,21,25,.46); }
   .group-sheet.open { opacity: 1; pointer-events: auto; }
   .group-sheet-panel {
     position: absolute; inset-inline: 0; bottom: 0;
-    top: calc(64px + env(safe-area-inset-top, 0px));
+    /* Starts well down the viewport on purpose: at 64px the panel filled the screen and, sharing
+       --bg with the page behind it, was indistinguishable from a full-page swap. */
+    top: max(calc(96px + env(safe-area-inset-top, 0px)), 16vh);
     background: var(--bg);
-    border-radius: 16px 16px 0 0;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -14px 34px rgba(0,0,0,.34);
     overflow-y: auto; -webkit-overflow-scrolling: touch;
-    padding: 24px 18px calc(28px + env(safe-area-inset-bottom, 0px));
+    padding: 8px 18px calc(28px + env(safe-area-inset-bottom, 0px));
     transform: translateY(100%);
-    transition: transform .28s ease;
+    transition: transform .3s cubic-bezier(.32,.72,0,1);
+  }
+  /* The grabber is the affordance that says "sheet". Sticky so it survives internal scrolling. */
+  .group-sheet-panel::before {
+    content: ""; display: block; position: sticky; top: 0; z-index: 2;
+    width: 38px; height: 4px; margin: 8px auto 14px;
+    border-radius: 999px; background: var(--line);
   }
   .group-sheet.open .group-sheet-panel { transform: translateY(0); }
   .group-sheet-in { width: 100%; max-width: 440px; margin-inline: auto; }
@@ -1150,7 +1158,7 @@
         </div>
       </div>
     </div>
-    <p class="empty-note" style="margin-top:6px">גרסה 66</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 67</p>
     <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
 </div>
@@ -1174,8 +1182,10 @@
   </div>
 </div>
 
-<div class="login group-preview" id="groupPreview" hidden>
-  <div class="group-preview-in" id="groupPreviewContent"></div>
+<div class="group-sheet" id="groupPreview" hidden>
+  <div class="group-sheet-panel">
+    <div class="group-sheet-in" id="groupPreviewContent"></div>
+  </div>
 </div>
 
 <!-- The "group" appView route (renderGroupPage/openGroup) -- presented as a sheet rising over
@@ -5856,9 +5866,20 @@
 
   // Adds the press class, waits one animation frame so it paints, then calls onOpen. Shared by
   // click and keyboard activation in renderGroupCard.
+  // requestAnimationFrame is paused in a hidden/background tab and throttled in low-power mode.
+  // Anything that gates a navigation or an open transition on it would simply never happen
+  // there -- a tap that does nothing. Race a short timer so the action always lands; whichever
+  // fires first wins, and the loser is a no-op.
+  function afterNextFrame(fn) {
+    let done = false;
+    const run = () => { if (done) return; done = true; fn(); };
+    requestAnimationFrame(() => requestAnimationFrame(run));
+    setTimeout(run, 60);
+  }
+
   function pressThenOpen(card, onOpen) {
     card.classList.add("pressed");
-    requestAnimationFrame(() => {
+    afterNextFrame(() => {
       card.classList.remove("pressed");
       onOpen();
     });
@@ -5976,15 +5997,22 @@
   function openGroupPreview(groupId) {
     currentGroupId = String(groupId || "");
     repairMyGroupMembership(currentGroupId);
-    document.getElementById("groupPreview").hidden = false;
+    const overlay = document.getElementById("groupPreview");
+    overlay.hidden = false;
     renderGroupPreview();
+    // A class added in the same frame as the unhide has no start value to animate from, so the
+    // sheet would simply appear. Two frames: one to let `hidden` come off and the closed state
+    // compute, one to flip to open.
+    afterNextFrame(() => { if (!overlay.hidden) overlay.classList.add("open"); });
   }
 
   function closeGroupPreview() {
     const overlay = document.getElementById("groupPreview");
     if (!overlay || overlay.hidden) return;
-    overlay.hidden = true;
+    overlay.classList.remove("open");
     resetStartGamePanel();
+    // Hide only after the reverse transition has run, same pattern syncGroupSheet() uses.
+    setTimeout(() => { if (!overlay.classList.contains("open")) overlay.hidden = true; }, 300);
   }
 
   function renderGroupPreview() {
@@ -6945,8 +6973,7 @@
       backdrop.hidden = false;
       if (!groupSheetOpen) {
         groupSheetOpen = true;
-        void backdrop.offsetWidth; // force reflow so the transition plays from translateY(100%)
-        backdrop.classList.add("open");
+        afterNextFrame(() => { if (appView === "group") backdrop.classList.add("open"); });
       }
     } else if (groupSheetOpen) {
       groupSheetOpen = false;

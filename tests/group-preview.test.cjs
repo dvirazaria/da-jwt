@@ -13,7 +13,11 @@ function sourceBetween(startMarker, endMarker) {
 }
 
 test('the dashboard group preview is a full in-app overlay with one injected close control', () => {
-  assert.match(html, /<div class="login group-preview" id="groupPreview" hidden>/);
+  // The preview is the surface a group card opens, so it must be the SAME sheet as the "group"
+  // route -- not a .login full-screen swap, which is what made it read as a whole page.
+  assert.match(html, /<div class="group-sheet" id="groupPreview" hidden>/);
+  assert.doesNotMatch(html, /class="login group-preview"/, 'the preview must not reuse the full-screen login shell');
+  assert.match(html, /id="groupPreview"[\s\S]{0,120}class="group-sheet-panel"/);
   assert.match(html, /id="groupPreviewContent"/);
   assert.doesNotMatch(html, /id="groupPreviewBackBtn"/);
   const renderer = sourceBetween('  function renderGroupPreview() {', '  function renderGroupSurface() {');

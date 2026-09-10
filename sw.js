@@ -1,4 +1,4 @@
-const CACHE = "kupa-v66";
+const CACHE = "kupa-v67";
 
 // The full app shell: everything needed for a cold install / offline first load. Every entry here
 // must exist on disk and actually ship in the Vercel deploy (see .vercelignore) — this file is not

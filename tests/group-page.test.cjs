@@ -204,9 +204,12 @@ test('the group route is a real overlay (#groupSheet/#groupSheetContent markup) 
 
 test('the group sheet CSS reuses existing tokens (18px/24px .wrap+section padding, the 16px install-hint radius, the .28s grid-open timing) instead of inventing new spacing/motion values', () => {
   const source = sourceBetween('  .group-sheet {', '  .group-set-section { width: 100%; }');
-  assert.match(source, /padding: 24px 18px calc\(28px \+ env\(safe-area-inset-bottom, 0px\)\);/);
-  assert.match(source, /border-radius: 16px 16px 0 0;/);
-  assert.match(source, /transition: transform \.28s ease;/);
+  // 8px top, not 24px: the sticky grabber above the content contributes the rest of that gap.
+  assert.match(source, /padding: 8px 18px calc\(28px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+  assert.match(source, /border-radius: 20px 20px 0 0;/);
+  // A sheet travels further than a panel expands, so it gets the iOS sheet easing rather than
+  // the .28s grid-open timing shared by in-place expansions.
+  assert.match(source, /transition: transform \.3s cubic-bezier\(\.32,\.72,0,1\);/);
   // header/section spacing inside the sheet still comes from the shared .games-group-header /
   // .games-primary-action / .games-section rules (24px section rhythm) — no sheet-only overrides.
   assert.match(html, /\.games-section \{ margin-top: 24px; text-align: center; \}/);
@@ -220,4 +223,31 @@ test('the reduced-motion rule stays the very last rule in the stylesheet, after 
   assert.ok(reducedMotionIdx > groupSheetIdx, 'reduced-motion rule should come after the group-sheet CSS');
   const tail = html.slice(html.indexOf('{', reducedMotionIdx), styleCloseIdx);
   assert.match(tail, /\* \{ animation: none !important; transition: none !important; \}\s*\}\s*$/);
+});
+
+// ---------- the sheet must be legible AS a sheet, and must animate open ----------
+
+test('both group surfaces open as an animated sheet, not a full-screen swap', () => {
+  const panel = html.match(/\.group-sheet-panel \{[^}]*\}/)[0];
+  // Starting at 64px filled the screen; sharing --bg with the page behind it, that read as a
+  // full page. It must start well down the viewport and carry a lifted edge.
+  assert.match(panel, /top: max\(/, 'the panel must start well below the top of the viewport');
+  assert.match(panel, /box-shadow:/, 'a sheet needs a lifted edge against a same-coloured page');
+  assert.match(panel, /transform: translateY\(100%\)/);
+  assert.match(panel, /transition: transform/);
+  assert.match(html, /\.group-sheet-panel::before \{[^}]*position: sticky/, 'grabber affordance');
+  // Adding .open in the same frame as the unhide gives the transition no start value, so the
+  // sheet would just appear. Both surfaces must wait two frames.
+  for (const fn of ['openGroupPreview', 'syncGroupSheet', 'pressThenOpen']) {
+    const body = html.slice(html.indexOf('function ' + fn));
+    assert.match(body.slice(0, 900), /afterNextFrame\(/, fn + ' must defer through afterNextFrame');
+  }
+  // rAF is paused in a hidden tab: gating a tap on it alone means the tap does nothing there.
+  const helper = html.slice(html.indexOf('function afterNextFrame'), html.indexOf('function afterNextFrame') + 400);
+  assert.match(helper, /requestAnimationFrame\(\(\) => requestAnimationFrame\(/);
+  assert.match(helper, /setTimeout\(run, 60\)/, 'a timer must back up rAF so the action always lands');
+  // Closing plays the exit before hiding.
+  const close = html.slice(html.indexOf('function closeGroupPreview'), html.indexOf('function closeGroupPreview') + 700);
+  assert.match(close, /classList\.remove\("open"\)/);
+  assert.match(close, /setTimeout/);
 });
