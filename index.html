@@ -84,9 +84,18 @@
     display: flex; align-items: center; gap: 8px;
     font-size: 11px; letter-spacing: .06em; color: var(--dim); font-weight: 400;
   }
-  /* Visually a 7px circle; ::before pads its tap target to 44px without shifting any layout. */
+  /* Visually a 7px circle; ::before pads its tap target to 44px without shifting any layout.
+     Pinned into the true top-right corner instead of sitting in the eyebrow's in-flow spot below
+     the logo, which read as "near the edge" but not "in the corner". -25px (relative to header,
+     itself pinned by the rule above) is that same in-flow position moved up ~25px -- header's own
+     top edge already carries env(safe-area-inset-top) via .wrap's padding, so the dot inherits the
+     safe-area clearance without repeating the calc. inset-inline-start (= the right edge in this
+     RTL layout) keeps it on the opposite physical edge from .corner-btn (#resetBtn/#themeBtn,
+     pinned with a physical `left`), so the two never collide. */
   .dot {
-    width: 7px; height: 7px; border-radius: 50%; background: var(--faint); position: relative;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--faint);
+    position: absolute; top: -25px; inset-inline-start: 18px;
+    z-index: 30;
     transition: background .4s, box-shadow .4s, opacity .3s;
   }
   .dot::before { content: ""; position: absolute; inset-block-start: 50%; inset-inline-start: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
@@ -459,10 +468,17 @@
   .games-detail-totals { color: var(--dim); font-size: 12px; font-weight: 300; margin: 8px 0 0; }
   .games-detail-totals b { color: var(--text); font-weight: 600; }
   .games-group-head { display: flex; align-items: center; justify-content: flex-start; gap: 10px; min-height: 44px; text-align: start; }
-  .games-group-head[role="button"] { cursor: pointer; transition: opacity .18s ease, transform .12s ease; }
-  .games-group-head[role="button"]:active { transform: scale(.97); }
+  .games-group-head[role="button"] { cursor: pointer; }
   .games-group-head[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
+  /* Owner ask: tapping a group card must animate as one unit (DESIGN.md's standard button press,
+     not the smaller row-only shrink used elsewhere). :active covers a real pointer hold; the JS
+     "pressed" class (added by pressThenOpen) covers keyboard activation and guarantees the press
+     frame paints even when click -> onOpen would otherwise collapse into a single frame. */
+  .games-group-card { transition: transform .12s ease; }
+  .games-group-card:active, .games-group-card.pressed { transform: scale(.92); }
   .games-group-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; background: var(--line); color: var(--dim); font-weight: 700; }
+  .games-group-copy { flex: 1 1 auto; min-width: 0; }
+  .games-group-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .games-empty { color: var(--faint); font-size: 14px; font-weight: 300; margin: 0; }
 
   /* create-group inline panel — same grid-collapse transition as .pmenu */
@@ -690,6 +706,17 @@
   .debt-paid-btn { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); font-size: 12px; font-weight: 500; padding: 4px 10px; min-height: 30px; }
   .debt-paid-btn:hover { color: var(--accent); border-color: var(--accent); }
   .friend-helper { color: var(--dim); font-size: 12px; font-weight: 300; margin-top: 8px; text-align: center; }
+  /* Friends screen empty state (Apple HIG / Material "no contacts yet" pattern, and the same
+     headline+benefit+one-button shape as .login h2/.login-benefit/.btn-primary above): a single
+     headline, one benefit line, then the share-link action as the page's one primary button. No
+     new illustration — the app already reserves the suits mark for the header, not per-screen. */
+  .friends-hero { align-self: stretch; text-align: center; }
+  .friends-hero-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+  .friends-hero-benefit { margin: 8px 0 0; color: var(--dim); font-size: 14px; font-weight: 300; }
+  /* Section rhythm matches the dashboard's 24px; the secondary add-by-name path sits closer
+     underneath, quieter, echoing the login screen's primary/.btn-quiet spacing. */
+  .friends-share-btn { margin-top: 24px; }
+  .friends-add-toggle { margin-top: 12px; }
   /* friend request row actions — a full 44px target inside the flat .debt-row */
   .friend-action {
     flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; color: var(--dim);
@@ -729,7 +756,11 @@
   .corner-btn:hover { color: var(--accent); }
   .corner-btn:active .cicon { transform: scale(.85) rotate(-30deg); }
   .corner-btn.danger-armed { color: var(--bad); }
-  header { padding-inline-end: 96px; }
+  /* position: relative makes header (not its own .load-in entrance transform, which would
+     otherwise silently become the containing block -- a transform's computed value never
+     resolves back to the literal keyword "none" once an animation with fill-mode "both" has
+     played) the deliberate, stable anchor for #syncDot's absolute placement below. */
+  header { padding-inline-end: 96px; position: relative; }
   /* Keep the main content below the fixed corner controls after the app title was removed. */
   .game-view .wrap > header, .settle-view .wrap > header { min-height: 64px; }
   /* D2: back-to-the-group line on the table and settlement screens. It sits inside <header>, so
@@ -776,6 +807,38 @@
   #groupPreview .games-section { text-align: start; }
   #groupPreview .games-section-title, #groupPreview .games-member-add,
   #groupPreview .games-former-members, #groupPreview .games-history-item { text-align: center; }
+  /* ---------- group page sheet ---------- */
+  /* The "group" appView (renderGroupPage) used to swap out #gamesHome in place; it now rises as
+     a bottom sheet over the (still-rendered, dimmed) games dashboard behind it -- #groupSettings
+     (z-index 42) keeps nesting above it unchanged since both are position:fixed siblings in the
+     same stacking context. Motion mirrors the app's .28s grid-open timing (DESIGN.md) with a
+     translate instead of a grid track, since this is a full panel, not an inline expand. */
+  .group-sheet {
+    position: fixed; inset: 0; z-index: 41;
+    background: rgba(5,7,10,.6);
+    opacity: 0; pointer-events: none;
+    transition: opacity .28s ease;
+  }
+  :root[data-theme="light"] .group-sheet { background: rgba(12,21,25,.32); }
+  .group-sheet.open { opacity: 1; pointer-events: auto; }
+  .group-sheet-panel {
+    position: absolute; inset-inline: 0; bottom: 0;
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    background: var(--bg);
+    border-radius: 16px 16px 0 0;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 24px 18px calc(28px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(100%);
+    transition: transform .28s ease;
+  }
+  .group-sheet.open .group-sheet-panel { transform: translateY(0); }
+  .group-sheet-in { width: 100%; max-width: 440px; margin-inline: auto; }
+  /* The sheet already supplies 24px of top padding, so the page-mode header gap (40px on
+     .games-group-header) would double up here -- same fix #groupPreview applies above. */
+  .group-sheet-panel .games-group-header { padding-top: 0; }
+  .group-sheet-panel .games-section { text-align: start; }
+  .group-sheet-panel .games-section-title, .group-sheet-panel .games-member-add,
+  .group-sheet-panel .games-former-members, .group-sheet-panel .games-history-item { text-align: center; }
   .group-set-section { width: 100%; }
   .group-set-section .games-section { margin-top: 0; }
   .join-notice-actions { display: flex; align-items: center; gap: 16px; }
@@ -1104,7 +1167,7 @@
         </div>
       </div>
     </div>
-    <p class="empty-note" style="margin-top:6px">גרסה 65</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 66</p>
     <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
 </div>
@@ -1130,6 +1193,15 @@
 
 <div class="login group-preview" id="groupPreview" hidden>
   <div class="group-preview-in" id="groupPreviewContent"></div>
+</div>
+
+<!-- The "group" appView route (renderGroupPage/openGroup) -- presented as a sheet rising over
+     the games dashboard rather than a full-screen swap. See syncGroupSheet() for the open/close
+     motion and the ".group-sheet" rules above. -->
+<div class="group-sheet" id="groupSheet" hidden>
+  <div class="group-sheet-panel">
+    <div class="group-sheet-in" id="groupSheetContent"></div>
+  </div>
 </div>
 
   <div class="login" id="login" hidden>
@@ -1385,6 +1457,9 @@
   let animName = null;        // the player to animate when animNext === "one"
   let groupPageEnterNext = false; // group page sections should stagger in on the next renderGroupPage() —
                                    // set only by openGroup()/setAppView(), never by an in-place re-render
+  let groupSheetOpen = false; // UI-only: whether #groupSheet has already played its enter transition —
+                               // lets syncGroupSheet() play the reverse (exit) transition exactly once
+                               // regardless of which action navigated away from appView "group"
   let gamesPageEnterNext = false; // dashboard cards should stagger in on the next renderGamesDashboard() —
                                    // set only by setAppView(), never by an in-place re-render (Task 15, same
                                    // pattern as groupPageEnterNext above)
@@ -5251,6 +5326,11 @@
   // share #gamesHome; game/settle share #rows; profile/friends use their own sections). Adds the shared .load-in
   // class and removes it once its animation finishes so the next switch can replay it.
   function flashViewEnter(nextView) {
+    // "group" plays its own enter motion via syncGroupSheet()/.group-sheet.open — flashing
+    // #gamesHome here too would replay the dashboard's fade+rise underneath the sheet on every
+    // navigation into it, which reads as a stray flicker rather than the dashboard just sitting
+    // there dimmed.
+    if (nextView === "group") return;
     const id = nextView === "profile" ? "profile" : nextView === "friends" ? "friendsPage" : (nextView === "game" || nextView === "settle") ? "rows" : "gamesHome";
     const container = document.getElementById(id);
     if (!container) return;
@@ -5758,9 +5838,14 @@
     head.setAttribute("role", "button");
     head.setAttribute("tabindex", "0");
     head.setAttribute("aria-label", "פתח את " + String(group.name || "הקבוצה"));
-    head.addEventListener("click", actions.onOpen);
+    // A real tap fires click -> onOpen synchronously, which can swap the view before the
+    // browser ever paints the press frame. pressThenOpen holds the "pressed" class one
+    // animation frame first, so the scale(.92) press is always visible; it also covers
+    // keyboard activation (Enter/space), which :active alone does not.
+    const activate = () => pressThenOpen(card, actions.onOpen);
+    head.addEventListener("click", activate);
     head.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); actions.onOpen(); }
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); }
     });
     if (group.avatarDataUrl) {
       const avatar = el("img", "games-group-avatar");
@@ -5770,20 +5855,30 @@
     } else {
       head.appendChild(el("span", "games-group-avatar", String(group.name || "?").slice(0, 1)));
     }
-    const copy = el("div", "");
+    const copy = el("div", "games-group-copy");
+    const titleRow = el("div", "games-group-title-row");
     const titleSpan = el("span", "games-card-title", String(group.name || ""));
     if (actions.archived) titleSpan.appendChild(el("span", "games-member-tag", "בארכיון"));
-    copy.appendChild(titleSpan);
-    const meta = el("span", "games-card-meta", formatMemberCount(Number(group.memberCount || 0)));
+    titleRow.appendChild(titleSpan);
+    titleRow.appendChild(el("span", "games-card-meta", formatMemberCount(Number(group.memberCount || 0))));
+    copy.appendChild(titleRow);
     if (group.hasActiveGame) {
       const isSettlement = group.activeGamePhase === "settlement";
-      meta.appendChild(document.createTextNode(" · "));
-      meta.appendChild(el("span", "games-card-status" + (isSettlement ? " settlement" : ""), isSettlement ? "בסגירה" : "משחק פעיל"));
+      copy.appendChild(el("span", "games-card-status" + (isSettlement ? " settlement" : ""), isSettlement ? "בסגירה" : "משחק פעיל"));
     }
-    copy.appendChild(meta);
     head.appendChild(copy);
     card.appendChild(head);
     return card;
+  }
+
+  // Adds the press class, waits one animation frame so it paints, then calls onOpen. Shared by
+  // click and keyboard activation in renderGroupCard.
+  function pressThenOpen(card, onOpen) {
+    card.classList.add("pressed");
+    requestAnimationFrame(() => {
+      card.classList.remove("pressed");
+      onOpen();
+    });
   }
 
   function renderGroupsSection(parent, groups, enterStagger) {
@@ -5873,8 +5968,10 @@
   function renderGamesDashboard() {
     // A deferred call (a panel's collapse setTimeout) can still fire after the user has
     // navigated away from the dashboard — bail instead of rebuilding a #gamesHome that's now
-    // showing a different view (same guard as renderGroupPage).
-    if (appView !== "games") return;
+    // showing a different view (same guard as renderGroupPage). The "group" sheet now rises over
+    // #gamesHome rather than replacing it, so the dashboard still needs to render (and stay
+    // current) underneath while appView is "group".
+    if (appView !== "games" && appView !== "group") return;
     // Only a fresh navigation into the dashboard (setAppView) stagger-animates the cards below;
     // an in-place re-render after e.g. toggling a card's expand state must not replay it (Task 15,
     // same pattern as renderGroupPage's enterStagger).
@@ -5938,7 +6035,9 @@
   function renderGroupSurface() {
     const preview = document.getElementById("groupPreview");
     if (preview && !preview.hidden) renderGroupPreview();
-    else if (appView === "group") renderGroupPage();
+    // The group page is a sheet over the dashboard now — keep the dimmed dashboard behind it
+    // current too, same as render() does for a fresh navigation into "group".
+    else if (appView === "group") { renderGamesDashboard(); renderGroupPage(); }
     else if (appView === "games") renderGamesDashboard();
   }
 
@@ -6807,13 +6906,13 @@
   function renderGroupPage() {
     // A deferred call (a panel's collapse setTimeout, the async avatar handler) can still fire
     // after the user has navigated away from the group page — bail instead of rebuilding a
-    // #gamesHome that's now showing a different view.
+    // #groupSheetContent that's now showing a different view.
     if (appView !== "group") return;
     // Only a fresh navigation into the group page (openGroup()/setAppView) stagger-animates the
     // sections below; an in-place re-render after e.g. removing a member must not replay it.
     const enterStagger = groupPageEnterNext;
     groupPageEnterNext = false;
-    const box = document.getElementById("gamesHome");
+    const box = document.getElementById("groupSheetContent");
     box.innerHTML = "";
     const collections = collectionsOf(state);
     const rawGroup = (Array.isArray(collections.groups) ? collections.groups : []).find(g => g && g.id === currentGroupId);
@@ -6849,6 +6948,28 @@
       });
     }
     box.appendChild(inner);
+  }
+
+  // Keeps #groupSheet's open/closed state (and its .28s rise/reverse transition) in sync with
+  // appView on every render() — one reactive spot instead of hooking every place that can leave
+  // "group" (back arrow, a bottom-nav tap, hideGroupForMember succeeding, etc.). Mirrors
+  // closeArchivedGroups()'s class-then-setTimeout pattern for playing a CSS transition backwards
+  // before hiding the element.
+  function syncGroupSheet() {
+    const backdrop = document.getElementById("groupSheet");
+    if (!backdrop) return;
+    if (appView === "group") {
+      backdrop.hidden = false;
+      if (!groupSheetOpen) {
+        groupSheetOpen = true;
+        void backdrop.offsetWidth; // force reflow so the transition plays from translateY(100%)
+        backdrop.classList.add("open");
+      }
+    } else if (groupSheetOpen) {
+      groupSheetOpen = false;
+      backdrop.classList.remove("open");
+      setTimeout(() => { if (appView !== "group") backdrop.hidden = true; }, 280);
+    }
   }
 
   // Member chips above the "שם שחקן חדש" input, shown only for a group game (Task 9): one chip
@@ -7256,7 +7377,9 @@
     renderProfile();
     renderFriendsPage();
     if (appView === "games") renderGamesDashboard();
-    else if (appView === "group") renderGroupPage();
+    // The group page is a sheet over the dashboard: render the (dimmed) dashboard underneath too.
+    else if (appView === "group") { renderGamesDashboard(); renderGroupPage(); }
+    syncGroupSheet();
     // A remote sync (applyRemote -> render) can change group data while the settings overlay is
     // open on top of the group page — keep it in sync instead of showing stale name/admin state.
     if (!document.getElementById("groupSettings").hidden) refreshGroupSettings();
@@ -8262,10 +8385,16 @@
       ? friendRequestsFor(state.friendships || [], myFriendRef())
       : { friends: [], incoming: [], outgoing: [] };
     const hasFriendData = friendData.friends.length || friendData.incoming.length || friendData.outgoing.length;
+    // Empty state: a real headline, a one-sentence benefit and nothing else competing for
+    // attention — the share-link button just below is the page's one primary action (see the
+    // CSS comment on .friends-hero for the pattern this follows). A request always needs a
+    // decision, so when there is data it leads; the accepted-friends list follows.
     if (!hasFriendData) {
-      friendsSec.appendChild(el("p", "empty-note", "עוד אין חברים"));
+      const hero = el("div", "friends-hero");
+      hero.appendChild(el("h2", "friends-hero-title", "עוד אין חברים?"));
+      hero.appendChild(el("p", "friends-hero-benefit", "חברים שמצטרפים דרך קישור זמינים מיד לבחירה בכל משחק וקבוצה."));
+      friendsSec.appendChild(hero);
     } else {
-      renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
       renderFriendGroup(friendsSec, "בקשות שהתקבלו", friendData.incoming.map(f => f.requester), "ממתין לאישור שלך",
         online ? (i => {
           const id = friendData.incoming[i].id;
@@ -8279,32 +8408,30 @@
           const id = friendData.outgoing[i].id;
           return [{ label: "בטל", onClick: () => withdrawFriendRequest(id) }];
         }) : null);
+      renderFriendGroup(friendsSec, "חברים", friendData.friends, "");
     }
-    const addFriendBtn = el("button", "btn-primary", "הוסף חבר");
-    addFriendBtn.type = "button";
-    addFriendBtn.disabled = !online;
-    addFriendBtn.setAttribute("aria-disabled", online ? "false" : "true");
-    addFriendBtn.setAttribute("aria-expanded", addFriendOpen ? "true" : "false");
-    addFriendBtn.style.marginTop = "14px";
-    if (online) addFriendBtn.addEventListener("click", toggleAddFriendPanel);
-    friendsSec.appendChild(addFriendBtn);
-    if (online) renderAddFriendPanel(friendsSec);
-    if (!online) friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
-    // The reverse direction uses a stable server token, so it is disabled until a signed-in
+    // Primary path: share my personal link — the frictionless route, no lookup or typed name.
+    // The reverse direction uses a stable server token, so it stays disabled until a signed-in
     // cloud session can create a redeemable link.
     if (me) {
-      const inviteMeBtn = el("button", "games-invite-action", friendInviteSharing ? "יוצר קישור…" : "הוסף אותי כחבר");
+      const inviteMeBtn = el("button", "btn-primary friends-share-btn", friendInviteSharing ? "יוצר קישור…" : "שתפו קישור חברות");
       inviteMeBtn.type = "button";
       inviteMeBtn.disabled = !online || friendInviteSharing;
-      inviteMeBtn.style.marginTop = "14px";
-      // .games-invite-action's documented 40px (DESIGN.md) matches its three existing siblings
-      // ("העתק קישור"/"שתף"/"וואטסאפ") on the group invite card; this one stands alone on the
-      // friends screen, so it gets the full 44px touch target on top of that shared style.
-      inviteMeBtn.style.minHeight = "44px";
       if (online) inviteMeBtn.addEventListener("click", shareFriendInvite);
       friendsSec.appendChild(inviteMeBtn);
       if (friendInviteShareError) friendsSec.appendChild(el("p", "friend-error", friendInviteShareError));
     }
+    // Secondary path: look someone up by exact email or name — quieter, same shape as the
+    // login screen's "המשך בלי חשבון": a real, bordered, 44px action, just not the lead one.
+    const addFriendBtn = el("button", "btn-quiet friends-add-toggle", "הוסף חבר");
+    addFriendBtn.type = "button";
+    addFriendBtn.disabled = !online;
+    addFriendBtn.setAttribute("aria-disabled", online ? "false" : "true");
+    addFriendBtn.setAttribute("aria-expanded", addFriendOpen ? "true" : "false");
+    if (online) addFriendBtn.addEventListener("click", toggleAddFriendPanel);
+    friendsSec.appendChild(addFriendBtn);
+    if (online) renderAddFriendPanel(friendsSec);
+    if (!online) friendsSec.appendChild(el("p", "friend-helper", SERVER_NOTE));
     box.appendChild(friendsSec);
   }
 
