@@ -866,6 +866,12 @@
      before internal scroll takes over. */
   .group-sheet-panel .games-section { margin-top: 18px; }
   .group-set-section { width: 100%; }
+  .group-set-roles { width: 100%; }
+  .group-set-role-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    min-height: 44px; padding: 4px 0; border-bottom: 1px solid var(--line); text-align: start;
+  }
+  .group-set-role-row:last-of-type { border-bottom: none; }
   .group-set-section .games-section { margin-top: 0; }
   .join-notice-actions { display: flex; align-items: center; gap: 16px; }
   /* L3: the modal's two corner controls are a matched pair of 44px icon targets -- an X to
@@ -1201,7 +1207,7 @@
         </div>
       </div>
     </div>
-    <p class="empty-note" style="margin-top:6px">גרסה 68</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 69</p>
     <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
 </div>
@@ -1213,6 +1219,7 @@
   <div class="login-in set-in">
     <div class="group-set-section" id="groupSetInvite" hidden></div>
     <div class="group-set-section" id="groupSetAddMember" hidden></div>
+    <div class="group-set-section" id="groupSetRoles" hidden></div>
     <button type="button" class="games-create-avatar" id="groupSetAvatarBtn" aria-label="שינוי תמונת הקבוצה">?</button>
     <input type="file" id="groupSetAvatarFile" accept="image/*" hidden aria-hidden="true">
     <input type="text" id="groupSetName" maxlength="40" placeholder="שם הקבוצה" autocomplete="off" aria-label="שם הקבוצה">
@@ -6607,6 +6614,28 @@
     }
     return details;
   }
+  // One row per active member: who they are, and the single role control that applies to them.
+  // Deliberately not a copy of the old strip -- removal stays on the member row's red X, so this
+  // panel is only about who administers the group.
+  function renderMemberRolesPanel(groupId) {
+    const section = el("div", "group-set-roles");
+    section.appendChild(el("h3", "ptitle", "ניהול הקבוצה"));
+    const activeList = activeMembers(collectionsOf(state).groupMembers, groupId);
+    activeList.forEach(member => {
+      const row = el("div", "group-set-role-row");
+      const name = el("span", "games-member-name", member.displayName);
+      if (member.role === "admin") name.appendChild(el("span", "games-member-tag", "מנהל"));
+      row.appendChild(name);
+      const isLastAdmin = isLastActiveAdmin(activeList, member.id);
+      if (member.role !== "admin") row.appendChild(renderMakeAdminButton(member));
+      else if (!isLastAdmin) row.appendChild(renderRemoveAdminButton(member));
+      else row.appendChild(el("span", "games-member-note", "המנהל האחרון"));
+      section.appendChild(row);
+    });
+    if (!activeList.length) section.appendChild(el("p", "games-empty", "אין חברים פעילים"));
+    return section;
+  }
+
   function renderMakeAdminButton(member) {
     const btn = el("button", "games-member-action games-member-promote", "הפוך למנהל");
     btn.type = "button";
@@ -8831,6 +8860,15 @@
     addMemberBox.innerHTML = "";
     addMemberBox.hidden = !summary.isAdmin;
     if (summary.isAdmin) addMemberBox.appendChild(renderAddMemberPanel());
+
+    // Promoting and demoting used to live in the member row's tap-to-expand strip. That strip was
+    // retired so a row could be just a name and a "מנהל" tag, which left promote/demote with no
+    // entry point at all — and "העבר ניהול לחבר אחר קודם" advising a transfer nobody could make.
+    // The overlay is where the other admin-only controls already are, so they belong here.
+    const rolesBox = document.getElementById("groupSetRoles");
+    rolesBox.innerHTML = "";
+    rolesBox.hidden = !summary.isAdmin;
+    if (summary.isAdmin) rolesBox.appendChild(renderMemberRolesPanel(currentGroupId));
 
     const avatarBtn = document.getElementById("groupSetAvatarBtn");
     avatarBtn.innerHTML = "";

@@ -131,3 +131,22 @@ test('the modal max-height grew from min(640px, 84vh) to min(700px, 88vh) — +6
   assert.match(panel, /max-height: min\(700px, 88vh\);/);
   assert.doesNotMatch(html, /min\(640px, 84vh\)/);
 });
+
+// ---------- role management must remain reachable after the strip was retired ----------
+
+test('promoting and demoting survived the member-row simplification, in the settings overlay', () => {
+  // Retiring the tap-to-expand strip left renderMemberActions (which held "הפוך למנהל" /
+  // "הסר ניהול") with no caller at all: no way to appoint an admin, and "העבר ניהול לחבר אחר
+  // קודם" advising a handover the UI could not perform.
+  assert.match(html, /id="groupSetRoles"/, 'the overlay needs a home for role management');
+  assert.match(html, /rolesBox\.appendChild\(renderMemberRolesPanel\(currentGroupId\)\)/);
+  assert.match(html, /rolesBox\.hidden = !summary\.isAdmin/, 'admin-only, like the other overlay controls');
+
+  const panel = html.slice(html.indexOf('function renderMemberRolesPanel'));
+  const body = panel.slice(0, panel.indexOf('\n  }'));
+  assert.match(body, /renderMakeAdminButton\(member\)/, 'promote must be reachable');
+  assert.match(body, /renderRemoveAdminButton\(member\)/, 'demote must be reachable');
+  assert.match(body, /isLastActiveAdmin\(activeList, member\.id\)/, 'the last admin keeps their role');
+  // Removal stays on the member row's red X — this panel must not grow a second delete path.
+  assert.doesNotMatch(body, /renderRemoveMemberButton/, 'removal belongs to the row, not here');
+});
