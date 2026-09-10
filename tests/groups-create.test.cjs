@@ -126,15 +126,48 @@ test('the group view reuses the games dashboard shell and hides the game/settle 
   assert.match(source, /document\.getElementById\("gamesHome"\)\.hidden = appView !== "games" && appView !== "group";/);
 });
 
+// Was: head.addEventListener("click", actions.onOpen) directly. The press-then-open change
+// (see the motion test below) routes both click and keydown through the same activate()
+// closure so the card always shows its press state before actions.onOpen runs — strengthened
+// here to also assert the keyboard path reuses that same closure, which the old direct-call
+// assertion couldn't express.
 test('the group card row opens its preview and is keyboard-accessible, without an expand control', () => {
   const source = sourceBetween('  function renderGroupCard(group, actions) {', '  function renderGroupsSection(');
   assert.match(source, /head\.setAttribute\("role", "button"\)/);
   assert.match(source, /head\.setAttribute\("tabindex", "0"\)/);
-  assert.match(source, /head\.addEventListener\("click", actions\.onOpen\)/);
+  assert.match(source, /const activate = \(\) => pressThenOpen\(card, actions\.onOpen\)/);
+  assert.match(source, /head\.addEventListener\("click", activate\)/);
+  assert.match(source, /if \(e\.key === "Enter" \|\| e\.key === " "\) \{ e\.preventDefault\(\); activate\(\); \}/);
   assert.doesNotMatch(source, /games-card-toggle/);
   assert.doesNotMatch(source, /הרחב/);
   const sectionSource = sourceBetween('  function renderGroupsSection(', '  function enterActiveGame(');
   assert.match(sectionSource, /onOpen: \(\) => openGroupPreview\(groupId\)/);
+});
+
+// ---------- group card press + layout (owner ask: animate on tap, count beside the name) ----------
+
+test('pressThenOpen holds the pressed class for one animation frame before calling onOpen', () => {
+  const source = sourceBetween('  function pressThenOpen(card, onOpen) {', '  function renderGroupsSection(');
+  assert.match(source, /card\.classList\.add\("pressed"\)/);
+  assert.match(source, /requestAnimationFrame\(\(\) => \{/);
+  assert.match(source, /card\.classList\.remove\("pressed"\)/);
+  assert.match(source, /onOpen\(\);/);
+});
+
+test('the group card presses as one unit at DESIGN.md\'s standard scale(.92), replacing the old row-only scale(.97)', () => {
+  const cssSource = sourceBetween('  .games-group-head { display: flex;', '  .games-empty {');
+  assert.match(cssSource, /\.games-group-card \{ transition: transform \.12s ease; \}/);
+  assert.match(cssSource, /\.games-group-card:active, \.games-group-card\.pressed \{ transform: scale\(\.92\); \}/);
+  assert.doesNotMatch(cssSource, /scale\(\.97\)/);
+});
+
+test('the member count is a sibling of the group name in one row, not stacked underneath it', () => {
+  const source = sourceBetween('  function renderGroupCard(group, actions) {', '  function pressThenOpen(');
+  assert.match(source, /const titleRow = el\("div", "games-group-title-row"\);/);
+  assert.match(source, /titleRow\.appendChild\(titleSpan\);/);
+  assert.match(source, /titleRow\.appendChild\(el\("span", "games-card-meta", formatMemberCount\(Number\(group\.memberCount \|\| 0\)\)\)\);/);
+  assert.match(source, /copy\.appendChild\(titleRow\);/);
+  assert.match(html, /\.games-group-title-row \{ display: flex; align-items: center; justify-content: space-between; gap: 8px; \}/);
 });
 
 // ---------- normalize() hardening ----------

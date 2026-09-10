@@ -445,10 +445,17 @@
   .games-detail-totals { color: var(--dim); font-size: 12px; font-weight: 300; margin: 8px 0 0; }
   .games-detail-totals b { color: var(--text); font-weight: 600; }
   .games-group-head { display: flex; align-items: center; justify-content: flex-start; gap: 10px; min-height: 44px; text-align: start; }
-  .games-group-head[role="button"] { cursor: pointer; transition: opacity .18s ease, transform .12s ease; }
-  .games-group-head[role="button"]:active { transform: scale(.97); }
+  .games-group-head[role="button"] { cursor: pointer; }
   .games-group-head[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
+  /* Owner ask: tapping a group card must animate as one unit (DESIGN.md's standard button press,
+     not the smaller row-only shrink used elsewhere). :active covers a real pointer hold; the JS
+     "pressed" class (added by pressThenOpen) covers keyboard activation and guarantees the press
+     frame paints even when click -> onOpen would otherwise collapse into a single frame. */
+  .games-group-card { transition: transform .12s ease; }
+  .games-group-card:active, .games-group-card.pressed { transform: scale(.92); }
   .games-group-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; background: var(--line); color: var(--dim); font-weight: 700; }
+  .games-group-copy { flex: 1 1 auto; min-width: 0; }
+  .games-group-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .games-empty { color: var(--faint); font-size: 14px; font-weight: 300; margin: 0; }
 
   /* create-group inline panel — same grid-collapse transition as .pmenu */
@@ -5741,9 +5748,14 @@
     head.setAttribute("role", "button");
     head.setAttribute("tabindex", "0");
     head.setAttribute("aria-label", "פתח את " + String(group.name || "הקבוצה"));
-    head.addEventListener("click", actions.onOpen);
+    // A real tap fires click -> onOpen synchronously, which can swap the view before the
+    // browser ever paints the press frame. pressThenOpen holds the "pressed" class one
+    // animation frame first, so the scale(.92) press is always visible; it also covers
+    // keyboard activation (Enter/space), which :active alone does not.
+    const activate = () => pressThenOpen(card, actions.onOpen);
+    head.addEventListener("click", activate);
     head.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); actions.onOpen(); }
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); }
     });
     if (group.avatarDataUrl) {
       const avatar = el("img", "games-group-avatar");
@@ -5753,20 +5765,30 @@
     } else {
       head.appendChild(el("span", "games-group-avatar", String(group.name || "?").slice(0, 1)));
     }
-    const copy = el("div", "");
+    const copy = el("div", "games-group-copy");
+    const titleRow = el("div", "games-group-title-row");
     const titleSpan = el("span", "games-card-title", String(group.name || ""));
     if (actions.archived) titleSpan.appendChild(el("span", "games-member-tag", "בארכיון"));
-    copy.appendChild(titleSpan);
-    const meta = el("span", "games-card-meta", formatMemberCount(Number(group.memberCount || 0)));
+    titleRow.appendChild(titleSpan);
+    titleRow.appendChild(el("span", "games-card-meta", formatMemberCount(Number(group.memberCount || 0))));
+    copy.appendChild(titleRow);
     if (group.hasActiveGame) {
       const isSettlement = group.activeGamePhase === "settlement";
-      meta.appendChild(document.createTextNode(" · "));
-      meta.appendChild(el("span", "games-card-status" + (isSettlement ? " settlement" : ""), isSettlement ? "בסגירה" : "משחק פעיל"));
+      copy.appendChild(el("span", "games-card-status" + (isSettlement ? " settlement" : ""), isSettlement ? "בסגירה" : "משחק פעיל"));
     }
-    copy.appendChild(meta);
     head.appendChild(copy);
     card.appendChild(head);
     return card;
+  }
+
+  // Adds the press class, waits one animation frame so it paints, then calls onOpen. Shared by
+  // click and keyboard activation in renderGroupCard.
+  function pressThenOpen(card, onOpen) {
+    card.classList.add("pressed");
+    requestAnimationFrame(() => {
+      card.classList.remove("pressed");
+      onOpen();
+    });
   }
 
   function renderGroupsSection(parent, groups, enterStagger) {
