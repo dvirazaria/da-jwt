@@ -3774,8 +3774,17 @@
     invite.revokedAt = at;
     return true;
   }
+  // A link shared from the local review server must still open the deployed app on somebody
+  // else's phone. 127.0.0.1/localhost always mean "this device", so leaving that origin in the
+  // message sends the recipient to their own phone instead of to this app.
+  var PUBLIC_APP_ORIGIN = "https://poker-tau-pink.vercel.app";
+  function shareableAppOrigin(origin) {
+    const value = String(origin || "").replace(/\/+$/, "");
+    const loopback = /^https?:\/\/(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(?::\d+)?$/i;
+    return !value || value === "null" || loopback.test(value) ? PUBLIC_APP_ORIGIN : value;
+  }
   function inviteLink(token, origin, pathname) {
-    return origin + pathname + "?join=" + token;
+    return shareableAppOrigin(origin) + pathname + "?join=" + token;
   }
   function formatInviteCode(token) {
     const t = String(token || "");
@@ -3804,7 +3813,7 @@
   // group-invite code. Their mapping lives only in friend_invites and is never readable through
   // profile policies; app_create_friend_invite/app_accept_friend_invite are the whole seam.
   function friendInviteLink(token, origin, pathname) {
-    return origin + pathname + "?friend=" + token;
+    return shareableAppOrigin(origin) + pathname + "?friend=" + token;
   }
   // The WhatsApp-ready "add me as a friend" message: the same app-name line buildInviteShareText
   // opens with (one recognizable message family), then who is inviting — falling back to a

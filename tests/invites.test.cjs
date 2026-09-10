@@ -118,6 +118,22 @@ test('inviteLink joins origin + pathname + ?join=token', () => {
   );
 });
 
+test('inviteLink never sends another phone to this device loopback address', () => {
+  const context = load();
+  assert.equal(
+    vm.runInContext(`inviteLink('ABCDEFGH', 'http://127.0.0.1:8765', '/')`, context),
+    'https://poker-tau-pink.vercel.app/?join=ABCDEFGH'
+  );
+  assert.equal(
+    vm.runInContext(`inviteLink('ABCDEFGH', 'http://localhost:8765', '/')`, context),
+    'https://poker-tau-pink.vercel.app/?join=ABCDEFGH'
+  );
+  assert.equal(
+    vm.runInContext(`inviteLink('ABCDEFGH', 'https://preview.example.com', '/')`, context),
+    'https://preview.example.com/?join=ABCDEFGH'
+  );
+});
+
 test('formatInviteCode splits the 8-char token into XXXX-XXXX', () => {
   const context = load();
   assert.equal(vm.runInContext(`formatInviteCode('ABCDEFGH')`, context), 'ABCD-EFGH');
