@@ -158,9 +158,14 @@ test('renderGroupHistory owns the "no games yet" empty state and does not cap th
   assert.doesNotMatch(source, /\.slice\(0, 5\)/);
 });
 
-test('renderGroupLeaders shows the pre-first-game empty state and renders the full list, uncapped', () => {
+// group-modal-polish (owner ask #2): a pre-first-game leaderboard used to show a placeholder
+// line ("הדירוג יופיע אחרי המשחק הראשון") in a de-emphasised section. The owner asked for no
+// explanatory line at all while it's empty — rewritten to assert the copy is gone (stronger than
+// the old "assert it's there"), while still keeping the "full list, uncapped" half of this test.
+test('renderGroupLeaders renders nothing before the first game (no heading, no placeholder line) and the full list uncapped once there is one', () => {
   const source = sourceBetween('  function renderGroupLeaders(entries) {', '  function renderGroupMembers(');
-  assert.match(source, /הדירוג יופיע אחרי המשחק הראשון/);
+  assert.match(source, /if \(!list\.length\) return null;/);
+  assert.doesNotMatch(source, /הדירוג יופיע אחרי המשחק הראשון/, 'the placeholder copy must be gone entirely, not just quieter');
   assert.doesNotMatch(source, /\.slice\(0, 3\)/);
 });
 
@@ -253,11 +258,18 @@ test('the settings corner control drops its text label at this size — icon-onl
   assert.doesNotMatch(header, /appendChild\(el\("span", "", "הגדרות"\)\)/);
 });
 
-test('an empty leaderboard keeps its copy and position but is visually de-emphasised, not removed', () => {
+// Superseded by group-modal-polish: the owner asked for *no* explanatory line while the
+// leaderboard is empty, which meant dropping the de-emphasised placeholder section itself, not
+// just its weight — including the "דירוג" heading (a heading over nothing is still clutter). This
+// is deliberately the opposite assertion of what stood here before ("keeps its copy... not
+// removed"); the old .games-section-empty weight class is retired with the section it modified,
+// so both call sites (renderGroupPreview, renderGroupPage) now guard a possibly-null result.
+test('an empty leaderboard is not removed-and-forgotten — it renders nothing, section and heading included, and both call sites guard the null', () => {
   const source = sourceBetween('  function renderGroupLeaders(entries) {', '  function renderGroupMembers(');
-  assert.match(source, /section\.classList\.add\("games-section-empty"\)/);
-  assert.match(source, /הדירוג יופיע אחרי המשחק הראשון/);
-  assert.match(html, /\.group-sheet-panel \.games-section\.games-section-empty \{ margin-top: 12px; \}/);
+  assert.doesNotMatch(source, /games-section-empty/);
+  assert.doesNotMatch(source, /הדירוג יופיע אחרי המשחק הראשון/);
+  assert.doesNotMatch(html, /games-section\.games-section-empty/, 'the now-unused weight-reduction rule must not linger as dead CSS');
+  assert.match(html, /const leaders = renderGroupLeaders\(resolveGroupLeaderboard\(collections, currentGroupId, cloudGroupAggregates\)\);\s*\n\s*if \(leaders\) inner\.appendChild\(leaders\);/);
 });
 
 test('the reduced-motion rule stays the very last rule in the stylesheet, after the new group modal CSS', () => {

@@ -193,20 +193,36 @@ test('the QR placeholder is gone — the invite card now draws a real QR of the 
   assert.match(html, /\.games-invite-qr \{/, 'and it has a sized, themed rule of its own');
 });
 
-// ---------- D3: member row actions behind a tap ----------
+// ---------- D3 retired (group-modal-polish): member rows are plain, no tap-to-expand ----------
+// The four tests below used to pin D3's tap-to-expand strip. The group-modal-polish task retired
+// it outright (owner ask #4/#5: a row is name + a "מנהל" tag, plus a red remove X for an admin
+// viewer) — rewritten in place rather than deleted, each now asserting the *absence* of the old
+// mechanism (stronger than the old presence-only checks, since a leftover role="button" or
+// aria-expanded would now be a regression) alongside the new behaviour that replaced it.
 
-test('an admin member row is a button that expands an inline action strip', () => {
+test('a member row carries no role=button, no tabindex, no aria-expanded, no chevron, no memberActionsOpenId — it is plain, or plain plus a remove X', () => {
   const source = sourceBetween('  function renderMemberRow(member, activeList, isAdmin) {', '  function renderMemberActions(');
-  assert.match(source, /setAttribute\("role", "button"\)/);
-  assert.match(source, /setAttribute\("tabindex", "0"\)/);
-  assert.match(source, /aria-expanded/);
-  assert.match(source, /e\.key === "Enter" \|\| e\.key === " "/);
-  assert.match(source, /memberActionsOpenId/);
+  assert.doesNotMatch(source, /setAttribute\("role", "button"\)/);
+  assert.doesNotMatch(source, /setAttribute\("tabindex", "0"\)/);
+  assert.doesNotMatch(source, /aria-expanded/);
+  assert.doesNotMatch(source, /games-member-chevron/);
+  assert.doesNotMatch(source, /memberActionsOpenId/);
+  assert.doesNotMatch(source, /e\.key === "Enter" \|\| e\.key === " "/);
+  // what replaced it: a name span, a "מנהל" tag for an admin subject, and the guarded X.
+  assert.match(source, /el\("span", "games-member-name", member\.displayName\)/);
+  assert.match(source, /el\("span", "games-member-tag", "מנהל"\)/);
+  assert.match(source, /renderRemoveMemberButton\(member\)/);
 });
 
-test('the action strip carries promote/demote, the armed remove and the last-admin note', () => {
+// renderMemberActions/renderMakeAdminButton/renderRemoveAdminButton are kept, unmodified, as
+// dead code: nothing in renderMemberRow calls them any more (see the test above and the one
+// below), but tests/group-lifecycle.test.cjs independently pins promoteMember/demoteMember and
+// the "הפוך למנהל" copy as real, working capabilities — deleting these render functions along
+// with the strip's chrome would have silently taken that capability out of the app. This test
+// now documents that status instead of describing live UI, which is what it used to do.
+test('the retired action strip (promote/demote/old text-remove) still exists as unreachable code, not deleted, for promoteMember/demoteMember\'s sake', () => {
   const source = sourceBetween('  function renderMemberActions(', '  function renderMakeAdminButton(');
-  assert.match(source, /games-card-details/); // shared grid-collapse pattern
+  assert.match(source, /games-card-details/); // shared grid-collapse pattern, unchanged
   assert.match(source, /renderMakeAdminButton/);
   assert.match(source, /renderRemoveMemberButton/);
   assert.match(source, /renderRemoveAdminButton/);
@@ -214,18 +230,24 @@ test('the action strip carries promote/demote, the armed remove and the last-adm
   assert.match(source, /isLastActiveAdmin/);
   assert.match(html, /function renderRemoveAdminButton\(member\) \{[\s\S]*?הסר ניהול/);
   assert.match(html, /demoteMember\(member\.groupId, member\.id\)/);
+  // and confirm nothing calls it any more — a dangling function, not a second code path
+  const rowSource = sourceBetween('  function renderMemberRow(member, activeList, isAdmin) {', '  function renderMemberActions(');
+  assert.doesNotMatch(rowSource, /renderMemberActions\(/);
 });
 
-test('the open member row is UI-only state, reset on every view change', () => {
+test('memberActionsOpenId is declared and reset on view change only for the retired strip above — the live row never reads it', () => {
   assert.match(html, /let memberActionsOpenId = null;/);
-  const source = sourceBetween('  function setAppView(nextView) {', '  function flashViewEnter');
-  assert.match(source, /memberActionsOpenId = null;/);
+  const resetSource = sourceBetween('  function setAppView(nextView) {', '  function flashViewEnter');
+  assert.match(resetSource, /memberActionsOpenId = null;/);
+  const rowSource = sourceBetween('  function renderMemberRow(member, activeList, isAdmin) {', '  function renderMemberActions(');
+  assert.doesNotMatch(rowSource, /memberActionsOpenId/, 'task 4: "no memberActionsOpenId for the row itself"');
 });
 
-test('member rows no longer show their actions unconditionally', () => {
+test('a member row shows the remove X only when it is legal: admin viewer, not self, not the group\'s last active admin', () => {
   const source = sourceBetween('  function renderMemberRow(member, activeList, isAdmin) {', '  function renderMemberActions(');
+  assert.match(source, /const canRemove = isAdmin && !membershipMatchesUser\(member, me\) && !isLastActiveAdmin\(activeList, member\.id\);/);
   assert.doesNotMatch(source, /row\.appendChild\(renderMakeAdminButton/);
-  assert.doesNotMatch(source, /row\.appendChild\(renderRemoveMemberButton/);
+  assert.doesNotMatch(source, /row\.appendChild\(renderRemoveAdminButton/);
 });
 
 // ---------- D4: debt direction colour + one "ממתין לתשלום" wording ----------
@@ -356,8 +378,12 @@ test('row 32: both inline panels share the title + full-width field + confirm/ca
 });
 
 // ---------- motion: every new interactive element animates (Global Constraint 13) ----------
+// '.games-member-row[role="button"]' is retired along with the tap-to-expand strip it styled
+// (see the "D3 retired" block above) — the row no longer ever carries role="button", so the
+// selector is gone from the stylesheet too. Its successor, the remove X's own press state, is
+// covered separately by tests/motion.test.cjs' '.games-member-remove' check.
 
-['.table-header', '.games-member-row[role="button"]', '.games-member-action', '.exit-cancel', '.group-start-counter']
+['.table-header', '.games-member-action', '.exit-cancel', '.group-start-counter']
   .forEach(cls => {
     test(`${cls} declares a transition, animation or :active press state`, () => {
       const idx = html.indexOf(cls);
