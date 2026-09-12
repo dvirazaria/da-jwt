@@ -140,7 +140,19 @@
   :root[data-theme="light"] { --bar-bg: rgba(245,248,249,.9); }
   html { background: var(--bg); }
   .tabbar {
-    position: fixed; bottom: 10px; inset-inline: 17px; margin-inline: auto;
+    /* env(safe-area-inset-bottom) is not a fixed device constant on iOS Safari: WebKit reports it
+       as ~0 while the bottom toolbar is showing (its own chrome already clears the home indicator)
+       and jumps it to the home-indicator height once the toolbar auto-hides on scroll (now page
+       content reaches the true bottom edge, so the page must clear the indicator itself). A plain
+       `bottom: 10px` ignores that swing, so the exact same rule sits 10px above a SHORT screen's
+       toolbar-occupied bottom (a visible gap -- the friends tab, which never scrolls) but only 10px
+       above the true device edge once a tall screen (the games tab) is scrolled and the toolbar
+       collapses -- reproducing the reported "bar creeps toward the home indicator" jump without
+       any change to the bar's own DOM/CSS. `.wrap`'s padding-bottom already folds this same inset
+       in (see its calc() below); mirror that idiom here so the bar keeps a constant 10px from the
+       real device edge in both toolbar states, matching `.wrap`.
+    */
+    position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); inset-inline: 17px; margin-inline: auto;
     max-width: 470px; z-index: 20;
     background: var(--bar-bg);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
