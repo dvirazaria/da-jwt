@@ -204,3 +204,47 @@ test('createGroupInvite and revokeGroupInvite save() and re-render the active gr
   assert.doesNotMatch(source, /\balert\(/);
   assert.doesNotMatch(source, /\bconfirm\(/);
 });
+
+// ---------- incident: invite creation must not be offered to a non-admin ----------
+//
+// docs/backend/link-guest.sql's invites_insert_admin requires app_is_group_admin(group_id); a
+// regular (non-admin) member's INSERT is refused server-side no matter what the client renders.
+// Before this guard, renderGroupInvite's "no invite yet" branch showed "צור הזמנה" to any active
+// member (only the *revoke* button was ever isAdmin-gated) -- a non-admin could create a fully
+// rendered local invite (code/link/QR, all optimistic), which the next push then had rejected by
+// invites_insert_admin (42501): classifyCloudError surfaces that as the red sync dot, and the
+// invite was never actually written server-side, so every friend who opened that link or scanned
+// that QR got app_redeem_invite's 'invalid' -- one client/server authorization mismatch behind
+// three separate-looking symptoms.
+test('renderGroupInvite gates invite CREATION on isAdmin, not just revocation', () => {
+  const source = sourceBetween('  function renderGroupHistory(gameSummaries) {', '  function renderGroupPage(');
+  // The "no invite yet" branch checks isAdmin before ever building the create button, and bails
+  // out with a plain note instead -- matching invites_insert_admin's server-side requirement.
+  assert.match(
+    source,
+    /if \(!invite\) \{\s*if \(!isAdmin\) \{\s*section\.appendChild\(el\("p", "games-invite-note", "רק מנהל הקבוצה יכול ליצור הזמנה"\)\);\s*return section;\s*\}/,
+    'a non-admin with no invite yet must see a note, not "צור הזמנה"'
+  );
+  // Exactly two isAdmin checks: the new creation gate, and the pre-existing revoke-button gate.
+  // Nothing else in this function (copy/share/WhatsApp/QR for an EXISTING invite) may become
+  // admin-only -- invites_select_members already allows every active member to read/share it.
+  assert.equal((source.match(/if \(isAdmin\)|if \(!isAdmin\)/g) || []).length, 2);
+});
+
+test('an admin still gets the create-invite button and bind picker, unchanged', () => {
+  const source = sourceBetween('  function renderGroupHistory(gameSummaries) {', '  function renderGroupPage(');
+  const createBranch = source.slice(source.indexOf('if (!invite) {'), source.indexOf('const card = el("div", "games-invite-card")'));
+  assert.match(createBranch, /renderInviteGuestBindPicker\(summary\.groupId\)/);
+  assert.match(createBranch, /el\("button", "games-invite-create", "צור הזמנה"\)/);
+  assert.match(createBranch, /createGroupInvite\(summary\.groupId, inviteBindGuestId\)/);
+});
+
+test('an existing invite is still fully visible/copyable/shareable to a non-admin member', () => {
+  const source = sourceBetween('  function renderGroupHistory(gameSummaries) {', '  function renderGroupPage(');
+  const existingBranch = source.slice(source.indexOf('const card = el("div", "games-invite-card")'));
+  // None of copy/share/WhatsApp/QR sit behind an isAdmin check -- only "בטל הזמנה" does.
+  const beforeRevoke = existingBranch.slice(0, existingBranch.indexOf('if (isAdmin)'));
+  assert.match(beforeRevoke, /games-invite-action.*העתק קישור/s);
+  assert.match(beforeRevoke, /qrSvgElement\(/);
+  assert.doesNotMatch(beforeRevoke, /isAdmin/);
+});
