@@ -129,7 +129,11 @@ test('Games dashboard is composed from three modular sections', () => {
   // resolveGroupLeaderboard/resolveGroupGameSummaries) so the dashboard's group cards read
   // safe server-side rollups when available, falling back to local computation otherwise.
   assert.match(html, /renderGroupsSection\(inner, getGroupSummaries\(collectionsOf\(state\), me, cloudGroupAggregates\), enterStagger\)/);
-  assert.match(html, /אין משחקים פעילים כרגע/);
+  // An empty active-games list now renders nothing at all -- no heading and no line, the same
+  // rule renderGroupLeaders follows for an empty ranking. Asserting the absence is stronger than
+  // the old presence check: a reappearing placeholder would now fail.
+  assert.doesNotMatch(html, /אין משחקים פעילים כרגע/);
+  assert.match(html, /function renderActiveGamesSection\(parent, summaries, enterStagger\) \{\n    if \(!summaries\.length\) return;/);
   assert.match(html, /אין לך קבוצות עדיין/);
   // Task 3 enables the create-group quick action; it's no longer a "coming soon" placeholder.
   assert.doesNotMatch(html, /בקרוב/);

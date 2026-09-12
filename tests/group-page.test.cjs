@@ -213,7 +213,7 @@ test('the group modal is centred and capped, not edge-anchored to the bottom of 
   // Centred flex layout with padding on every side, so the dimmed dashboard stays visible all
   // the way around the dialog instead of it filling the screen edge-to-edge.
   assert.match(backdrop, /display: flex; align-items: center; justify-content: center;/);
-  assert.match(backdrop, /padding: max\(24px,/, 'margin on every side of the backdrop');
+  assert.match(backdrop, /padding: calc\(40px \+ env\(/, 'a fixed 40px margin above and below the dialog');
   // No bottom-sheet leftovers: not absolutely anchored to an edge, no "starts N vh down" rule,
   // no one-sided radius, no off-screen starting transform.
   assert.doesNotMatch(panel, /position: absolute/);
@@ -223,7 +223,10 @@ test('the group modal is centred and capped, not edge-anchored to the bottom of 
   assert.doesNotMatch(panel, /translateY\(100%\)/);
   // Bounded on both axes with internal scroll for anything that doesn't fit.
   assert.match(panel, /max-width: 440px/);
-  assert.match(panel, /max-height: min\(/);
+  // Height is no longer a content-driven cap: the box is one fixed size for every group, filling
+  // the backdrop's 40px/20px padding, with anything that doesn't fit scrolling inside it.
+  assert.match(panel, /height: 100%/);
+  assert.match(panel, /overflow-y: auto/);
   assert.match(panel, /overflow-y: auto/);
   assert.match(panel, /border-radius: 20px;/, 'rounded on all four corners, not just the top');
   // The grabber was a sheet-only affordance — gone along with the sheet.

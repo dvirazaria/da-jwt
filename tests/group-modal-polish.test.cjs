@@ -61,7 +61,15 @@ test('the remove X is --bad at rest (not hover-revealed), a 44px target, with an
 test('the whole remove chain still runs through the same two-step arm and the last-admin guard: X → armRemoveMember → removeMember → removeGroupMember (pure)', () => {
   // X button: first tap arms, second tap (while already armed) actually removes — no single-tap path.
   const btn = sourceBetween('  function renderRemoveMemberButton(member) {', '  // Inline "+ הוסף חבר"');
-  assert.match(btn, /if \(removeMemberArmedId === member\.id\) \{\s*\n\s*disarmRemoveMember\(\);\s*\n\s*removeMember\(member\.groupId, member\.id\);/);
+  assert.match(btn, /if \(removeMemberArmedId === member\.id\) \{\s*\n\s*disarmRemoveMember\(\);/,
+    'the armed branch still disarms before it commits');
+  // Confirming now collapses the row before committing, so the reader sees WHICH member left.
+  // Both exits must still reach removeMember, and nothing may remove on a single tap.
+  assert.match(btn, /item\.classList\.add\("removing"\)/);
+  assert.match(btn, /setTimeout\(\(\) => removeMember\(member\.groupId, member\.id\), 280\)/);
+  assert.match(btn, /matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches[\s\S]{0,120}removeMember\(member\.groupId, member\.id\)/,
+    'reduced motion removes immediately instead of waiting out an animation it will not show');
+  assert.match(btn, /btn\.disabled = true/, 'a second tap must not land mid-animation');
   assert.match(btn, /armRemoveMember\(member\.id\);/);
   // removeMember (UI) hands off to removeGroupMember (pure) unchanged.
   assert.match(html, /function removeMember\(groupId, memberId\) \{[\s\S]{0,200}removeGroupMember\(state\.groupMembers, memberId, new Date\(\)\.toISOString\(\)\)/);
@@ -126,10 +134,16 @@ test('.group-sheet-panel keeps its own overflow from chaining onto the locked bo
 
 // ---------- #3: the modal is ~60px taller, still capped ----------
 
-test('the modal max-height grew from min(640px, 84vh) to min(700px, 88vh) — +60px on a typical phone, still capped well under 100vh on a small one', () => {
+test('the modal is one fixed box for every group — 40px top and bottom, 20px each side', () => {
   const panel = html.match(/\.group-sheet-panel \{[^}]*\}/)[0];
-  assert.match(panel, /max-height: min\(700px, 88vh\);/);
-  assert.doesNotMatch(html, /min\(640px, 84vh\)/);
+  const backdrop = html.match(/\.group-sheet \{[^}]*\}/)[0];
+  // Sizing to content made the dialog jump between a one-member group and a busy one.
+  assert.match(panel, /height: 100%;/, 'the panel fills the padded backdrop rather than its content');
+  assert.doesNotMatch(panel, /max-height:/, 'a content-driven cap is exactly what was removed');
+  assert.doesNotMatch(html, /min\(640px, 84vh\)|min\(700px, 88vh\)/);
+  // The gap is measured from the safe area, so it is a real visual margin on a notched iPhone
+  // rather than space swallowed behind the notch.
+  assert.match(backdrop, /padding: calc\(40px \+ env\(safe-area-inset-top, 0px\)\) 20px calc\(40px \+ env\(safe-area-inset-bottom, 0px\)\);/);
 });
 
 // ---------- role management must remain reachable after the strip was retired ----------
@@ -149,4 +163,19 @@ test('promoting and demoting survived the member-row simplification, in the sett
   assert.match(body, /isLastActiveAdmin\(activeList, member\.id\)/, 'the last admin keeps their role');
   // Removal stays on the member row's red X — this panel must not grow a second delete path.
   assert.doesNotMatch(body, /renderRemoveMemberButton/, 'removal belongs to the row, not here');
+});
+
+// ---------- #1: the removal is a visible process, not a jump cut ----------
+
+test('the member row collapses on its way out, in the app\'s own panel vocabulary', () => {
+  const item = html.match(/\.games-member-item \{[^}]*\}/)[0];
+  // Without the grid there is no height to animate from and the row would blink out.
+  assert.match(item, /display: grid; grid-template-rows: 1fr;/);
+  assert.match(item, /transition: grid-template-rows \.28s ease/);
+  assert.match(html, /\.games-member-item\.removing \{[^}]*grid-template-rows: 0fr;[^}]*opacity: 0;/);
+  assert.match(html, /\.games-member-item\.removing > \* \{ overflow: hidden; \}/,
+    'the collapsing row must clip its content or the text spills past the shrinking box');
+  // The arm/disarm states were already animated by the button's own transition — keep that.
+  const removeBtn = html.match(/\.games-member-remove \{[^}]*\}/)[0];
+  assert.match(removeBtn, /transition: color \.2s, background-color \.2s, transform \.12s ease/);
 });

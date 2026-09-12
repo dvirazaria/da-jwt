@@ -166,19 +166,24 @@
   }
   :root[data-theme="light"] .tabbar { box-shadow: 0 8px 24px rgba(12,21,25,.14); }
   .tabbar.kb-open { transform: translateY(120px); opacity: 0; pointer-events: none; }
+  /* The bar's height is pinned, not derived. The active tab reveals its label by animating
+     max-width, and a label that ever wrapped -- or simply the act of appearing -- grew the row and
+     made the whole bar jump on every tab change. Fixing the height here means the label can only
+     ever change the bar's WIDTH. */
   .tabbar-in {
     display: flex; align-items: center; justify-content: space-between; gap: 4px;
-    width: 100%;
+    width: 100%; height: 44px;
   }
   .tab {
     flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
     color: var(--dim); font-size: 14px; font-weight: 700;
-    border-radius: 999px; padding: 10px; min-height: 44px;
+    border-radius: 999px; padding: 0 10px; height: 100%; min-height: 44px;
     transition: background-color .25s ease, color .25s ease, flex-grow .25s ease, transform .12s ease;
   }
   .tab svg { width: 22px; height: 22px; flex: 0 0 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .tab .tlabel {
     max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
+    line-height: 1; flex: 0 1 auto; min-width: 0;
     transition: max-width .3s ease, opacity .22s ease;
   }
   .tab.on {
@@ -579,7 +584,17 @@
      games-card-details-content pairing, games-member-note) stay defined — promoteMember/
      demoteMember remain real, tested capabilities (tests/group-lifecycle.test.cjs) — but nothing
      in the row calls them any more, so they render nothing today. */
-  .games-member-item { border-bottom: 1px solid var(--line); }
+  /* A removed member should be SEEN leaving, not simply be absent on the next render. The item is
+     a one-row grid so the closing direction of the app's own 0fr/1fr panel vocabulary applies to
+     it; without the grid there is no height to animate from and the row would just blink out. */
+  .games-member-item {
+    border-bottom: 1px solid var(--line);
+    display: grid; grid-template-rows: 1fr;
+    transition: grid-template-rows .28s ease, opacity .2s ease, border-bottom-color .2s ease;
+  }
+  .games-member-item > * { min-height: 0; }
+  .games-member-item.removing { grid-template-rows: 0fr; opacity: 0; border-bottom-color: transparent; }
+  .games-member-item.removing > * { overflow: hidden; }
   .games-member-item:last-of-type { border-bottom: none; }
   .games-member-item .games-member-row { border-bottom: none; }
   .games-member-row.with-remove { display: flex; align-items: center; gap: 10px; min-height: 44px; }
@@ -829,7 +844,9 @@
     position: fixed; inset: 0; z-index: 41;
     background: rgba(0,0,0,.72);
     display: flex; align-items: center; justify-content: center;
-    padding: max(24px, env(safe-area-inset-top, 0px)) 20px max(24px, env(safe-area-inset-bottom, 0px));
+    /* A fixed 40px gap top and bottom, 20px each side -- measured from the safe area, not from
+       behind the notch, so the inset is a real visual gap on every iPhone. */
+    padding: calc(40px + env(safe-area-inset-top, 0px)) 20px calc(40px + env(safe-area-inset-bottom, 0px));
     opacity: 0; pointer-events: none;
     transition: opacity .28s ease;
   }
@@ -841,7 +858,10 @@
      Same .28s duration as the backdrop fade and every grid-open transition elsewhere in the app;
      only the property changed, not the timing. */
   .group-sheet-panel {
-    width: 100%; max-width: 440px; max-height: min(700px, 88vh);
+    /* One size for every group. Sizing to content made the box jump between a one-member group
+       and a busy one; height:100% inside the padded backdrop pins it instead, and short content
+       simply leaves empty space rather than shrinking the dialog. */
+    width: 100%; max-width: 440px; height: 100%;
     background: var(--bg);
     border-radius: 20px;
     border: 1px solid var(--line);
@@ -1224,7 +1244,7 @@
         </div>
       </div>
     </div>
-    <p class="empty-note" style="margin-top:6px">גרסה 71</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 72</p>
     <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
 </div>
@@ -5882,12 +5902,14 @@
     return card;
   }
 
+  // Nothing to say when there is nothing to list: no heading either, the same rule
+  // renderGroupLeaders follows for an empty ranking. Returns without appending so the caller
+  // never gets an empty section leaving a stray gap between its neighbours.
   function renderActiveGamesSection(parent, summaries, enterStagger) {
+    if (!summaries.length) return;
     const section = el("section", "games-section");
     section.appendChild(el("h3", "games-section-title", "משחקים פעילים"));
-    if (!summaries.length) {
-      section.appendChild(el("p", "games-empty", "אין משחקים פעילים כרגע"));
-    } else {
+    {
       summaries.forEach((summary, idx) => {
         section.appendChild(renderActiveGameCard(summary, {
           expanded: expandedGameCards.has(summary.gameId),
@@ -6706,7 +6728,18 @@
     btn.addEventListener("click", () => {
       if (removeMemberArmedId === member.id) {
         disarmRemoveMember();
-        removeMember(member.groupId, member.id);
+        const item = btn.closest(".games-member-item");
+        // Reduced motion, or no row to animate: remove immediately rather than sit through a
+        // delay that shows nothing.
+        if (!item || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          removeMember(member.groupId, member.id);
+          return;
+        }
+        // Collapse the row first so it is clear WHICH member left, then commit. The button is
+        // disabled meanwhile so a second tap cannot land during the animation.
+        btn.disabled = true;
+        item.classList.add("removing");
+        setTimeout(() => removeMember(member.groupId, member.id), 280);
         return;
       }
       armRemoveMember(member.id);
