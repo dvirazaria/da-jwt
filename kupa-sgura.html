@@ -6996,14 +6996,28 @@
   }
 
   // The group's invite, rendered inside the group settings overlay (D1): any active member sees
-  // it (returns null otherwise). No invite yet → "צור הזמנה" (plus renderInviteGuestBindPicker's
-  // chip row, when applicable). With one → the code, copy/share, the shared server note, and, for
-  // admins only, a text action to revoke it (which brings back "צור הזמנה").
+  // it (returns null otherwise). No invite yet → "צור הזמנה", but ONLY for an admin (invites_
+  // insert_admin, docs/backend/link-guest.sql, requires app_is_group_admin(group_id) — a non-admin
+  // member's insert is refused server-side no matter what the client shows). Before this gate, a
+  // regular member could tap "צור הזמנה" and get a fully-rendered code/link/QR (createGroupInvite
+  // writes the local row and renders unconditionally, with no server round trip awaited first);
+  // pushCloudRun's next push then hits invites_insert_admin, 42501 surfaces as the red sync dot
+  // (classifyCloudError), and the invite the member just shared was never written server-side, so
+  // app_redeem_invite answers 'invalid' for every friend who opens that link or scans that QR —
+  // one client/server authorization mismatch presenting as three symptoms. A member with no invite
+  // yet instead sees a plain note; an already-existing (admin-created) invite is still fully
+  // visible/copyable/shareable to every member below, unaffected — only creation is admin-only.
+  // With one → the code, copy/share, the shared server note, and, for admins only, a text action to
+  // revoke it (which brings back "צור הזמנה").
   function renderGroupInvite(summary, invite, isAdmin) {
     if (!summary || !summary.isMember) return null;
     const section = el("section", "games-section games-invite-section");
     section.appendChild(el("h3", "games-section-title", "הזמנה לקבוצה"));
     if (!invite) {
+      if (!isAdmin) {
+        section.appendChild(el("p", "games-invite-note", "רק מנהל הקבוצה יכול ליצור הזמנה"));
+        return section;
+      }
       const bindPicker = renderInviteGuestBindPicker(summary.groupId);
       if (bindPicker) section.appendChild(bindPicker);
       const createBtn = el("button", "games-invite-create", "צור הזמנה");
