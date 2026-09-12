@@ -175,6 +175,48 @@ test('the member count is a sibling of the group name in one row, not stacked un
   assert.match(html, /\.games-group-title-row \{ display: flex; align-items: center; justify-content: space-between; gap: 8px; \}/);
 });
 
+// ---------- placement: the create-group panel opens under its own button ----------
+// The owner has 8+ groups; the panel used to be appended after the *whole* group list
+// (renderCreateGroupPanel(section) as the last call in renderGroupsSection), so opening it
+// scrolled nothing and the panel rendered far below the "+ צור קבוצה" button that opened it.
+// It must now sit between the heading row and the list/empty-state, so it always opens right
+// under the button regardless of how many group cards follow.
+
+test('renderCreateGroupPanel is called right after the heading, before the group list or empty state -- not after the whole list', () => {
+  const source = sourceBetween('  function renderGroupsSection(', '  // Collapsed "ארכיון');
+  const headingIdx = source.indexOf('section.appendChild(heading)');
+  const panelIdx = source.indexOf('renderCreateGroupPanel(section)');
+  const listIdx = source.indexOf('games-group-list');
+  const emptyIdx = source.indexOf('אין לך קבוצות עדיין');
+  assert.ok(headingIdx >= 0 && panelIdx >= 0 && listIdx >= 0 && emptyIdx >= 0, 'expected markers not found');
+  assert.ok(headingIdx < panelIdx, 'the panel must be requested after the heading is appended');
+  assert.ok(panelIdx < listIdx, 'the panel must be appended before the group list, not after it');
+  assert.ok(panelIdx < emptyIdx, 'the panel must be appended before the empty-state message too');
+});
+
+test('the create-group panel still opens via the shared grid-collapse transition, deferred a frame so it animates rather than appearing instantly', () => {
+  const source = sourceBetween('  function renderCreateGroupPanel(', '  function renderActiveGameCard(');
+  assert.match(source, /el\("div", "games-create-panel"\)/);
+  assert.match(source, /requestAnimationFrame\(\(\) => requestAnimationFrame\(\(\) => \{/);
+  assert.match(source, /panel\.classList\.add\("open"\)/);
+});
+
+test('opening the panel focuses the name input, and only scrolls it into view when no other input already has focus', () => {
+  const source = sourceBetween('  function renderCreateGroupPanel(', '  function renderActiveGameCard(');
+  const openBlock = source.slice(source.indexOf('if (createGroupOpen && createGroupJustOpened)'));
+  assert.match(openBlock, /nameInput\.focus\(\)/);
+  assert.match(openBlock, /panel\.scrollIntoView\(\{ behavior: "smooth", block: "nearest" \}\)/);
+  // Guarded: an input/textarea with focus elsewhere is left alone rather than yanked.
+  assert.match(openBlock, /activeTag !== "INPUT" && activeTag !== "TEXTAREA"/);
+  assert.match(openBlock, /document\.activeElement/);
+});
+
+test('closing the create-group panel still reverses the grid-collapse transition before clearing the draft', () => {
+  const source = sourceBetween('  function closeCreateGroupPanel(', '  function addMemberByName(');
+  assert.match(source, /panel\.classList\.remove\("open"\)/);
+  assert.match(source, /setTimeout\(finish, 280\)/);
+});
+
 // ---------- normalize() hardening ----------
 
 test('normalize shapes groups/groupMembers/invites/friendships through their normalizers, same as debts', () => {

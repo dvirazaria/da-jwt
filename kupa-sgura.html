@@ -5834,7 +5834,18 @@
 
     if (createGroupOpen && createGroupJustOpened) {
       createGroupJustOpened = false;
-      requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add("open")));
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        panel.classList.add("open");
+        // The panel now opens right under its own button, above however many group cards
+        // follow -- with 8+ groups it can still start below the fold. Bring it into view, but
+        // only when nothing else already has focus (typing elsewhere shouldn't get yanked by a
+        // scroll it didn't ask for); "nearest" avoids moving the page at all once it's visible.
+        const activeTag = document.activeElement && document.activeElement.tagName;
+        if (activeTag !== "INPUT" && activeTag !== "TEXTAREA") {
+          panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+        nameInput.focus();
+      }));
     } else if (createGroupOpen) {
       panel.classList.add("open");
     }
@@ -5980,6 +5991,10 @@
     createGroupBtn.addEventListener("click", toggleCreateGroupPanel);
     heading.appendChild(createGroupBtn);
     section.appendChild(heading);
+    // The panel opens directly under this heading/button, above the list -- with 8+ groups,
+    // appending it after the whole list (the old order) put it far off-screen from the button
+    // that summoned it.
+    renderCreateGroupPanel(section);
     if (!groups.length) {
       section.appendChild(el("p", "games-empty", "אין לך קבוצות עדיין"));
     } else {
@@ -5994,7 +6009,6 @@
       });
       section.appendChild(list);
     }
-    renderCreateGroupPanel(section);
     parent.appendChild(section);
   }
 
