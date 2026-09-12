@@ -154,7 +154,19 @@
   :root[data-theme="light"] { --bar-bg: rgba(245,248,249,.9); }
   html { background: var(--bg); }
   .tabbar {
-    position: fixed; bottom: 10px; inset-inline: 17px; margin-inline: auto;
+    /* env(safe-area-inset-bottom) is not a fixed device constant on iOS Safari: WebKit reports it
+       as ~0 while the bottom toolbar is showing (its own chrome already clears the home indicator)
+       and jumps it to the home-indicator height once the toolbar auto-hides on scroll (now page
+       content reaches the true bottom edge, so the page must clear the indicator itself). A plain
+       `bottom: 10px` ignores that swing, so the exact same rule sits 10px above a SHORT screen's
+       toolbar-occupied bottom (a visible gap -- the friends tab, which never scrolls) but only 10px
+       above the true device edge once a tall screen (the games tab) is scrolled and the toolbar
+       collapses -- reproducing the reported "bar creeps toward the home indicator" jump without
+       any change to the bar's own DOM/CSS. `.wrap`'s padding-bottom already folds this same inset
+       in (see its calc() below); mirror that idiom here so the bar keeps a constant 10px from the
+       real device edge in both toolbar states, matching `.wrap`.
+    */
+    position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); inset-inline: 17px; margin-inline: auto;
     max-width: 470px; z-index: 20;
     background: var(--bar-bg);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
@@ -1244,7 +1256,7 @@
         </div>
       </div>
     </div>
-    <p class="empty-note" style="margin-top:6px">גרסה 72</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 73</p>
     <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
 </div>
@@ -5851,7 +5863,18 @@
 
     if (createGroupOpen && createGroupJustOpened) {
       createGroupJustOpened = false;
-      requestAnimationFrame(() => requestAnimationFrame(() => panel.classList.add("open")));
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        panel.classList.add("open");
+        // The panel now opens right under its own button, above however many group cards
+        // follow -- with 8+ groups it can still start below the fold. Bring it into view, but
+        // only when nothing else already has focus (typing elsewhere shouldn't get yanked by a
+        // scroll it didn't ask for); "nearest" avoids moving the page at all once it's visible.
+        const activeTag = document.activeElement && document.activeElement.tagName;
+        if (activeTag !== "INPUT" && activeTag !== "TEXTAREA") {
+          panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+        nameInput.focus();
+      }));
     } else if (createGroupOpen) {
       panel.classList.add("open");
     }
@@ -5997,6 +6020,10 @@
     createGroupBtn.addEventListener("click", toggleCreateGroupPanel);
     heading.appendChild(createGroupBtn);
     section.appendChild(heading);
+    // The panel opens directly under this heading/button, above the list -- with 8+ groups,
+    // appending it after the whole list (the old order) put it far off-screen from the button
+    // that summoned it.
+    renderCreateGroupPanel(section);
     if (!groups.length) {
       section.appendChild(el("p", "games-empty", "אין לך קבוצות עדיין"));
     } else {
@@ -6011,7 +6038,6 @@
       });
       section.appendChild(list);
     }
-    renderCreateGroupPanel(section);
     parent.appendChild(section);
   }
 
@@ -7013,14 +7039,28 @@
   }
 
   // The group's invite, rendered inside the group settings overlay (D1): any active member sees
-  // it (returns null otherwise). No invite yet → "צור הזמנה" (plus renderInviteGuestBindPicker's
-  // chip row, when applicable). With one → the code, copy/share, the shared server note, and, for
-  // admins only, a text action to revoke it (which brings back "צור הזמנה").
+  // it (returns null otherwise). No invite yet → "צור הזמנה", but ONLY for an admin (invites_
+  // insert_admin, docs/backend/link-guest.sql, requires app_is_group_admin(group_id) — a non-admin
+  // member's insert is refused server-side no matter what the client shows). Before this gate, a
+  // regular member could tap "צור הזמנה" and get a fully-rendered code/link/QR (createGroupInvite
+  // writes the local row and renders unconditionally, with no server round trip awaited first);
+  // pushCloudRun's next push then hits invites_insert_admin, 42501 surfaces as the red sync dot
+  // (classifyCloudError), and the invite the member just shared was never written server-side, so
+  // app_redeem_invite answers 'invalid' for every friend who opens that link or scans that QR —
+  // one client/server authorization mismatch presenting as three symptoms. A member with no invite
+  // yet instead sees a plain note; an already-existing (admin-created) invite is still fully
+  // visible/copyable/shareable to every member below, unaffected — only creation is admin-only.
+  // With one → the code, copy/share, the shared server note, and, for admins only, a text action to
+  // revoke it (which brings back "צור הזמנה").
   function renderGroupInvite(summary, invite, isAdmin) {
     if (!summary || !summary.isMember) return null;
     const section = el("section", "games-section games-invite-section");
     section.appendChild(el("h3", "games-section-title", "הזמנה לקבוצה"));
     if (!invite) {
+      if (!isAdmin) {
+        section.appendChild(el("p", "games-invite-note", "רק מנהל הקבוצה יכול ליצור הזמנה"));
+        return section;
+      }
       const bindPicker = renderInviteGuestBindPicker(summary.groupId);
       if (bindPicker) section.appendChild(bindPicker);
       const createBtn = el("button", "games-invite-create", "צור הזמנה");
