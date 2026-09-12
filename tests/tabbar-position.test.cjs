@@ -39,9 +39,10 @@ const CONTAINING_BLOCK_PROPS = /\btransform\s*:|(?<!backdrop-)\bfilter\s*:|backd
 
 test('the tab bar\'s own bottom offset folds in env(safe-area-inset-bottom), like .wrap\'s padding-bottom already does', () => {
   const body = ruleBody('  .tabbar {');
-  assert.match(body, /bottom:\s*calc\(10px \+ env\(safe-area-inset-bottom,\s*0px\)\)/,
-    '.tabbar must anchor off the same dynamic inset .wrap uses, not a bare px, so toolbar-driven ' +
-    'viewport changes cannot move it relative to the true device edge');
+  // The inset alone was not enough: it is constant while Safari's toolbar collapses, so the bar
+  // still slid on a scrollable tab. --vv-offset carries that difference (see initTabbarViewportPin).
+  assert.match(body, /bottom:\s*calc\(10px \+ env\(safe-area-inset-bottom,\s*0px\) \+ var\(--vv-offset,\s*0px\)\)/,
+    '.tabbar must anchor off the safe-area inset AND the visual-viewport gap, not a bare px');
   // the sibling rule this idiom is mirrored from, so a future edit to one is caught if it drifts
   // from the other
   const wrapBody = ruleBody('  .wrap {');
@@ -77,4 +78,24 @@ test('the bar\'s height stays pinned (the earlier fix) and .kb-open still slides
   const kbOpenBody = html.slice(kbOpenIdx, html.indexOf('}', kbOpenIdx));
   assert.match(kbOpenBody, /transform:\s*translateY\(120px\)/);
   assert.match(kbOpenBody, /opacity:\s*0/);
+});
+
+// ---------- the remaining movement was iOS Safari's collapsing toolbar ----------
+
+test('the bar is pinned to the VISUAL viewport, not just the layout one', () => {
+  // Measured in Chromium the bar never moved (top 750 / bottom 808 on every tab, scrolled or
+  // not) and nothing in its ancestor chain creates a containing block — so `position: fixed`
+  // was already correct. What still moved it on the owner's iPhone is Safari collapsing its
+  // toolbar on a scrollable tab, which grows the visual viewport under a layout-fixed element.
+  assert.match(html, /function initTabbarViewportPin\(\)/);
+  assert.match(html, /window\.visualViewport/);
+  assert.match(html, /vv\.addEventListener\("resize", apply\)/);
+  assert.match(html, /vv\.addEventListener\("scroll", apply\)/);
+  assert.match(html, /setProperty\("--vv-offset"/);
+  // Absent visualViewport must leave the old behaviour untouched, not throw.
+  assert.match(html, /if \(!vv \|\| !bar\) return;/);
+  // The keyboard shrinks the same viewport; .kb-open already handles that, so a keyboard-sized
+  // gap must not launch the bar up the screen.
+  assert.match(html, /hidden > 160 \? 0 : hidden/);
+  assert.match(html, /initTabbarViewportPin\(\);/);
 });

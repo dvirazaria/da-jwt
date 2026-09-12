@@ -152,7 +152,14 @@
        in (see its calc() below); mirror that idiom here so the bar keeps a constant 10px from the
        real device edge in both toolbar states, matching `.wrap`.
     */
-    position: fixed; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); inset-inline: 17px; margin-inline: auto;
+    /* --vv-offset is the gap iOS Safari opens between the layout viewport (what `bottom` is
+       measured against) and the visual viewport (what you can actually see) as its toolbar
+       collapses on scroll. Without it the bar slides down on a scrollable tab and sits still on
+       a short one -- which reads as "the bar moves depending on how much content there is".
+       0 everywhere else, so desktop and the installed PWA are unaffected. */
+    position: fixed;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px) + var(--vv-offset, 0px));
+    inset-inline: 17px; margin-inline: auto;
     max-width: 470px; z-index: 20;
     background: var(--bar-bg);
     -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
@@ -1239,7 +1246,7 @@
         </div>
       </div>
     </div>
-    <p class="empty-note" style="margin-top:6px">גרסה 73</p>
+    <p class="empty-note" style="margin-top:6px">גרסה 74</p>
     <p class="legal-links"><a href="./privacy.html" target="_blank" rel="noopener">פרטיות</a> · <a href="./terms.html" target="_blank" rel="noopener">תנאי שימוש</a></p>
   </div>
 </div>
@@ -1745,7 +1752,9 @@
     // The legacy (non-cloud) sync path only ever has two states; clear any leftover cloud-mode
     // class so a sign-out (or the Claude-document fallback) never leaves a stale waiting/error dot.
     d.classList.remove("syncing", "waiting", "error");
-    d.title = label;
+    // The visible/assistive label stays the same four short states; the detail rides on title so
+    // a long press or a hover names the table and code without cluttering the dot.
+    d.title = detail ? label + " — " + detail : label;
     d.setAttribute("aria-label", label);
   }
 
@@ -1950,6 +1959,7 @@
   // A non-retryable push failure (RLS/constraint/4xx) is showing on the dot until the next push or
   // pull resolves it. In memory only -- after a refresh the app is going to try again regardless.
   let cloudSurfaceError = false;
+  let cloudLastError = null;          // { table, code, message } of the failure the dot is showing
   let lastPushedRows = null; // the diff baseline: what the server is known to hold
   // INSERT ... DO NOTHING cannot tell a newly-created row from an existing row it ignored. Keep
   // this account-scoped marker in memory until a pull rebuilds the baseline, then retry the local
@@ -1981,7 +1991,7 @@
 
   // The four honest sync-dot states, computed fresh from the current truth every time -- never a
   // fifth ad-hoc label. See cloudSyncLabel (cloud mapping (pure)) for the branching itself.
-  function setCloudSync(kind, label) {
+  function setCloudSync(kind, label, detail) {
     const d = document.getElementById("syncDot");
     if (!d) return;
     d.classList.toggle("on", kind === "synced" || kind === "syncing");
@@ -1999,7 +2009,7 @@
     const info = { syncing: cloudPushing, error: cloudSurfaceError, pendingCount: cloudOutboxSignal() };
     const label = cloudSyncLabel(info);
     const kind = info.syncing ? "syncing" : info.error ? "error" : info.pendingCount > 0 ? "waiting" : "synced";
-    setCloudSync(kind, label);
+    setCloudSync(kind, label, kind === "error" ? cloudErrorDetail(cloudLastError) : "");
   }
 
   // Games the server is already known to hold. A closed game only goes up when the server saw it
@@ -2207,7 +2217,7 @@
           if (CLOUD_INSERT_ONLY[pair[0]]) {
             const result = await supabase.from(pair[1]).upsert(upserts, { onConflict: "id", ignoreDuplicates: true });
             if (!pushIsCurrent()) return;
-            if (result && result.error) throw result.error;
+            if (result && result.error) throw tagCloudError(result.error, pair[1]);
           } else {
             // Rows the server is known to hold. For the two collections that share the `games`
             // table the baseline is both halves; a gamesClosed row is never new — the games
@@ -2224,7 +2234,7 @@
             if (split.inserts.length) {
               const result = await supabase.from(pair[1]).upsert(split.inserts, { onConflict: "id", ignoreDuplicates: true });
               if (!pushIsCurrent()) return;
-              if (result && result.error) throw result.error;
+              if (result && result.error) throw tagCloudError(result.error, pair[1]);
               // DO NOTHING reports success both when it inserted and when the row was already on
               // the server. Do not promote either case into the local baseline until a pull
               // resolves it; otherwise an unseen server row would swallow this local edit forever.
@@ -2234,7 +2244,7 @@
             if (split.updates.length) {
               const result = await supabase.from(pair[1]).upsert(split.updates, { onConflict: "id" });
               if (!pushIsCurrent()) return;
-              if (result && result.error) throw result.error;
+              if (result && result.error) throw tagCloudError(result.error, pair[1]);
             }
           }
         }
@@ -2256,7 +2266,7 @@
           .update({ status: payment.status, paid_at: payment.paid_at, paid_by_profile_id: payment.paid_by_profile_id })
           .eq("id", payment.id);
         if (!pushIsCurrent()) return;
-        if (result && result.error) throw result.error;
+        if (result && result.error) throw tagCloudError(result.error, pair[1]);
       }
       confirmed.debtPayments = next.debtPayments;
       (next.games || []).concat(next.gamesClosed || []).forEach(row => {
@@ -2286,12 +2296,15 @@
       }
       cloudPushAttempt = 0;
       cloudSurfaceError = true;
+      cloudLastError = describeCloudError(e);
+      console.warn("cloud push refused:", cloudErrorDetail(cloudLastError) || e);
       if (pushIsCurrent()) scheduleCloudPull(1200);
       return;
     }
     if (!pushIsCurrent()) return;
     cloudPushAttempt = 0;
     cloudSurfaceError = false;
+    cloudLastError = null;
     lastPushedRows = confirmed;
     clearCloudPending(confirmed);
     dirtyUntil = 0;
@@ -2309,7 +2322,7 @@
     if (!ids.length) return;
     const result = await supabase.from(table).delete().in("id", ids);
     if (!authUser || authUser.id !== deleteAccountId) return;
-    if (result && result.error) throw result.error;
+    if (result && result.error) throw tagCloudError(result.error, "debts");
   }
 
   // The one friendship DELETE. Every other group-table removal is a soft column the upsert
@@ -5191,6 +5204,26 @@
   // merits — retrying the identical payload only wastes another round trip, so the caller surfaces
   // it once and re-pulls so the server's version wins, the same rule pushCloudRun already used.
   const CLOUD_SURFACE_CODES = { "22P02": 1, "23502": 1, "23503": 1, "23505": 1, "42501": 1, "42883": 1 };
+  // A refused write used to surface as "שגיאת שמירה" and nothing else -- neither the person
+  // holding the phone nor anyone reading a bug report could tell WHICH table the server refused
+  // or why, which is exactly the information needed to fix it. Carry it through.
+  function tagCloudError(error, table) {
+    if (error && typeof error === "object" && !error.cloudTable) error.cloudTable = table;
+    return error;
+  }
+  function describeCloudError(error) {
+    if (!error) return null;
+    const table = error.cloudTable || "";
+    const code = error.code || (error.status ? String(error.status) : "");
+    const message = String(error.message || "").slice(0, 120);
+    if (!table && !code && !message) return null;
+    return { table, code, message };
+  }
+  function cloudErrorDetail(info) {
+    if (!info) return "";
+    return [info.table, info.code].filter(Boolean).join(" ") + (info.message ? ": " + info.message : "");
+  }
+
   function classifyCloudError(error) {
     const e = error || {};
     const status = Number(e.status || e.httpStatus || e.statusCode || 0);
@@ -6165,6 +6198,23 @@
     if (appView === "group") { setAppView("games"); return true; }
     return false;
   }
+  // See the --vv-offset note on .tabbar. visualViewport is absent on older engines; the bar then
+  // behaves exactly as it did before, which is correct everywhere that has no collapsing toolbar.
+  function initTabbarViewportPin() {
+    const vv = window.visualViewport;
+    const bar = document.querySelector(".tabbar");
+    if (!vv || !bar) return;
+    const apply = () => {
+      const hidden = Math.max(0, Math.round(window.innerHeight - (vv.height + vv.offsetTop)));
+      // The keyboard also shrinks the visual viewport, but .kb-open already slides the bar away
+      // for that; clamping keeps a keyboard-sized gap from launching the bar up the screen.
+      bar.style.setProperty("--vv-offset", (hidden > 160 ? 0 : hidden) + "px");
+    };
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    apply();
+  }
+
   function initGroupModalDismissal() {
     document.addEventListener("keydown", (e) => {
       // Let the group-settings overlay above us take Escape first.
@@ -9788,6 +9838,7 @@
   render();
   initIosInstallHint();
   initGroupModalDismissal();
+  initTabbarViewportPin();
   if (typeof screen.orientation?.lock === "function" && matchMedia("(display-mode: standalone)").matches) {
     try { screen.orientation.lock("portrait").catch(() => {}); } catch (e) {}
   }
